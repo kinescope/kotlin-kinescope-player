@@ -39,10 +39,10 @@
             android:id="@+id/poster_iv"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:visibility="visible"
             android:clickable="true"
             android:focusable="true"
-            android:src="@drawable/default_poster" />
+            android:src="@drawable/default_poster"
+            android:visibility="visible" />
 
         <LinearLayout
             android:id="@+id/live_start_date_ll"

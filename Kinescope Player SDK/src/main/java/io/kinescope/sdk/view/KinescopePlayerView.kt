@@ -7,7 +7,8 @@ import android.media.AudioManager
 import android.os.Looper
 import android.util.AttributeSet
 import android.view.GestureDetector
-import android.view.LayoutInflater
+import android.view.Gravity
+import android.view.Menu
 import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
@@ -25,28 +26,34 @@ import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
+import androidx.media3.common.Tracks
+import androidx.media3.common.VideoSize
 import androidx.media3.common.util.Assertions
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerControlView
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.TimeBar
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
 import com.squareup.picasso.Picasso
 import io.kinescope.sdk.R
-import io.kinescope.sdk.adapter.KinescopeSettingsAdapter
-import io.kinescope.sdk.analytics.KinescopeAnalyticsManager
 import io.kinescope.sdk.analytics.KinescopeAnalyticsArgs
+import io.kinescope.sdk.analytics.KinescopeAnalyticsManager
 import io.kinescope.sdk.logger.KinescopeLogger
 import io.kinescope.sdk.logger.KinescopeLoggerLevel
 import io.kinescope.sdk.models.videos.KinescopeVideo
 import io.kinescope.sdk.player.KinescopeVideoPlayer
+import io.kinescope.sdk.player.quality.KinescopeQualityManager
+import io.kinescope.sdk.player.quality.KinescopeQualityVariant
+import io.kinescope.sdk.player.quality.getQualityVariantsList
+import io.kinescope.sdk.player.speed.KinescopeSpeedVariant
 import io.kinescope.sdk.utils.EMPTY
 import io.kinescope.sdk.utils.animateRotation
+import io.kinescope.sdk.utils.dip
 import io.kinescope.sdk.utils.formatLiveStartDate
 import me.saket.cascade.CascadePopupMenu
+import me.saket.cascade.allChildren
 import kotlin.math.roundToInt
 
 
@@ -71,10 +78,22 @@ class KinescopePlayerView(
 
             newPlayerView.let {
                 it.setPlayer(player)
+                it.qualityManager = oldPlayerView.qualityManager
                 it.analyticsManager = oldPlayerView.analyticsManager
                 it.posterView?.isVisible = oldPlayerView.posterView?.isVisible ?: false
                 it.liveStartDateContainerView?.isVisible =
                     oldPlayerView.liveStartDateContainerView?.isVisible ?: false
+
+                if (oldPlayerView.isLiveState) {
+                    it.isLiveState = true
+                    it.isLiveSynced = oldPlayerView.isLiveSynced
+
+                    it.positionView?.isVisible = false
+                    it.durationView?.isVisible = false
+                    it.timeSeparatorView?.isVisible = false
+                    it.liveDataView?.isVisible = true
+                }
+
             }
 
             oldPlayerView.setPlayer(null)
@@ -128,8 +147,6 @@ class KinescopePlayerView(
 
     var onFullscreenButtonCallback: (() -> Unit)? = null
 
-    private var customControlsLayoutId: Int = 0
-
     private val formatBuilder: StringBuilder = StringBuilder()
     private val formatter = java.util.Formatter(formatBuilder, java.util.Locale.getDefault())
 
@@ -160,14 +177,6 @@ class KinescopePlayerView(
     private var liveStartDateContainerView: View? = null
     private var liveStartDateTextView: TextView? = null
 
-    private var settingsWindow: PopupWindow? = null
-    private var settingsview: RecyclerView? = null
-    private var settingsAdapter: KinescopeSettingsAdapter? = null
-    private var playbackSpeedAdapter: KinescopeSettingsAdapter? = null
-
-    private val settingsWindowMargin =
-        resources.getDimensionPixelSize(R.dimen.kinescope_media_settings_offset)
-
     private var scrubbing = false
     private var scrubbingLiveDurationCached = 0L
 
@@ -184,60 +193,15 @@ class KinescopePlayerView(
             field = value
         }
 
+    private var qualityManager: KinescopeQualityManager? = null
     private var analyticsManager = KinescopeAnalyticsManager(context)
+
+    private var currentSpeed = 1f
 
     private val updateProgressRunnable = Runnable {
         updateProgress()
         getAnalyticsArguments().let { args ->
             analyticsManager.tick(args = args)
-        }
-    }
-
-    private var playbackSpeedOption: String = "normal"
-    private val onPlaybackSpeedOptionsCallback = object : (String) -> Unit {
-        override fun invoke(speed: String) {
-            when (speed) {
-                "normal" -> {
-                    playbackSpeedOption = "normal"
-                    kinescopePlayer?.exoPlayer?.setPlaybackSpeed(1f)
-                }
-
-                "0.25" -> {
-                    playbackSpeedOption = "0.25"
-                    kinescopePlayer?.exoPlayer?.setPlaybackSpeed(0.25f)
-                }
-
-                "0.5" -> {
-                    playbackSpeedOption = "0.5"
-                    kinescopePlayer?.exoPlayer?.setPlaybackSpeed(0.5f)
-                }
-
-                "0.75" -> {
-                    playbackSpeedOption = "0.75"
-                    kinescopePlayer?.exoPlayer?.setPlaybackSpeed(0.75f)
-                }
-
-                "1.25" -> {
-                    playbackSpeedOption = "1.25"
-                    kinescopePlayer?.exoPlayer?.setPlaybackSpeed(1.25f)
-                }
-
-                "1.5" -> {
-                    playbackSpeedOption = "1.5"
-                    kinescopePlayer?.exoPlayer?.setPlaybackSpeed(1.5f)
-                }
-
-                "1.75" -> {
-                    playbackSpeedOption = "1.75"
-                    kinescopePlayer?.exoPlayer?.setPlaybackSpeed(1.75f)
-                }
-
-                "2" -> {
-                    playbackSpeedOption = "2"
-                    kinescopePlayer?.exoPlayer?.setPlaybackSpeed(2f)
-                }
-            }
-            settingsWindow?.dismiss()
         }
     }
 
@@ -281,6 +245,24 @@ class KinescopePlayerView(
             }
 
             updateBuffering()
+        }
+
+        override fun onTracksChanged(tracks: Tracks) {
+            super.onTracksChanged(tracks)
+            kinescopePlayer?.exoPlayer?.let { player ->
+                with(player.trackSelector as DefaultTrackSelector) {
+                    qualityManager?.updateVariants(
+                        variants = getQualityVariantsList()
+                    )
+                }
+            }
+        }
+
+        override fun onVideoSizeChanged(videoSize: VideoSize) {
+            super.onVideoSizeChanged(videoSize)
+            qualityManager?.updateVideoHeight(
+                height = videoSize.height
+            )
         }
 
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
@@ -353,7 +335,7 @@ class KinescopePlayerView(
             } else if (fullscreenButton === view) {
                 onFullscreenButtonCallback?.invoke()
             } else if (optionsButton === view) {
-                displaySettingsWindow(playbackSpeedAdapter!!)
+                displaySettingsWindow()
             } else if (subtitlesButton === view) {
                 //TODO: Subtitles menu
             } else if (attachmentsButton === view) {
@@ -365,7 +347,6 @@ class KinescopePlayerView(
 
         }
     }
-
 
     init {
         inflate(context, R.layout.view_kinesope_player, this)
@@ -400,28 +381,6 @@ class KinescopePlayerView(
         liveStartDateContainerView = findViewById(R.id.live_start_date_ll)
         liveStartDateTextView = findViewById(R.id.live_start_date_tv)
 
-        settingsview =
-            LayoutInflater.from(context).inflate(R.layout.view_options_list, null) as RecyclerView?
-        settingsAdapter = KinescopeSettingsAdapter(arrayOf("Playback speed", "Quality"), null, null)
-        playbackSpeedAdapter = KinescopeSettingsAdapter(
-            resources.getStringArray(R.array.menu_playback_speed),
-            playbackSpeedOption,
-            onPlaybackSpeedOptionsCallback
-        )
-        settingsview?.adapter = playbackSpeedAdapter
-        settingsview?.layoutManager = LinearLayoutManager(
-            this@KinescopePlayerView.context,
-            LinearLayoutManager.VERTICAL,
-            false
-        )
-        settingsWindow = PopupWindow(
-            settingsview,
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            true
-        )
-        settingsWindow?.setOnDismissListener(componentListener)
-
         applyKinescopePlayerOptions()
         setSubtitlesStyling()
         setUIListeners()
@@ -437,6 +396,12 @@ class KinescopePlayerView(
         if (this.kinescopePlayer === kinescopePlayer) return
         this.kinescopePlayer?.exoPlayer?.removeListener(componentListener)
         this.kinescopePlayer = kinescopePlayer
+
+        kinescopePlayer?.exoPlayer?.let { player ->
+            this.qualityManager =
+                KinescopeQualityManager(context, player.trackSelector as DefaultTrackSelector)
+        }
+
         kinescopePlayer?.exoPlayer?.addListener(componentListener)
         kinescopePlayer?.onSourceChanged = { source ->
             analyticsManager.sourceChanged(newSource = source)
@@ -483,15 +448,7 @@ class KinescopePlayerView(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        /*isAttachedToWindow = true
-        if (isFullyVisible()) {
-            controlViewLayoutManager.resetHideCallbacks()
-        }*/
         updateAll()
-    }
-
-    fun setCustomControllerLayoutID(value: Int) {
-        customControlsLayoutId = value
     }
 
     private var isVideoFullscreen = false
@@ -510,31 +467,12 @@ class KinescopePlayerView(
         updateFullscreenButton()
     }
 
-    private fun updateSettingsWindowSize() {
-        settingsview!!.measure(MeasureSpec.UNSPECIFIED, MeasureSpec.UNSPECIFIED)
-        val maxWidth: Int = width - settingsWindowMargin * 2
-        val itemWidth: Int = settingsview!!.measuredWidth
-        val width = Math.min(itemWidth, maxWidth)
-        settingsWindow!!.width = width
-        val maxHeight: Int = height - settingsWindowMargin * 2
-        val totalHeight: Int = settingsview!!.measuredHeight
-        val height = Math.min(maxHeight, totalHeight)
-        settingsWindow!!.height = height
-    }
-
-    private fun displaySettingsWindow(settingsAdapter: RecyclerView.Adapter<*>) {
-        settingsview?.adapter = settingsAdapter
-        updateSettingsWindowSize()
-        //settingsWindow!!.dismiss()
-        val xoff: Int = width - settingsWindow!!.width - settingsWindowMargin
-        val yoff: Int = -settingsWindow!!.height - optionsButton!!.height - settingsWindowMargin
-        //settingsWindow!!.showAsDropDown(optionsButton, xoff, yoff)
-
-        //CascadePopupMenu(context, optionsButton!!)
-
+    private fun displaySettingsWindow() {
         val popup = CascadePopupMenu(
+            fixedWidth = context.dip(250),
             context = context,
             anchor = optionsButton!!,
+            gravity = Gravity.TOP,
             styler = CascadePopupMenu.Styler(
                 background = {
                     AppCompatResources.getDrawable(
@@ -543,36 +481,50 @@ class KinescopePlayerView(
                     )
                 },
                 menuItem = {
-                    it.titleView.setTextColor(Color.parseColor("#ffffff"))
+                    it.titleView.setTextColor(Color.WHITE)
                     it.subMenuArrowView.updatePadding(right = 56)
                 },
                 menuTitle = {
-                    it.titleView.setTextColor(Color.parseColor("#ffffff"))
+                    it.titleView.setTextColor(Color.WHITE)
                     it.titleView.compoundDrawablePadding = 48
                     it.titleView.updatePadding(left = 36)
                 },
-            )
+            ),
         )
 
-        //popup.popup.setBackgroundDrawable(context.getDrawable(R.drawable.bg_options_rect))
-        popup.menu.addSubMenu("Video quality")
+        popup.menu.addSubMenu(context.getString(R.string.settings_quality))
             .setIcon(R.drawable.ic_option_quality)
-            .also { sub ->
-                sub.add("480p")
-                sub.add("720p")
-                sub.add("1080p")
+            .apply {
+                qualityManager?.variants.orEmpty().forEach { variant ->
+                    add(Menu.NONE, variant.id, Menu.NONE, variant.name)
+                }
+                add(
+                    Menu.NONE,
+                    KinescopeQualityVariant.QUALITY_VARIANT_AUTO_ID,
+                    Menu.NONE,
+                    context.getString(R.string.settings_quality_variant_auto)
+                )
+                allChildren.forEach { child ->
+                    child.setOnMenuItemClickListener { item ->
+                        qualityManager?.setVariant(id = item.itemId)
+                        true
+                    }
+                }
             }
 
-        popup.menu.addSubMenu("Playback speed")
+        popup.menu.addSubMenu(context.getString(R.string.settings_speed))
             .setIcon(R.drawable.ic_option_playback_speed)
-            .also { sub ->
-                sub.add("0.5")
-                sub.add("0.75")
-                sub.add("Normal")
-                sub.add("1.25")
-                sub.add("1.5")
-                sub.add("1.75")
-                sub.add("2")
+            .apply {
+                val speedVariants = getSpeedVariants()
+                speedVariants.forEachIndexed { index, variant ->
+                    add(Menu.NONE, index, Menu.NONE, variant.name)
+                }
+                allChildren.forEach { child ->
+                    child.setOnMenuItemClickListener { item ->
+                        kinescopePlayer?.setPlaybackSpeed(speedVariants[item.itemId].speed)
+                        true
+                    }
+                }
             }
         popup.show()
     }
@@ -942,4 +894,40 @@ class KinescopePlayerView(
                 currentPosition = (player.currentPosition.toFloat() / 1000f).roundToInt(),
             )
         } ?: KinescopeAnalyticsArgs()
+
+    private fun getSpeedVariants(): List<KinescopeSpeedVariant> =
+        listOf(
+            KinescopeSpeedVariant(
+                name = context.getString(R.string.settings_speed_0_25),
+                speed = KinescopeSpeedVariant.SPEED_VARIANT_0_25
+            ),
+            KinescopeSpeedVariant(
+                name = context.getString(R.string.settings_speed_0_5),
+                speed = KinescopeSpeedVariant.SPEED_VARIANT_0_5
+            ),
+            KinescopeSpeedVariant(
+                name = context.getString(R.string.settings_speed_0_75),
+                speed = KinescopeSpeedVariant.SPEED_VARIANT_0_75
+            ),
+            KinescopeSpeedVariant(
+                name = context.getString(R.string.settings_speed_normal),
+                speed = KinescopeSpeedVariant.SPEED_VARIANT_NORMAL,
+            ),
+            KinescopeSpeedVariant(
+                name = context.getString(R.string.settings_speed_1_25),
+                speed = KinescopeSpeedVariant.SPEED_VARIANT_1_25
+            ),
+            KinescopeSpeedVariant(
+                name = context.getString(R.string.settings_speed_1_5),
+                speed = KinescopeSpeedVariant.SPEED_VARIANT_1_5
+            ),
+            KinescopeSpeedVariant(
+                name = context.getString(R.string.settings_speed_1_75),
+                speed = KinescopeSpeedVariant.SPEED_VARIANT_1_75
+            ),
+            KinescopeSpeedVariant(
+                name = context.getString(R.string.settings_speed_2),
+                speed = KinescopeSpeedVariant.SPEED_VARIANT_2
+            )
+        )
 }

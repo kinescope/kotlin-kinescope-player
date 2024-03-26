@@ -3,4 +3,20 @@
     <string name="live">Live</string>
     <string name="live_time_offset">-%s</string>
     <string name="live_its_starting_soon">It\'s starting soon</string>
+
+    <string name="settings_quality">Video quality</string>
+    <string name="settings_speed">Playback speed</string>
+
+    <string name="settings_speed_0_25">0.25</string>
+    <string name="settings_speed_0_5">0.5</string>
+    <string name="settings_speed_0_75">0.75</string>
+    <string name="settings_speed_normal">Normal</string>
+    <string name="settings_speed_1_25">1.25</string>
+    <string name="settings_speed_1_5">1.5</string>
+    <string name="settings_speed_1_75">1.75</string>
+    <string name="settings_speed_2">2</string>
+
+    <string name="settings_quality_variant">%sp</string>
+    <string name="settings_quality_variant_auto">Auto</string>
+    <string name="settings_quality_variant_auto_caption">Auto %sp</string>
 </resources>

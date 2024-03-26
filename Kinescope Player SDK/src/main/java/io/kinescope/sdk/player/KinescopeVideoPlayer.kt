@@ -12,6 +12,8 @@ import androidx.media3.exoplayer.dash.DashChunkSource
 import androidx.media3.exoplayer.dash.DashMediaSource
 import androidx.media3.exoplayer.dash.DefaultDashChunkSource
 import androidx.media3.exoplayer.hls.HlsMediaSource
+import androidx.media3.exoplayer.trackselection.AdaptiveTrackSelection
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import com.google.common.collect.ImmutableList
 import io.kinescope.sdk.api.KinescopeFetch
@@ -39,6 +41,7 @@ class KinescopeVideoPlayer(
 
     init {
         exoPlayer = ExoPlayer.Builder(context)
+            .setTrackSelector(DefaultTrackSelector(context, AdaptiveTrackSelection.Factory()))
             .setSeekBackIncrementMs(10000)
             .setSeekForwardIncrementMs(10000)
             .build()

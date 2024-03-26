@@ -15,6 +15,9 @@
     <color name="kinescope_live_not_synced_color">#52FFFFFF</color>
     <color name="kinescope_live_stream_start_bg_color">#CC222222</color>
 
+    <color name="kinescope_setting_item">#222222</color>
+    <color name="kinescope_setting_item_pressed">#333333</color>
+
     <style name="KinescopeMediaButton">
         <item name="android:background">?android:attr/selectableItemBackground</item>
         <item name="android:layout_width">@dimen/kinescope_media_button_height</item>
@@ -68,33 +71,5 @@
     <dimen name="kinescope_progress_enabled_thumb_size">10dp</dimen>
     <dimen name="kinescope_progress_dragged_thumb_size">14dp</dimen>
     <dimen name="kinescope_progress_layout_height">48dp</dimen>
-
-
-    <string-array name="menu_settings">
-        <item name="playback_speed">Playback Speed</item>
-        <item name="video_quality">Video quality</item>
-
-    </string-array>
-
-    <string-array name="menu_playback_speed">
-        <item name="playback_speed_0_25">0.25</item>
-        <item name="playback_speed_0_5">0.5</item>
-        <item name="playback_speed_0_75">0.75</item>
-        <item name="playback_speed_normal">normal</item>
-        <item name="playback_speed_1_25">1.25</item>
-        <item name="playback_speed_1_5">1.5</item>
-        <item name="playback_speed_1_75">1.75</item>
-        <item name="playback_speed_2">2</item>
-    </string-array>
-
-    <string-array name="menu_video_quality">
-        <item name="video_quality_2160p">2160p</item>
-        <item name="video_quality_1440p">1440p</item>
-        <item name="video_quality_1080p">1080p</item>
-        <item name="video_quality_720p">720p</item>
-        <item name="video_quality_480p">480p</item>
-        <item name="video_quality_auto">auto</item>
-    </string-array>
-
 
 </resources>

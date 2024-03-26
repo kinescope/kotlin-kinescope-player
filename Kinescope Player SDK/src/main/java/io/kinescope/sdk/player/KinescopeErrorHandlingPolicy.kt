@@ -7,13 +7,10 @@ import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 @UnstableApi
 class KinescopeErrorHandlingPolicy : DefaultLoadErrorHandlingPolicy() {
 
-    override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long {
-        return RETRY_DELAY_MS
-    }
+    override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long =
+        RETRY_DELAY_MS
 
-    override fun getMinimumLoadableRetryCount(dataType: Int): Int {
-        return RETRY_COUNT
-    }
+    override fun getMinimumLoadableRetryCount(dataType: Int): Int = RETRY_COUNT
 
     companion object {
         private const val RETRY_DELAY_MS = 5000L

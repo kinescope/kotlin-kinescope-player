@@ -56,6 +56,7 @@ configurations.all {
 }
 
 dependencies {
+    implementation fileTree(dir: "libs", include: ["*.aar"])
     implementation 'androidx.core:core-ktx:1.9.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.8.0'
@@ -67,7 +68,7 @@ dependencies {
     implementation 'com.squareup.moshi:moshi:1.14.0'
     implementation 'com.squareup.moshi:moshi-adapters:1.14.0'
     kapt 'com.squareup.moshi:moshi-kotlin-codegen:1.14.0'
-    implementation 'me.saket.cascade:cascade:1.3.0'
+//    implementation 'me.saket.cascade:cascade:1.3.0'
     implementation 'com.squareup.retrofit2:converter-protobuf:2.9.0'
 
     def media3Version = "1.1.1"

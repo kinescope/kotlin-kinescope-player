@@ -23,7 +23,6 @@ class PlaylistActivity : AppCompatActivity() {
         KinescopeViewModel.Factory((application as KinescopeSDKDemoApplication).apiHelper)
     }
 
-
     private var isVideoFullscreen = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -48,7 +47,7 @@ class PlaylistActivity : AppCompatActivity() {
         playerView.onFullscreenButtonCallback = { toggleFullscreen() }
         fullscreenPlayerView.onFullscreenButtonCallback = { toggleFullscreen() }
 
-        val adapter = VideosAdapter() { videoId ->
+        val adapter = VideosAdapter { videoId ->
             kinescopePlayer.loadVideo(videoId, onSuccess = { data ->
                 if (data != null) {
                     kinescopePlayer.play()
@@ -62,7 +61,6 @@ class PlaylistActivity : AppCompatActivity() {
         viewModel.allVideos.observe(this) {
             adapter.updateData(it)
         }
-
         viewModel.getAllVideos()
     }
 
@@ -83,14 +81,9 @@ class PlaylistActivity : AppCompatActivity() {
 
         } else {
             window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
-                window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_FULLSCREEN
-                        and View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                        and View.SYSTEM_UI_FLAG_HIDE_NAVIGATION)
-            } else {
-                window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_FULLSCREEN
-                        and View.SYSTEM_UI_FLAG_HIDE_NAVIGATION)
-            }
+            window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_FULLSCREEN
+                    and View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                    and View.SYSTEM_UI_FLAG_HIDE_NAVIGATION)
 
             KinescopePlayerView.switchTargetView(fullscreenPlayerView, playerView, kinescopePlayer)
         }

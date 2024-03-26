@@ -1,13 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.recyclerview.widget.RecyclerView
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.recyclerview.widget.RecyclerView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/rv_kinescope_options"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:minWidth="150dp"
     android:background="#222222"
+    android:minWidth="350dp"
     android:scrollbars="vertical"
-    tools:listitem="@layout/item_option"
     tools:itemCount="3"
-    />
+    tools:listitem="@layout/item_settings_option" />

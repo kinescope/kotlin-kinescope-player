@@ -14,7 +14,7 @@ class KinescopeSettingsAdapter(
     private var activeOption:String?,
     private val callback:((String) -> Unit)?) : RecyclerView.Adapter<KinescopeSettingsAdapter.ViewHolder>() {
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): KinescopeSettingsAdapter.ViewHolder {
-        return ViewHolder(LayoutInflater.from(parent.context).inflate(R.layout.item_option, parent, false))
+        return ViewHolder(LayoutInflater.from(parent.context).inflate(R.layout.item_settings_option, parent, false))
     }
 
     override fun onBindViewHolder(holder: KinescopeSettingsAdapter.ViewHolder, position: Int) {
