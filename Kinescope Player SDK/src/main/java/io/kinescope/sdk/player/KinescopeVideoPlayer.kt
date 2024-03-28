@@ -96,12 +96,10 @@ class KinescopeVideoPlayer(
                 getDashMediaSource(videoBuilder)
             }
 
-            kinescopeVideo.hlsLink.isNullOrEmpty().not() -> {
-                val dataSourceFactory = DefaultHttpDataSource.Factory()
-                HlsMediaSource.Factory(dataSourceFactory)
+            kinescopeVideo.hlsLink.isNullOrEmpty().not() ->
+                HlsMediaSource.Factory(DefaultHttpDataSource.Factory())
                     .setLoadErrorHandlingPolicy(KinescopeErrorHandlingPolicy())
                     .createMediaSource(MediaItem.fromUri(kinescopeVideo.hlsLink.orEmpty()))
-            }
 
             else -> return
         }
@@ -121,7 +119,7 @@ class KinescopeVideoPlayer(
     fun loadVideo(
         videoId: String,
         onSuccess: ((KinescopeVideo?) -> Unit)? = null,
-        onFailed: ((t: Throwable) -> Unit)? = null,
+        onFailed: ((t: Throwable?) -> Unit)? = null,
     ) {
         fetch.getVideo(videoId).enqueue(object : Callback<KinescopeVideo> {
             override fun onResponse(
@@ -130,7 +128,8 @@ class KinescopeVideoPlayer(
             ) {
                 if (response.isSuccessful) {
                     val video = response.body()!!
-                    setVideo(video);
+                    setVideo(video)
+                    onSuccess?.invoke(video)
 
                     if (onSuccess != null) {
                         onSuccess(video)
@@ -140,11 +139,8 @@ class KinescopeVideoPlayer(
                         KinescopeLoggerLevel.NETWORK,
                         "LoadVideo isSuccessful false"
                     )
+                    onFailed?.invoke(null)
                 }
-
-                if (onSuccess != null) {
-                    onSuccess(null)
-                };
             }
 
             override fun onFailure(call: Call<KinescopeVideo>, t: Throwable) {

@@ -11,6 +11,10 @@
     <color name="kinescope_circle_animation_color">#4DFFFFFF</color>
     <color name="kinescope_circle_bg_color">#00000000</color>
 
+    <color name="kinescope_live_synced_color">#EF4F63</color>
+    <color name="kinescope_live_not_synced_color">#52FFFFFF</color>
+    <color name="kinescope_live_stream_start_bg_color">#CC222222</color>
+
     <style name="KinescopeMediaButton">
         <item name="android:background">?android:attr/selectableItemBackground</item>
         <item name="android:layout_width">@dimen/kinescope_media_button_height</item>

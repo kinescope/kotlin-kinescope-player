@@ -6,7 +6,6 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
-import androidx.core.widget.addTextChangedListener
 import androidx.media3.common.util.UnstableApi
 import io.kinescope.demo.R
 import io.kinescope.sdk.player.KinescopeVideoPlayer
@@ -15,7 +14,8 @@ import io.kinescope.sdk.view.KinescopePlayerView
 @UnstableApi
 class LiveActivity : AppCompatActivity() {
 
-    private lateinit var kinescopeplayer: KinescopeVideoPlayer
+    private lateinit var kinescopePlayerView: KinescopePlayerView
+    private lateinit var kinescopePlayer: KinescopeVideoPlayer
     private lateinit var watchLiveContainerView: LinearLayout
     private lateinit var watchLiveIdInputView: EditText
     private lateinit var watchLiveBtnView: Button
@@ -24,17 +24,13 @@ class LiveActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_live)
 
-        val playerView = findViewById<KinescopePlayerView>(R.id.player)
+        kinescopePlayerView = findViewById(R.id.player)
         watchLiveContainerView = findViewById(R.id.watch_live_ll)
         watchLiveIdInputView = findViewById(R.id.id_et)
         watchLiveBtnView = findViewById(R.id.watch_live_btn)
 
-        kinescopeplayer = KinescopeVideoPlayer(this)
-        playerView.setPlayer(kinescopeplayer)
-
-        watchLiveIdInputView.addTextChangedListener {
-            watchLiveBtnView.isEnabled = it.isNullOrEmpty().not()
-        }
+        kinescopePlayer = KinescopeVideoPlayer(this)
+        kinescopePlayerView.setPlayer(kinescopePlayer)
 
         watchLiveBtnView.setOnClickListener {
             tryLoadVideo(watchLiveIdInputView.text.toString())
@@ -43,15 +39,30 @@ class LiveActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
-        kinescopeplayer.stop()
+        kinescopePlayer.stop()
     }
 
     private fun tryLoadVideo(id: String) {
+        val liveId = id.takeIf { id.isNotEmpty() } ?: DEFAULT_LIVE_ID
+
         watchLiveContainerView.isVisible = false
-        kinescopeplayer.loadVideo(id, {
-            kinescopeplayer.play()
+        kinescopePlayer.loadVideo(liveId, { video ->
+            if (video?.isLive == true) {
+                kinescopePlayerView.enableLiveState(
+                    posterUrl = video.poster?.url,
+                    startDate = video.live?.startsAt,
+                )
+            }
+            kinescopePlayer.play()
         }) {
-            it.printStackTrace()
+            it?.printStackTrace()
         }
+    }
+
+    companion object {
+        /**
+         * Used if the live ID field value is empty
+         */
+        private const val DEFAULT_LIVE_ID = "5zWMENJ3EawysA4qbqUhar"
     }
 }

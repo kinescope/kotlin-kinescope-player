@@ -1,134 +1,166 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/kinescope_control"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/kinescope_control"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_gravity="bottom"
-    android:layoutDirection="ltr"
     android:background="#CC000000"
-    android:orientation="vertical"
-    tools:targetApi="28"
     android:clickable="false"
-    >
+    android:layoutDirection="ltr"
+    android:orientation="vertical"
+    tools:targetApi="28">
 
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
         android:layout_marginStart="16dp"
         android:layout_marginTop="16dp"
-        >
+        android:orientation="vertical">
 
         <TextView
             android:id="@+id/kinescope_title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:gravity="start"
-            android:textSize="20sp"
             android:textColor="#B8B8B8"
-            tools:text="Title text"
-            />
+            android:textSize="20sp"
+            tools:text="Title text" />
 
         <TextView
             android:id="@+id/kinescope_author"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:gravity="start"
-            android:textSize="16sp"
             android:textColor="#B8B8B8"
-            tools:text="Author text"
-            />
+            android:textSize="16sp"
+            tools:text="Author text" />
     </LinearLayout>
 
     <ImageView
         android:id="@+id/kinescope_play_pause"
+        style="@style/ExoStyledControls.Button.Center.PlayPause"
         android:layout_width="32dp"
         android:layout_height="32dp"
-        android:layout_gravity="center"
-        style="@style/ExoStyledControls.Button.Center.PlayPause"/>
+        android:layout_gravity="center" />
 
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
         android:layout_gravity="bottom"
+        android:layout_marginTop="4dp"
         android:gravity="center"
         android:orientation="horizontal">
 
-        <TextView android:id="@+id/kinescope_position"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:id="@+id/live_data_ll"
+            android:layout_width="65dp"
             android:layout_height="wrap_content"
-            android:textSize="14sp"
-            android:textStyle="normal"
-            android:paddingLeft="4dp"
-            android:paddingRight="4dp"
-            android:includeFontPadding="false"
-            android:textColor="#FFFFFF"
-            tools:text="0:00"
-            />
+            android:layout_marginHorizontal="8dp"
+            android:layout_marginBottom="2dp"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <View
+                android:id="@+id/live_badge_circle_view"
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:layout_marginTop="1dp"
+                android:layout_marginEnd="4dp"
+                android:background="@drawable/ic_live_synced" />
+
+            <TextView
+                android:id="@+id/live_badge_tv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:text="@string/live"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="normal" />
+
+            <TextView
+                android:id="@+id/live_time_offset"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="normal"
+                android:visibility="gone" />
+
+        </LinearLayout>
 
         <TextView
+            android:id="@+id/kinescope_position"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="14sp"
-            android:textStyle="normal"
+            android:includeFontPadding="false"
             android:paddingLeft="4dp"
             android:paddingRight="4dp"
-            android:includeFontPadding="false"
-            android:text="/"
-            android:textColor="#FFFFFF"/>
-
-        <TextView android:id="@+id/kinescope_duration"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textSize="14sp"
-            android:textStyle="normal"
-            android:paddingLeft="4dp"
-            android:paddingRight="4dp"
-            android:includeFontPadding="false"
             android:textColor="#FFFFFF"
-            tools:text="0:00"
-            />
+            android:textSize="14sp"
+            android:textStyle="normal"
+            tools:text="0:00" />
+
+        <TextView
+            android:id="@+id/time_separator_view"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:includeFontPadding="false"
+            android:paddingLeft="4dp"
+            android:paddingRight="4dp"
+            android:text="/"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="normal" />
+
+        <TextView
+            android:id="@+id/kinescope_duration"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:includeFontPadding="false"
+            android:paddingLeft="4dp"
+            android:paddingRight="4dp"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="normal"
+            tools:text="0:00" />
 
         <io.kinescope.sdk.view.KinescopeTimeBar
             android:id="@+id/kinescope_progress"
             android:layout_width="0dp"
             android:layout_height="26dp"
             android:layout_weight="1"
-            app:scrubber_drawable="@drawable/ic_scrubber"
-            app:scrubber_enabled_size="24dp"
             app:bar_height="4dp"
             app:buffered_color="@color/kinescope_progressbar_buffered_color"
-            app:unplayed_color="@color/kinescope_progressbar_unplayed_color"
             app:played_color="@color/kinescope_progressbar_played_color"
-            />
+            app:scrubber_drawable="@drawable/ic_scrubber"
+            app:scrubber_enabled_size="24dp"
+            app:unplayed_color="@color/kinescope_progressbar_unplayed_color" />
 
 
         <ImageButton
             android:id="@+id/kinescope_btn_attachments"
             style="@style/KinescopeMediaButton"
-            android:src="@drawable/ic_attachments"
-            />
+            android:src="@drawable/ic_attachments" />
 
         <ImageButton
             android:id="@+id/kinescope_btn_subtitles"
             style="@style/KinescopeMediaButton"
-            android:src="@drawable/ic_subtitles"
-            />
+            android:src="@drawable/ic_subtitles" />
 
         <ImageButton
             android:id="@+id/kinescope_fullscreen"
             style="@style/KinescopeMediaButton"
-            android:src="@drawable/ic_fullscreen"
-            />
+            android:src="@drawable/ic_fullscreen" />
 
         <ImageButton
             android:id="@+id/kinescope_settings"
             style="@style/KinescopeMediaButton"
-            android:src="@drawable/ic_dots"
-            />
+            android:src="@drawable/ic_dots" />
     </LinearLayout>
 </FrameLayout>
