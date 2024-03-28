@@ -5,5 +5,5 @@ import retrofit2.http.GET
 
 interface KinescopeApi {
     @GET("v1/videos/")
-    suspend fun getAll():KinescopeAllVideosResponse
+    suspend fun getAll(): KinescopeAllVideosResponse
 }

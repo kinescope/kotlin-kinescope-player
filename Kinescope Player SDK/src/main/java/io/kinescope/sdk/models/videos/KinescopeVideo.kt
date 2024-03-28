@@ -19,6 +19,15 @@ data class KinescopeVideo (
     @Json(name = "attachments") val attachments: List<KinescopeVideoAttachments>,
     @Json(name = "subtitles") val subtitles: List<KinescopeVideoSubtitle>,
     @Json(name = "duration") val duration: Float,
+    @Json(name = "live") val live: KinescopeVideoLive?,
     @Json(name = "hls_link") val hlsLink:String?,
     @Json(name = "dash_link") val dashLink:String?,
-): Serializable
+): Serializable {
+
+    val isLive: Boolean
+        get() = type == TYPE_LIVE
+
+    companion object {
+        private const val TYPE_LIVE = "live"
+    }
+}

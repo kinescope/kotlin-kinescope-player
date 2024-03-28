@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="live">Live</string>
+    <string name="live_time_offset">-%s</string>
+    <string name="live_its_starting_soon">It\'s starting soon</string>
+</resources>

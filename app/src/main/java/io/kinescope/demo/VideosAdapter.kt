@@ -31,7 +31,7 @@ class VideosAdapter(val callback: (String)-> Unit) : RecyclerView.Adapter<Videos
 
     inner class ViewHolder(private val view:View) :  RecyclerView.ViewHolder(view.rootView), View.OnClickListener {
         private var video: KinescopeVideoApi? = null
-        val title:TextView = view.findViewById(R.id.tv_title)
+        val title: TextView = view.findViewById(R.id.tv_title)
 
         init {
             view.setOnClickListener(this)

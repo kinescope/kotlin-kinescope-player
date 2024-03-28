@@ -11,14 +11,15 @@ import kotlinx.coroutines.launch
 
 
 class KinescopeViewModel(private val apiHelper: KinescopeApiHelper) : ViewModel() {
-    private val _allVideos:MutableLiveData<ArrayList<KinescopeVideoApi>> = MutableLiveData(arrayListOf())
-    val allVideos:LiveData<ArrayList<KinescopeVideoApi>>
+    private val _allVideos: MutableLiveData<ArrayList<KinescopeVideoApi>> =
+        MutableLiveData(arrayListOf())
+    val allVideos: LiveData<ArrayList<KinescopeVideoApi>>
         get() = _allVideos
 
     fun getAllVideos() {
         viewModelScope.launch {
             apiHelper.getAllVideos().flowOn(Dispatchers.IO)
-                .catch {  e ->
+                .catch { e ->
                     e
                 }
                 .collect() {
@@ -27,7 +28,7 @@ class KinescopeViewModel(private val apiHelper: KinescopeApiHelper) : ViewModel(
         }
     }
 
-    class Factory (private val apiHelper: KinescopeApiHelper) : ViewModelProvider.Factory  {
+    class Factory(private val apiHelper: KinescopeApiHelper) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(
             modelClass: Class<T>,

@@ -9,6 +9,7 @@ import android.view.View
 import android.view.WindowManager
 import androidx.activity.viewModels
 import androidx.core.view.isVisible
+import androidx.media3.common.util.UnstableApi
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import io.kinescope.demo.KinescopeViewModel
@@ -16,8 +17,9 @@ import io.kinescope.demo.application.KinescopeSDKDemoApplication
 import io.kinescope.sdk.player.KinescopeVideoPlayer
 import io.kinescope.sdk.view.KinescopePlayerView
 
+@UnstableApi
 class PlaylistActivity : AppCompatActivity() {
-    private val viewModel: KinescopeViewModel by viewModels  {
+    private val viewModel: KinescopeViewModel by viewModels {
         KinescopeViewModel.Factory((application as KinescopeSDKDemoApplication).apiHelper)
     }
 
@@ -30,10 +32,9 @@ class PlaylistActivity : AppCompatActivity() {
         kinescopePlayer = KinescopeVideoPlayer(this.applicationContext)
     }
 
-    lateinit var playerView:KinescopePlayerView
-    lateinit var fullscreenPlayerView:KinescopePlayerView
-    lateinit var kinescopePlayer:KinescopeVideoPlayer
-
+    lateinit var playerView: KinescopePlayerView
+    lateinit var fullscreenPlayerView: KinescopePlayerView
+    lateinit var kinescopePlayer: KinescopeVideoPlayer
 
 
     override fun onStart() {
@@ -44,12 +45,12 @@ class PlaylistActivity : AppCompatActivity() {
         fullscreenPlayerView.setIsFullscreen(true)
         val videosView = findViewById<RecyclerView>(R.id.rv_videos)
         playerView.setPlayer(kinescopePlayer)
-        playerView.onFullscreenButtonCallback = {toggleFullscreen()}
-        fullscreenPlayerView.onFullscreenButtonCallback = {toggleFullscreen()}
+        playerView.onFullscreenButtonCallback = { toggleFullscreen() }
+        fullscreenPlayerView.onFullscreenButtonCallback = { toggleFullscreen() }
 
         val adapter = VideosAdapter() { videoId ->
             kinescopePlayer.loadVideo(videoId, onSuccess = { data ->
-                if(data != null) {
+                if (data != null) {
                     kinescopePlayer.play()
                 }
             })

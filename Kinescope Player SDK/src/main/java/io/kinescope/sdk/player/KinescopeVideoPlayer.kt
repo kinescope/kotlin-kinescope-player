@@ -31,6 +31,8 @@ class KinescopeVideoPlayer(
     constructor(context: Context) : this(context, KinescopePlayerOptions())
 
     var exoPlayer: ExoPlayer? = null
+    var onSourceChanged: ((source: String) -> Unit)? = null
+
     private val USER_AGENT = "KinescopeAndroidVideoKotlin"
     private var currentKinescopeVideo: KinescopeVideo? = null
     private var fetch: KinescopeFetch
@@ -79,6 +81,8 @@ class KinescopeVideoPlayer(
     }
 
     private fun setVideo(kinescopeVideo: KinescopeVideo) {
+        val source: String
+
         val mediaSource = when {
             kinescopeVideo.dashLink.isNullOrEmpty().not() -> {
                 val videoBuilder: MediaItem.Builder = MediaItem.Builder()
@@ -93,12 +97,14 @@ class KinescopeVideoPlayer(
 
                     videoBuilder.setSubtitleConfigurations(ImmutableList.of(subtitle))
                 }
+
+                source = kinescopeVideo.dashLink.orEmpty()
                 getDashMediaSource(videoBuilder)
             }
 
             kinescopeVideo.hlsLink.isNullOrEmpty().not() -> {
-                val dataSourceFactory = DefaultHttpDataSource.Factory()
-                HlsMediaSource.Factory(dataSourceFactory)
+                source = kinescopeVideo.hlsLink.orEmpty()
+                HlsMediaSource.Factory(DefaultHttpDataSource.Factory())
                     .setLoadErrorHandlingPolicy(KinescopeErrorHandlingPolicy())
                     .createMediaSource(MediaItem.fromUri(kinescopeVideo.hlsLink.orEmpty()))
             }
@@ -107,6 +113,8 @@ class KinescopeVideoPlayer(
         }
 
         currentKinescopeVideo = kinescopeVideo
+        onSourceChanged?.invoke(source)
+
         exoPlayer?.setMediaSource(mediaSource)
         exoPlayer?.playWhenReady = false
         exoPlayer?.prepare()
@@ -121,7 +129,7 @@ class KinescopeVideoPlayer(
     fun loadVideo(
         videoId: String,
         onSuccess: ((KinescopeVideo?) -> Unit)? = null,
-        onFailed: ((t: Throwable) -> Unit)? = null,
+        onFailed: ((t: Throwable?) -> Unit)? = null,
     ) {
         fetch.getVideo(videoId).enqueue(object : Callback<KinescopeVideo> {
             override fun onResponse(
@@ -130,7 +138,8 @@ class KinescopeVideoPlayer(
             ) {
                 if (response.isSuccessful) {
                     val video = response.body()!!
-                    setVideo(video);
+                    setVideo(video)
+                    onSuccess?.invoke(video)
 
                     if (onSuccess != null) {
                         onSuccess(video)
@@ -140,11 +149,8 @@ class KinescopeVideoPlayer(
                         KinescopeLoggerLevel.NETWORK,
                         "LoadVideo isSuccessful false"
                     )
+                    onFailed?.invoke(null)
                 }
-
-                if (onSuccess != null) {
-                    onSuccess(null)
-                };
             }
 
             override fun onFailure(call: Call<KinescopeVideo>, t: Throwable) {
