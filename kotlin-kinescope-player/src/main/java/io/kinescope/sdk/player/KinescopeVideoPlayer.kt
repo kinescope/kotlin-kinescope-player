@@ -186,6 +186,11 @@ class KinescopeVideoPlayer(
         KinescopeLogger.log(KinescopeLoggerLevel.PLAYER, "Stop playing")
     }
 
+    fun release() {
+        exoPlayer?.release()
+        exoPlayer = null
+    }
+
     fun seekTo(toMilliSeconds: Long) {
         exoPlayer?.seekTo(exoPlayer!!.contentPosition + toMilliSeconds)
         KinescopeLogger.log(KinescopeLoggerLevel.PLAYER, "seek to ${toMilliSeconds / 1000} seconds")
