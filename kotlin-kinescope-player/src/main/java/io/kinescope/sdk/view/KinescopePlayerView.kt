@@ -126,8 +126,12 @@ class KinescopePlayerView(
         override fun onDoubleTapEvent(e: MotionEvent): Boolean {
             KinescopeLogger.log(
                 KinescopeLoggerLevel.PLAYER_VIEW,
-                "double tap event, isForward=${isForward(e)}"
+                "double tap event, action=${e.action}, isForward=${isForward(e)}"
             )
+
+            if (e.action != MotionEvent.ACTION_UP) {
+                return true
+            }
 
             val isFwd = isForward(e)
             seekView?.run {
@@ -136,8 +140,6 @@ class KinescopePlayerView(
             kinescopePlayer?.let {
                 if (isFwd) it.moveForward() else it.moveBack()
             }
-            onDoubleTapSeek?.invoke(isFwd, 10_000L)
-
             return true
         }
 
@@ -1118,7 +1120,7 @@ class KinescopePlayerView(
 
     fun hideControlsExceptPlayPause() {
         controlView?.children?.forEach { child ->
-            child.isVisible = (child == playPauseButton )
+            child.isVisible = (child == playPauseButton)
         }
     }
 
@@ -1126,8 +1128,11 @@ class KinescopePlayerView(
         controlView?.isVisible = false
     }
 
-    fun showControls() {
+    fun showAllControls() {
         controlView?.isVisible = true
+        controlView?.children?.forEach { child ->
+            child.isVisible = true
+        }
         updateAll()
     }
 
