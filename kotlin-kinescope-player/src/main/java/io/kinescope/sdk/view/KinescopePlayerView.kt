@@ -111,7 +111,7 @@ class KinescopePlayerView(
     private var gestureListener: KinescopeGestureListener
 
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-    var onDoubleTapSeek: ((isForward: Boolean, deltaMs: Long) -> Unit)? = null
+
     private inner class KinescopeGestureListener(private val rootView: View) :
         GestureDetector.SimpleOnGestureListener() {
         private fun isForward(event: MotionEvent): Boolean {
@@ -1117,13 +1117,11 @@ class KinescopePlayerView(
             isFullscreen = isVideoFullscreen,
         )
 
-
-    fun hideControlsExceptPlayPause() {
+    fun hideControlsExceptPlayPause()  {
         controlView?.children?.forEach { child ->
             child.isVisible = (child == playPauseButton)
         }
     }
-
     fun hideAllControls(){
         controlView?.isVisible = false
     }
@@ -1136,7 +1134,4 @@ class KinescopePlayerView(
         updateAll()
     }
 
-    fun isControlsVisible(): Boolean {
-        return controlView?.isVisible ?: false
-    }
 }
