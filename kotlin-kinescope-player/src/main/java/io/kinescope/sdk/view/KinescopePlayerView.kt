@@ -111,7 +111,7 @@ class KinescopePlayerView(
     private var gestureListener: KinescopeGestureListener
 
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-
+    var onDoubleTapSeek: ((isForward: Boolean, deltaMs: Long) -> Unit)? = null
     private inner class KinescopeGestureListener(private val rootView: View) :
         GestureDetector.SimpleOnGestureListener() {
         private fun isForward(event: MotionEvent): Boolean {
@@ -126,10 +126,21 @@ class KinescopePlayerView(
         override fun onDoubleTapEvent(e: MotionEvent): Boolean {
             KinescopeLogger.log(
                 KinescopeLoggerLevel.PLAYER_VIEW,
-                "double tap event, isForward=${isForward(e)}"
+                "double tap event, action=${e.action}, isForward=${isForward(e)}"
             )
-            if (isForward(e)) seekView?.showForwardView(e) else seekView?.showBackView(e)
-            return super.onDoubleTapEvent(e)
+
+            if (e.action != MotionEvent.ACTION_UP) {
+                return true
+            }
+
+            val isFwd = isForward(e)
+            seekView?.run {
+                if (isFwd) showForwardView(e) else showBackView(e)
+            }
+            kinescopePlayer?.let {
+                if (isFwd) it.moveForward() else it.moveBack()
+            }
+            return true
         }
 
         override fun onDown(e: MotionEvent): Boolean {
@@ -1105,4 +1116,27 @@ class KinescopePlayerView(
             volume = audioManager.currentVolumeInPercent,
             isFullscreen = isVideoFullscreen,
         )
+
+
+    fun hideControlsExceptPlayPause() {
+        controlView?.children?.forEach { child ->
+            child.isVisible = (child == playPauseButton)
+        }
+    }
+
+    fun hideAllControls(){
+        controlView?.isVisible = false
+    }
+
+    fun showAllControls() {
+        controlView?.isVisible = true
+        controlView?.children?.forEach { child ->
+            child.isVisible = true
+        }
+        updateAll()
+    }
+
+    fun isControlsVisible(): Boolean {
+        return controlView?.isVisible ?: false
+    }
 }
