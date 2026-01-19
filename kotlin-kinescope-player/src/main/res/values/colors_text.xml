@@ -2,4 +2,9 @@
 <resources>
     <color name="white">#FFFFFF</color>
     <color name="gray">#A9A9A9</color>
+
+    <color name="black">#FF000000</color>
+    <color name="player_custom_color_remaining">#6C2EB9</color>
+    <color name="seekbar_background">#80FFFFFF</color>
+    <color name="seekbar_progress">#6161FC</color>
 </resources>

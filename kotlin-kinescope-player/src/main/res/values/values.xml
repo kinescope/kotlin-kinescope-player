@@ -66,6 +66,11 @@
         <item name="scrubber_dragged_size">@dimen/kinescope_progress_dragged_thumb_size</item>
         <item name="android:layout_height">@dimen/kinescope_progress_layout_height</item>
     </style>
+    
+    <style name="PopupAnimation">
+        <item name="android:windowEnterAnimation">@anim/slide_in_right</item>
+        <item name="android:windowExitAnimation">@anim/slide_out_right</item>
+    </style>
 
     <dimen name="kinescope_progress_bar_height">4dp</dimen>
     <dimen name="kinescope_progress_touch_target_height">48dp</dimen>

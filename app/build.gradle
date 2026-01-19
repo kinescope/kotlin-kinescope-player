@@ -1,11 +1,12 @@
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
-    id 'kotlinx-serialization'
+    id 'org.jetbrains.kotlin.plugin.serialization' version '1.9.20'
 }
 
 android {
-    compileSdk 33
+    namespace "io.kinescope.demo"
+    compileSdk 35
 
     signingConfigs {
         release {
@@ -19,7 +20,7 @@ android {
     defaultConfig {
         applicationId "io.kinescope.demo"
         minSdk 26
-        targetSdk 33
+        targetSdk 34
         versionCode 1
         versionName "0.1"
 
@@ -42,20 +43,23 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = '1.8'
+        jvmTarget = '17'
+    }
+    buildFeatures {
+        viewBinding true
     }
 }
 
 dependencies {
     implementation project(path: ':kotlin-kinescope-player')
     //implementation project (path: ':io.kinescope.sdk')
-    implementation 'androidx.core:core-ktx:1.9.0'
+    implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.8.0'
+    implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     implementation 'androidx.fragment:fragment-ktx:1.5.5'
     implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.0'
@@ -65,6 +69,14 @@ dependencies {
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
 
-    implementation "androidx.media3:media3-common:1.1.1"
+    def media3Version = "1.8.0"
+    implementation "androidx.media3:media3-common:$media3Version"
+    implementation "androidx.media3:media3-exoplayer:$media3Version"
+    implementation "androidx.media3:media3-exoplayer-hls:$media3Version"
+    implementation "androidx.media3:media3-datasource:$media3Version"
+    implementation "androidx.media3:media3-database:$media3Version"
+    implementation "androidx.media3:media3-ui:$media3Version"
     implementation "com.google.guava:guava:31.1-android"
+    implementation "androidx.viewpager2:viewpager2:1.0.0"
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2"
 }
