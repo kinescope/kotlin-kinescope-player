@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+
+    <color name="kinescope_primary_color">#6161FC</color>
+
+    <dimen name="kinescope_media_button_height">36dp</dimen>
+    <dimen name="kinescope_media_button_width">36dp</dimen>
+    <dimen name="kinescope_media_settings_offset">8dp</dimen>
+
+    <color name="kinescope_progressbar_buffered_color">#FFFFFF</color>
+    <color name="kinescope_progressbar_unplayed_color">#52FFFFFF</color>
+
+    <color name="kinescope_circle_animation_color">#4DFFFFFF</color>
+    <color name="kinescope_circle_bg_color">#00000000</color>
+
+    <color name="kinescope_live_synced_color">#EF4F63</color>
+    <color name="kinescope_live_not_synced_color">#52FFFFFF</color>
+    <color name="kinescope_live_stream_start_bg_color">#CC222222</color>
+
+    <color name="kinescope_settings">#222222</color>
+    <color name="kinescope_settings_item">#222222</color>
+    <color name="kinescope_settings_item_pressed">#444444</color>
+
+    <style name="KinescopeMediaButton">
+        <item name="android:background">?android:attr/selectableItemBackground</item>
+        <item name="android:layout_width">@dimen/kinescope_media_button_height</item>
+        <item name="android:layout_height">@dimen/kinescope_media_button_width</item>
+    </style>
+
+    <declare-styleable name="KinescopeTimeBar">
+        <attr name="bar_height" />
+        <attr name="bar_gravity" />
+        <attr name="touch_target_height" />
+        <attr name="ad_marker_width" />
+        <attr name="scrubber_enabled_size" />
+        <attr name="scrubber_disabled_size" />
+        <attr name="scrubber_dragged_size" />
+        <attr name="scrubber_drawable" />
+        <attr name="played_color" />
+        <attr name="scrubber_color" />
+        <attr name="buffered_color" />
+        <attr name="unplayed_color" />
+        <attr name="ad_marker_color" />
+        <attr name="played_ad_marker_color" />
+    </declare-styleable>
+
+    <style name="KinescopeControls" />
+
+    <style name="KinescopeControls.KinescopeTimeBar">
+        <item name="bar_height">@dimen/kinescope_progress_bar_height</item>
+        <item name="bar_gravity">bottom</item>
+        <item name="touch_target_height">@dimen/kinescope_progress_touch_target_height</item>
+        <item name="scrubber_enabled_size">@dimen/kinescope_progress_enabled_thumb_size</item>
+        <item name="scrubber_dragged_size">@dimen/kinescope_progress_dragged_thumb_size</item>
+        <item name="android:layout_height">@dimen/kinescope_progress_layout_height</item>
+    </style>
+    
+    <style name="PopupAnimation">
+        <item name="android:windowEnterAnimation">@anim/slide_in_right</item>
+        <item name="android:windowExitAnimation">@anim/slide_out_right</item>
+    </style>
+
+    <dimen name="kinescope_progress_bar_height">4dp</dimen>
+    <dimen name="kinescope_progress_touch_target_height">48dp</dimen>
+    <dimen name="kinescope_progress_enabled_thumb_size">10dp</dimen>
+    <dimen name="kinescope_progress_dragged_thumb_size">14dp</dimen>
+    <dimen name="kinescope_progress_layout_height">48dp</dimen>
+
+</resources>

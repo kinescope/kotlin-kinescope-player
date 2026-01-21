@@ -1,0 +1,21 @@
+<resources>
+    <string name="app_name">Kinescope Shorts</string>
+
+
+
+
+
+
+    <string name="player_like">Лайк</string>
+    <string name="player_share">Поделится</string>
+    <string name="player_comment">Коммент</string>
+
+
+
+    <string name="download_channel_name">Загрузки видео</string>
+    <string name="download_channel_description">Уведомления о загрузке видео</string>
+    <string name="download_notification_title">Загрузка видео</string>
+    <string name="download_completed">Загрузка завершена</string>
+    <string name="download_failed">Ошибка загрузки</string>
+
+</resources>
