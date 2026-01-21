@@ -9,6 +9,7 @@ import io.kinescope.demo.customui.CustomUIActivity
 import io.kinescope.demo.live.LiveActivity
 import io.kinescope.demo.playlist.PlaylistActivity
 import io.kinescope.demo.subtitles.SubtitlesActivity
+import io.kinescope.demo.offlinedrm.OfflineDrmDemoActivity
 import io.kinescope.demo.shorts.ShortsActivity
 
 class MainActivity : AppCompatActivity() {
@@ -30,6 +31,7 @@ class MainActivity : AppCompatActivity() {
         val btnCustomUI = findViewById<AppCompatButton>(R.id.btn_custom_ui)
         val btnLive = findViewById<AppCompatButton>(R.id.btn_live)
         val btnShorts = findViewById<AppCompatButton>(R.id.btn_shorts)
+        val btnOfflineDrm = findViewById<AppCompatButton>(R.id.btn_offline_drm)
 
         /*btnFullscreen.setOnClickListener {
             val intent =  Intent(this, FullscreenActivity::class.java)
@@ -59,6 +61,10 @@ class MainActivity : AppCompatActivity() {
         btnShorts.setOnClickListener {
             val intent = Intent(this, ShortsActivity::class.java)
             startActivity(intent)
+        }
+
+        btnOfflineDrm.setOnClickListener {
+            startActivity(Intent(this, OfflineDrmDemoActivity::class.java))
         }
     }
 

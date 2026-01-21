@@ -1,5 +1,22 @@
 # kotlin-kinescope-player
-[![](https://jitpack.io/v/kinescope/kotlin-kinescope-player.svg)](https://jitpack.io/#kinescope/kotlin-kinescope-player)
+
+[![JitPack](https://jitpack.io/v/kinescope/kotlin-kinescope-player.svg)](https://jitpack.io/#kinescope/kotlin-kinescope-player)
+
+Android SDK for [Kinescope](https://kinescope.io/) video: player, vertical Shorts feed, and offline downloads with DRM (Widevine) in a single dependency.
+
+---
+
+## Features
+
+| Feature | Description |
+|--------|-------------|
+| **Player** | `KinescopeVideoPlayer`, `KinescopePlayerView` — HLS, DASH, Live, posters, custom colors, fullscreen, analytics |
+| **Shorts** | `com.kotlin.kinescope.shorts` — TikTok-style vertical feed, `ViewPager2`, `KinescopeVideoProvider` for your API |
+| **Offline** | `DownloadVideoOffline`, `VideoDownloadService` — HLS/DASH downloads, Widevine DRM, `DownloadManager` |
+
+One dependency includes the player, Shorts, and the offline pipeline; `VideoDownloadService` and required permissions are merged from the library manifest.
+
+---
 
 ## Installation
 
@@ -16,12 +33,17 @@ dependencyResolutionManagement {
 }
 ```
 
-**Step 2.** Add the dependency to your module's `build.gradle` file. Replace `<LATEST_VERSION>` with the current version (can be found in the JitPack badge located at the top of this description):
+**Step 2.** Add the dependency to your module's `build.gradle` file. Replace `<LATEST_VERSION>` with the current version (can be found in the JitPack badge at the top):
+
 ```groovy
 dependencies {
    implementation 'com.github.kinescope:kotlin-kinescope-player:<LATEST_VERSION>'
 }
 ```
+
+This adds the Player, Shorts, and Offline modules (see [Features](#features)).
+
+---
 
 ## Quick start
 
@@ -42,7 +64,7 @@ dependencies {
 val kinescopePlayer = KinescopeVideoPlayer(context)
 ```
 
-3. Set your `KinescopePlayer` object to your `KinescopePlayerView` object
+3. Attach the player to `KinescopePlayerView`:
 
 ```kotlin
 val playerView = binding.playerView
@@ -51,7 +73,7 @@ val playerView = binding.playerView
    }
 ```
 
-3. Load and play video.
+4. Load and play video:
 
 ```kotlin
 with(kinescopePlayer) {
@@ -169,7 +191,7 @@ playerView.hideCustomButton()
 
 For fullscreen feature usage switching player to another view should be implemented in the app side.
 
-1. Add those parametes to "configChanges" field in your apps manifest.xml for orientation changing support:
+1. Add these to `configChanges` in your app's manifest for orientation support:
 
 ```xml
 <activity android:name=".YourActivity"
@@ -214,3 +236,39 @@ You can set a callback for analytics events. It is called every time any of the 
 ```kotlin
 playerView.setAnalyticsCallback { event, data -> }
 ```
+
+### Offline downloads (DownloadVideoOffline)
+
+The library includes an offline download pipeline: `VideoDownloadService` (declared in the library manifest) and `io.kinescope.sdk.download.DownloadVideoOffline` as the entry point.
+
+1. Initialize at app startup: `DownloadVideoOffline.initialize(context)`
+2. Start a download (HLS): `DownloadRequest.Builder(contentId, hlsUri).setMimeType(MimeTypes.APPLICATION_M3U8).setData(metadata).build()` then `DownloadVideoOffline.startDownload(context, request)`
+3. For **DASH**: use `MimeTypes.APPLICATION_MPD` and the `.mpd` manifest URI
+4. For **DRM (Widevine)**: add `.setKeySetId(keySetId)` to the request; use `io.kinescope.sdk.shorts.drm.DrmConfigurator` and `DrmHelper` to obtain PSSH and the offline license
+5. Subscribe to changes: `DownloadVideoOffline.addDownloadListener(context, listener)`; in `onDestroy` call `removeDownloadListener(listener)`
+6. Playback: `DownloadVideoOffline.getDownloadCache(context)` with `CacheDataSource`; for DRM use `MediaItem` with `setDrmKeySetId`. `OfflinePlayer` in `io.kinescope.sdk.shorts.player` supports HLS only; for DASH use `DashMediaSource` with the same cache and keySetId.
+
+See `DownloadVideoOffline` KDoc for full examples.
+
+### Shorts (vertical feed)
+
+`com.kotlin.kinescope.shorts.*` provides a TikTok-style vertical feed, offline DRM downloads, and `KinescopeVideoProvider` for your API. See `kotlin-kinescope-shorts/LIBRARY_USAGE_GUIDE.md` and `kotlin-kinescope-shorts/QUICK_START.md` in this repository.
+
+---
+
+## Documentation
+
+| Topic | File |
+|-------|------|
+| Shorts (feed, API, ActivityProvider) | [kotlin-kinescope-shorts/LIBRARY_USAGE_GUIDE.md](kotlin-kinescope-shorts/LIBRARY_USAGE_GUIDE.md) |
+| Shorts quick start | [kotlin-kinescope-shorts/QUICK_START.md](kotlin-kinescope-shorts/QUICK_START.md) |
+| Kinescope API (`KinescopeVideoProvider`) | [kotlin-kinescope-shorts/API_USAGE_GUIDE.md](kotlin-kinescope-shorts/API_USAGE_GUIDE.md) |
+| API 404 troubleshooting | [kotlin-kinescope-shorts/API_TROUBLESHOOTING.md](kotlin-kinescope-shorts/API_TROUBLESHOOTING.md) |
+| Offline downloads | `DownloadVideoOffline` KDoc (HLS, DASH, DRM) |
+| Changelog / Releases | [CHANGELOG.md](CHANGELOG.md) |
+
+---
+
+## License
+
+See the repository license.

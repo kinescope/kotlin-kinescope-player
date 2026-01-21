@@ -85,6 +85,16 @@
             android:text="Shorts"
             android:textColor="@color/white"
             android:textSize="24sp" />
+
+        <androidx.appcompat.widget.AppCompatButton
+            android:id="@+id/btn_offline_drm"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="32dp"
+            android:backgroundTint="@color/kinescope_primary_color"
+            android:text="Offline DRM"
+            android:textColor="@color/white"
+            android:textSize="24sp" />
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

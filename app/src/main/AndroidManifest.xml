@@ -67,6 +67,16 @@
             android:configChanges="orientation|screenSize|screenLayout|layoutDirection"
             android:exported="true" />
 
+        <activity
+            android:name=".offlinedrm.OfflineDrmDemoActivity"
+            android:configChanges="orientation|screenSize|screenLayout|layoutDirection"
+            android:exported="false" />
+
+        <activity
+            android:name=".offlinedrm.AddDrmDownloadActivity"
+            android:configChanges="orientation|screenSize|screenLayout|layoutDirection"
+            android:exported="false" />
+
         <service
             android:name="io.kinescope.sdk.shorts.download.VideoDownloadService"
             android:exported="false"
