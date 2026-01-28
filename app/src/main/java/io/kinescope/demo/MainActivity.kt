@@ -9,26 +9,26 @@ import io.kinescope.demo.customui.CustomUIActivity
 import io.kinescope.demo.live.LiveActivity
 import io.kinescope.demo.playlist.PlaylistActivity
 import io.kinescope.demo.subtitles.SubtitlesActivity
+import io.kinescope.demo.offlinedrm.OfflineDrmDemoActivity
+import io.kinescope.demo.shorts.ShortsActivity
 
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // https://developer.android.com/reference/android/view/Display#FLAG_SECURE
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE,
             WindowManager.LayoutParams.FLAG_SECURE);
 
-        //val btnFullscreen = findViewById<AppCompatButton>(R.id.btn_fullscreen)
+        findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.viewPager2).visibility = android.view.View.GONE
+        findViewById<android.widget.LinearLayout>(R.id.main_buttons_layout).visibility = android.view.View.VISIBLE
+
         val btnPlaylist = findViewById<AppCompatButton>(R.id.btn_playlist)
         val btnSubtitles = findViewById<AppCompatButton>(R.id.btn_subtitles)
         val btnCustomUI = findViewById<AppCompatButton>(R.id.btn_custom_ui)
         val btnLive = findViewById<AppCompatButton>(R.id.btn_live)
-
-        /*btnFullscreen.setOnClickListener {
-            val intent =  Intent(this, FullscreenActivity::class.java)
-            startActivity(intent);
-        }*/
+        val btnShorts = findViewById<AppCompatButton>(R.id.btn_shorts)
+        val btnOfflineDrm = findViewById<AppCompatButton>(R.id.btn_offline_drm)
 
         btnPlaylist.setOnClickListener {
             val intent =  Intent(this, PlaylistActivity::class.java)
@@ -48,6 +48,15 @@ class MainActivity : AppCompatActivity() {
         btnLive.setOnClickListener {
             val intent = Intent(this, LiveActivity::class.java)
             startActivity(intent)
+        }
+
+        btnShorts.setOnClickListener {
+            val intent = Intent(this, ShortsActivity::class.java)
+            startActivity(intent)
+        }
+
+        btnOfflineDrm.setOnClickListener {
+            startActivity(Intent(this, OfflineDrmDemoActivity::class.java))
         }
     }
 

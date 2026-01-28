@@ -9,6 +9,7 @@
 /.idea/assetWizardSettings.xml
 .DS_Store
 /build
+**/build
 /captures
 .externalNativeBuild
 .cxx
@@ -16,3 +17,7 @@ local.properties
 .idea/misc.xml
 .idea/deploymentTargetDropDown.xml
 .idea/*
+kotlin-kinescope-shorts/**/build
+kotlin-kinescope-shorts/.idea
+kotlin-kinescope-shorts/.gradle
+kotlin-kinescope-shorts/local.properties

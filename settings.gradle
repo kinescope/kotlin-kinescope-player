@@ -15,3 +15,5 @@ dependencyResolutionManagement {
 rootProject.name = "Kinescope SDK Demo"
 include ':app'
 include ':kotlin-kinescope-player'
+include ':kotlin-kinescope-shorts'
+project(':kotlin-kinescope-shorts').projectDir = file('kotlin-kinescope-shorts/library')
