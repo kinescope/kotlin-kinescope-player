@@ -2,22 +2,23 @@ plugins {
     id 'com.android.library'
     id 'org.jetbrains.kotlin.android'
     id 'kotlin-kapt'
-    id 'kotlinx-serialization'
-    id "com.google.protobuf" version "0.8.17"
+    id "com.google.protobuf" version "0.9.4"
     id "maven-publish"
+    id 'org.jetbrains.kotlin.plugin.serialization' version '1.9.24'
 }
 
 android {
-    compileSdk 33
+    namespace "io.kinescope.sdk"
+    compileSdk 35
 
     defaultConfig {
         minSdk 21
-        targetSdk 33
+        targetSdk 34
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles "consumer-rules.pro"
 
-        versionName "0.0.5"
+        versionName "0.0.6"
     }
 
     buildTypes {
@@ -33,21 +34,31 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = '1.8'
+        jvmTarget = '17'
     }
     buildFeatures {
         viewBinding true
+        buildConfig true
+    }
+}
+
+kapt {
+    correctErrorTypes = true
+    includeCompileClasspath = false
+    useBuildCache = true
+    javacOptions {
+        option("-source", "17")
+        option("-target", "17")
     }
 }
 
 protobuf {
     protoc {
-        // artifact = 'com.google.protobuf:protoc:3.14.0:osx-x86_64'
-        artifact = 'com.google.protobuf:protoc:3.14.0'
+        artifact = 'com.google.protobuf:protoc:3.25.3'
     }
 
     generateProtoTasks {
@@ -65,20 +76,22 @@ afterEvaluate {
     publishing {
         publications {
             release(MavenPublication) {
-                from components.release
-
                 groupId = 'com.github.kinescope'
                 artifactId = 'kotlin-kinescope-player'
-                version = "0.0.5"
+                version = "0.0.6"
+                
+                from components.release
             }
         }
     }
 }
 
 dependencies {
-    implementation 'androidx.core:core-ktx:1.9.0'
+    api project(':kotlin-kinescope-shorts')
+
+    implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.8.0'
+    implementation 'com.google.android.material:material:1.11.0'
 
     implementation 'com.squareup.okhttp3:okhttp:4.10.0'
     implementation 'com.squareup.retrofit2:retrofit:2.11.0'
@@ -86,17 +99,32 @@ dependencies {
     implementation 'com.squareup.retrofit2:converter-moshi:2.11.0'
     implementation 'com.squareup.retrofit2:converter-protobuf:2.11.0'
     implementation 'com.squareup.okio:okio:2.10.0'
-    implementation 'com.squareup.moshi:moshi:1.14.0'
-    implementation 'com.squareup.moshi:moshi-adapters:1.14.0'
-    kapt 'com.squareup.moshi:moshi-kotlin-codegen:1.14.0'
+    implementation 'com.squareup.moshi:moshi:1.15.1'
+    implementation 'com.squareup.moshi:moshi-adapters:1.15.1'
+    kapt 'com.squareup.moshi:moshi-kotlin-codegen:1.15.1'
 
-    def media3Version = "1.1.1"
+    def media3Version = "1.8.0"
     implementation "androidx.media3:media3-exoplayer:$media3Version"
     implementation "androidx.media3:media3-exoplayer-dash:$media3Version"
     implementation "androidx.media3:media3-exoplayer-hls:$media3Version"
     implementation "androidx.media3:media3-ui:$media3Version"
+    implementation "androidx.media3:media3-datasource:$media3Version"
+    implementation "androidx.media3:media3-common:$media3Version"
+    implementation "androidx.media3:media3-database:$media3Version"
+    implementation "androidx.media3:media3-cast:$media3Version"
+    implementation "androidx.media3:media3-extractor:$media3Version"
+    implementation "androidx.media3:media3-container:$media3Version"
+    implementation "androidx.media3:media3-decoder:$media3Version"
 
     implementation "com.github.bumptech.glide:glide:4.16.0"
     implementation "com.google.protobuf:protobuf-java:3.25.3"
     implementation "androidx.datastore:datastore-core:1.0.0"
+
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2"
+    implementation "androidx.collection:collection-ktx:1.5.0"
+    implementation "androidx.recyclerview:recyclerview:1.3.2"
+    implementation "androidx.activity:activity:1.8.0"
+    implementation "androidx.constraintlayout:constraintlayout:2.1.4"
 }

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Фон дорожки -->
+    <item android:id="@android:id/background">
+        <shape android:shape="rectangle">
+            <corners android:radius="4dp"/> <!-- Сглаживание углов -->
+            <solid android:color="@color/seekbar_background"/> <!-- Цвет фона -->
+        </shape>
+    </item>
+
+    <!-- Прогресс -->
+    <item
+        android:id="@android:id/progress">
+        <clip>
+            <shape android:shape="rectangle">
+                <corners android:radius="4dp"/> <!-- Сглаживание углов -->
+                <solid android:color="@color/seekbar_progress"/> <!-- Цвет прогресса -->
+            </shape>
+        </clip>
+    </item>
+</layer-list>
