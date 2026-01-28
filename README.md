@@ -261,5 +261,5 @@ See `kotlin-kinescope-shorts/LIBRARY_USAGE_GUIDE.md` and `kotlin-kinescope-short
 | Shorts quick start | [kotlin-kinescope-shorts/QUICK_START.md](kotlin-kinescope-shorts/QUICK_START.md) |
 | Kinescope API (`KinescopeVideoProvider`) | [kotlin-kinescope-shorts/API_USAGE_GUIDE.md](kotlin-kinescope-shorts/API_USAGE_GUIDE.md) |
 | API 404 troubleshooting | [kotlin-kinescope-shorts/API_TROUBLESHOOTING.md](kotlin-kinescope-shorts/API_TROUBLESHOOTING.md) |
-| Offline downloads | `DownloadVideoOffline` KDoc (HLS, DASH, DRM) |
+| Offline downloads | `DownloadVideoOffline` KDoc (HLS, DASH, DRM). kotlin-kinescope-player/ src/main/java/download |
 ---
