@@ -2,6 +2,7 @@ package io.kinescope.sdk.models.common
 
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
+import io.kinescope.sdk.models.players.KinescopePlayerTemplate
 import io.kinescope.sdk.models.videos.KinescopeVideoApi
 import java.io.Serializable
 
@@ -12,3 +13,11 @@ data class KinescopeMetaResponse<A, B>(
 ) : Serializable
 
 typealias KinescopeAllVideosResponse = KinescopeMetaResponse<List<KinescopeVideoApi>, KinescopeMetaData>
+
+@JsonClass(generateAdapter = true)
+data class KinescopeDataResponse<A>(
+    @Json(name = "data") val data: A,
+) : Serializable
+
+typealias KinescopePlayersListResponse = KinescopeDataResponse<List<KinescopePlayerTemplate>>
+typealias KinescopePlayerTemplateResponse = KinescopeDataResponse<KinescopePlayerTemplate>

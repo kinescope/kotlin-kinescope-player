@@ -1,9 +1,13 @@
 package io.kinescope.sdk.view
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.PorterDuff
 import android.graphics.Typeface
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.media.AudioManager
 import android.os.Looper
 import android.util.AttributeSet
@@ -49,7 +53,11 @@ import io.kinescope.sdk.extensions.playbackSpeed
 import io.kinescope.sdk.logger.KinescopeLogger
 import io.kinescope.sdk.logger.KinescopeLoggerLevel
 import io.kinescope.sdk.models.videos.KinescopeVideo
+import io.kinescope.sdk.models.videos.KinescopeVideoAttachments
+import io.kinescope.sdk.models.videos.KinescopeVideoSubtitle
+import io.kinescope.sdk.models.players.syncLegacyChromeFlags
 import io.kinescope.sdk.player.KinescopeGlideListener
+import io.kinescope.sdk.player.KinescopePictureInPicture
 import io.kinescope.sdk.player.KinescopeVideoPlayer
 import io.kinescope.sdk.player.quality.KinescopeQualityManager
 import io.kinescope.sdk.player.quality.KinescopeQualityVariant
@@ -105,6 +113,15 @@ class KinescopePlayerView(
 
         private const val DEFAULT_TIME_BAR_MIN_UPDATE_INTERVAL_MS = 200
         private const val MAX_UPDATE_INTERVAL_MS = 1000
+        private const val CONTROL_OVERLAY_FADE_DURATION_MS = 200L
+        private const val CONTROL_OVERLAY_AUTO_HIDE_MS = 3000L
+        private const val SCRUB_MODE_CONTROL_ELEVATION_DP = 8f
+        private const val SETTINGS_MENU_ELEVATION_DP = 24f
+        private const val SCRUB_SEEKBAR_SCALE = 1.12f
+        private const val SCRUB_SEEKBAR_SCALE_DURATION_MS = 150L
+        private const val DOUBLE_TAP_SEEK_SECONDS = 10
+        private const val DOUBLE_TAP_SEEK_STREAK_WINDOW_MS = 1500L
+        private const val SUBTITLES_OPTION_OFF_ID = -1
     }
 
     private val gestureDetector: GestureDetectorCompat
@@ -134,9 +151,8 @@ class KinescopePlayerView(
             }
 
             val isFwd = isForward(e)
-            seekView?.run {
-                if (isFwd) showForwardView(e) else showBackView(e)
-            }
+            val totalSeconds = registerDoubleTapSeek(isFwd)
+            seekView?.showSeekFeedback(forward = isFwd, totalSeconds = totalSeconds)
             kinescopePlayer?.let {
                 if (isFwd) it.moveForward() else it.moveBack()
             }
@@ -161,6 +177,8 @@ class KinescopePlayerView(
     }
 
     var onFullscreenButtonCallback: (() -> Unit)? = null
+    var onPictureInPictureButtonCallback: (() -> Unit)? = null
+    var onAttachmentSelected: ((KinescopeVideoAttachments) -> Unit)? = null
 
     private val formatBuilder: StringBuilder = StringBuilder()
     private val formatter = java.util.Formatter(formatBuilder, java.util.Locale.getDefault())
@@ -180,10 +198,10 @@ class KinescopePlayerView(
     private var buttonsContainer: ViewGroup? = null
     private var playPauseButton: ImageView? = null
     private var optionsButton: View? = null
+    private var pictureInPictureButton: View? = null
     private var fullscreenButton: View? = null
-    private var subtitlesButton: View? = null
-    private var attachmentsButton: View? = null
     private var customButton: ImageButton? = null
+    private var selectedSubtitleIndex: Int = SUBTITLES_OPTION_OFF_ID
     private var settingsMenuView: KinescopeSettingsView? = null
 
     private var titleView: TextView? = null
@@ -196,8 +214,30 @@ class KinescopePlayerView(
     private var liveStartDateContainerView: View? = null
     private var liveStartDateTextView: TextView? = null
 
+    private var isVideoFullscreen = false
+        set(value) {
+            getAnalyticsArguments().let { args ->
+                when (value) {
+                    true -> analyticsManager.enterFullscreen(args = args)
+                    else -> analyticsManager.exitFullscreen(args = args)
+                }
+            }
+            field = value
+        }
+
     private var scrubbing = false
     private var scrubbingLiveDurationCached = 0L
+    private var controlElevationBeforeScrub = 0f
+    private var lastDoubleTapSeekForward: Boolean? = null
+    private var doubleTapSeekStreakCount = 0
+    private var lastDoubleTapSeekTimeMs = 0L
+
+    private val hideControlOverlayRunnable = Runnable {
+        if (scrubbing || settingsMenuView?.isVisible == true) {
+            return@Runnable
+        }
+        hideControlOverlay(animated = true)
+    }
 
     private var window = Timeline.Window()
     private val showBuffering = 1
@@ -303,7 +343,11 @@ class KinescopePlayerView(
                         }
                     }
 
-                    Player.STATE_ENDED -> analyticsManager.end(args = args)
+                    Player.STATE_ENDED -> {
+                        analyticsManager.end(args = args)
+                        showControlOverlay(animated = true)
+                        cancelControlOverlayAutoHide()
+                    }
 
                     else -> {}
                 }
@@ -337,7 +381,11 @@ class KinescopePlayerView(
 
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
             super.onPlayWhenReadyChanged(playWhenReady, reason)
+            if (controlView?.isVisible == true) {
+                scheduleControlOverlayAutoHide()
+            }
             updateBuffering()
+            updatePlayPauseButton()
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -352,6 +400,8 @@ class KinescopePlayerView(
 
         override fun onScrubStart(timeBar: TimeBar, position: Long) {
             scrubbing = true
+            enterScrubOverlayMode()
+            seekView?.showScrubOverlay()
 
             if (isLiveState) {
                 scrubbingLiveDurationCached = kinescopePlayer?.exoPlayer?.duration ?: 0
@@ -384,8 +434,17 @@ class KinescopePlayerView(
 
         override fun onScrubStop(timeBar: TimeBar, position: Long, canceled: Boolean) {
             scrubbing = false
+            seekView?.hideScrubOverlay()
             if (!canceled && kinescopePlayer != null) {
                 seekToTimeBarPosition(kinescopePlayer!!.exoPlayer!!, position)
+            }
+
+            exitScrubOverlayMode()
+            updateAll()
+            if (controlView?.isVisible == true) {
+                scheduleControlOverlayAutoHide()
+            } else {
+                showControlOverlay(animated = true)
             }
 
             if (isLiveState) {
@@ -404,12 +463,10 @@ class KinescopePlayerView(
                 dispatchPlayPause(player)
             } else if (fullscreenButton === view) {
                 onFullscreenButtonCallback?.invoke()
+            } else if (pictureInPictureButton === view) {
+                onPictureInPictureButtonCallback?.invoke()
             } else if (optionsButton === view) {
-                showSettingsMenu()
-            } else if (subtitlesButton === view) {
-                //TODO: Subtitles menu
-            } else if (attachmentsButton === view) {
-
+                toggleSettingsMenu()
             }
         }
 
@@ -440,10 +497,9 @@ class KinescopePlayerView(
 
         buttonsContainer = controlView?.findViewById(R.id.buttons_container_ll)
         playPauseButton = controlView?.findViewById(R.id.kinescope_play_pause)
+        pictureInPictureButton = controlView?.findViewById(R.id.kinescope_picture_in_picture)
         optionsButton = controlView?.findViewById(R.id.kinescope_settings)
         fullscreenButton = controlView?.findViewById(R.id.kinescope_fullscreen)
-        subtitlesButton = controlView?.findViewById(R.id.kinescope_btn_subtitles)
-        attachmentsButton = controlView?.findViewById(R.id.kinescope_btn_attachments)
         customButton = controlView?.findViewById(R.id.custom_btn)
 
         titleView = controlView?.findViewById(R.id.kinescope_title)
@@ -468,12 +524,25 @@ class KinescopePlayerView(
                     title = resources.getString(R.string.settings_parameter_video_quality),
                     icon = R.drawable.ic_quality
                 )
+                addParameter(
+                    parameter = KinescopeSettingsView.Parameter.Subtitles,
+                    title = resources.getString(R.string.settings_parameter_subtitles),
+                    icon = R.drawable.ic_subtitles,
+                )
+                addParameter(
+                    parameter = KinescopeSettingsView.Parameter.Attachments,
+                    title = resources.getString(R.string.settings_parameter_attachments),
+                    icon = R.drawable.ic_attachments,
+                )
                 onOptionSelected = ::onSettingsOptionSelected
             }
+        settingsMenuView?.setAnchorView(optionsButton)
+        settingsMenuView?.setFullscreenMode(isVideoFullscreen)
 
         applyKinescopePlayerOptions()
         setSubtitlesStyling()
         setUIListeners()
+        updatePlayPauseButton()
     }
 
     /**
@@ -494,9 +563,7 @@ class KinescopePlayerView(
 
         kinescopePlayer?.exoPlayer?.addListener(componentListener)
         kinescopePlayer?.onSourceChanged = { source, metricUrl ->
-            qualityManager?.setVariant(
-                id = KinescopeQualityVariant.QUALITY_VARIANT_AUTO_ID
-            )
+            applyDefaultQuality()
             analyticsManager.setSource(
                 source = source,
                 metricUrl = metricUrl,
@@ -504,6 +571,7 @@ class KinescopePlayerView(
         }
         exoPlayerView?.player = kinescopePlayer?.exoPlayer
         applyKinescopePlayerOptions()
+        applyAccentColor()
         applyExoPlayerVisibility()
         updateAll()
     }
@@ -524,12 +592,16 @@ class KinescopePlayerView(
         @ColorInt bufferedColor: Int? = null,
     ) {
         buttonColor?.let { color ->
-            playPauseButton?.setColorFilter(color, PorterDuff.Mode.SRC_IN)
-            buttonsContainer?.children?.forEach {
-                if (it is ImageButton) {
-                    it.setColorFilter(color, PorterDuff.Mode.SRC_IN)
+            tintControlIcon(pictureInPictureButton, color)
+            tintControlIcon(optionsButton, color)
+            tintControlIcon(fullscreenButton, color)
+            tintControlIcon(customButton, color)
+            buttonsContainer?.children?.forEach { child ->
+                if (child is ImageButton) {
+                    tintControlIcon(child, color)
                 }
             }
+            settingsMenuView?.applyIconTint(color)
         }
         timeBar?.let {
             scrubberColor?.let { color -> it.setScrubberColor(color) }
@@ -663,19 +735,10 @@ class KinescopePlayerView(
         updateAll()
     }
 
-    private var isVideoFullscreen = false
-        set(value) {
-            getAnalyticsArguments().let { args ->
-                when (value) {
-                    true -> analyticsManager.enterFullscreen(args = args)
-                    else -> analyticsManager.exitFullscreen(args = args)
-                }
-            }
-            field = value
-        }
-
     fun setIsFullscreen(value: Boolean) {
         isVideoFullscreen = value
+        seekView?.setFullscreenMode(value)
+        settingsMenuView?.setFullscreenMode(value)
         updateFullscreenButton()
     }
 
@@ -717,43 +780,264 @@ class KinescopePlayerView(
     private fun applyKinescopePlayerOptions() {
         val options = kinescopePlayer?.kinescopePlayerOptions
         if (options != null) {
-            fullscreenButton?.isVisible = options.showFullscreenButton
-            seekView?.isVisible = options.showSeekBar
-            subtitlesButton?.isVisible = options.showSubtitlesButton
-            attachmentsButton?.isVisible = options.showAttachments
-            optionsButton?.isVisible = options.showOptionsButton
+            val showControls = options.controls
+            controlView?.isVisible = showControls
+            fullscreenButton?.isVisible = showControls && options.fullscreen
+            seekView?.isVisible = showControls && options.showSeekBar
+            optionsButton?.isVisible = showControls && options.showOptionsButton
+            pictureInPictureButton?.isVisible = showControls &&
+                options.pictureInPicture &&
+                KinescopePictureInPicture.isSupported(context)
+            playPauseButton?.isVisible = showControls && options.showPlayPauseButton
+            positionView?.isVisible = showControls && options.showDuration && !isLiveState
+            durationView?.isVisible = false
+            timeSeparatorView?.isVisible = false
+            settingsMenuView?.setParameterVisible(
+                KinescopeSettingsView.Parameter.PlaybackSpeed,
+                showControls && options.showPlaybackSpeedInSettings,
+            )
+            settingsMenuView?.setParameterVisible(
+                KinescopeSettingsView.Parameter.VideoQuality,
+                showControls && options.showAudioOnlyQualityInSettings,
+            )
+            val video = getVideo()
+            settingsMenuView?.setParameterVisible(
+                KinescopeSettingsView.Parameter.Subtitles,
+                showControls && options.showSubtitlesButton && !video?.subtitles.isNullOrEmpty(),
+            )
+            settingsMenuView?.setParameterVisible(
+                KinescopeSettingsView.Parameter.Attachments,
+                showControls && options.showAttachments && !video?.attachments.isNullOrEmpty(),
+            )
+        } else {
+            playPauseButton?.isVisible = true
+            controlView?.isVisible = true
+            settingsMenuView?.setParameterVisible(
+                KinescopeSettingsView.Parameter.PlaybackSpeed,
+                true
+            )
         }
+    }
+
+    /**
+     * Re-applies [KinescopeVideoPlayer.kinescopePlayerOptions] to control chrome and settings entries.
+     * Call after mutating options on an attached player.
+     */
+    fun refreshPlayerChrome() {
+        kinescopePlayer?.kinescopePlayerOptions?.syncLegacyChromeFlags()
+        applyKinescopePlayerOptions()
+        applyAccentColor()
+        updateAll()
+    }
+
+    fun applyTemplateOptions() {
+        kinescopePlayer?.applyPlaybackOptions()
+        refreshPlayerChrome()
+        applyDefaultQuality()
+    }
+
+    private fun applyDefaultQuality() {
+        val quality = kinescopePlayer?.kinescopePlayerOptions?.quality ?: return
+        val variantId = when (quality.lowercase()) {
+            "auto" -> KinescopeQualityVariant.QUALITY_VARIANT_AUTO_ID
+            "audio", "audio_only", "audio-only" -> KinescopeQualityVariant.QUALITY_VARIANT_AUDIO_ONLY_ID
+            else -> quality.toIntOrNull() ?: KinescopeQualityVariant.QUALITY_VARIANT_AUTO_ID
+        }
+        qualityManager?.setVariant(variantId)
+    }
+
+    private fun applyAccentColor() {
+        val white = androidx.core.content.ContextCompat.getColor(context, R.color.white)
+        val playedColor = kinescopePlayer?.kinescopePlayerOptions?.accentColor
+            ?.let { hex -> runCatching { Color.parseColor(hex) }.getOrNull() }
+            ?: androidx.core.content.ContextCompat.getColor(context, R.color.kinescope_primary_color)
+        setColors(
+            buttonColor = white,
+            playedColor = playedColor,
+        )
+    }
+
+    private fun tintControlIcon(view: View?, @ColorInt color: Int) {
+        (view as? android.widget.ImageView)?.setColorFilter(color, PorterDuff.Mode.SRC_IN)
     }
 
     private fun updateTitles() {
-        if (getVideo() == null) return
-        titleView?.text = getVideo()!!.title
-        authorView?.text = getVideo()!!.subtitle
+        val video = getVideo() ?: return
+        titleView?.apply {
+            text = video.title
+            isVisible = video.title.isNotEmpty()
+        }
+        authorView?.apply {
+            text = video.subtitle
+            isVisible = !video.subtitle.isNullOrEmpty()
+        }
+        if (
+            selectedSubtitleIndex == SUBTITLES_OPTION_OFF_ID &&
+            kinescopePlayer?.getShowSubtitles() == true &&
+            video.subtitles.isNotEmpty()
+        ) {
+            selectedSubtitleIndex = 0
+        }
+        applyKinescopePlayerOptions()
+    }
+
+    private fun registerDoubleTapSeek(forward: Boolean): Int {
+        val now = System.currentTimeMillis()
+        doubleTapSeekStreakCount = if (
+            lastDoubleTapSeekForward == forward &&
+            now - lastDoubleTapSeekTimeMs <= DOUBLE_TAP_SEEK_STREAK_WINDOW_MS
+        ) {
+            doubleTapSeekStreakCount + 1
+        } else {
+            1
+        }
+        lastDoubleTapSeekForward = forward
+        lastDoubleTapSeekTimeMs = now
+        return doubleTapSeekStreakCount * DOUBLE_TAP_SEEK_SECONDS
     }
 
     private fun updatePlayPauseButton() {
-        if (!controlView!!.isVisible || !isAttachedToWindow) {
-            return
+        val button = playPauseButton as? ImageView ?: return
+        val layoutParams = button.layoutParams ?: return
+        val size = resources.getDimensionPixelSize(R.dimen.kinescope_play_pause_size)
+
+        layoutParams.width = size
+        layoutParams.height = size
+        button.layoutParams = layoutParams
+        button.clearColorFilter()
+        button.scaleType = ImageView.ScaleType.FIT_CENTER
+        button.background = null
+        button.setPadding(0, 0, 0, 0)
+
+        val iconRes = when {
+            shouldShowReplayButton() -> R.drawable.ic_controls_rewind
+            shouldShowPauseButton() -> R.drawable.kinescope_controls_pause
+            else -> R.drawable.kinescope_controls_play
         }
-        if (playPauseButton != null) {
-            if (shouldShowPauseButton()) {
-                (playPauseButton as ImageView)
-                    .setImageDrawable(
-                        AppCompatResources.getDrawable(
-                            context,
-                            R.drawable.kinescope_controls_pause
-                        )
-                    )
-            } else {
-                (playPauseButton as ImageView)
-                    .setImageDrawable(
-                        AppCompatResources.getDrawable(
-                            context,
-                            R.drawable.kinescope_controls_play
-                        )
-                    )
+        button.setImageDrawable(createScaledControlIcon(iconRes, size))
+        button.requestLayout()
+    }
+
+    private fun createScaledControlIcon(@DrawableRes iconRes: Int, sizePx: Int): Drawable? {
+        val source = AppCompatResources.getDrawable(context, iconRes)?.mutate() ?: return null
+        val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        source.setBounds(0, 0, sizePx, sizePx)
+        source.draw(canvas)
+        return BitmapDrawable(resources, bitmap)
+    }
+
+    private fun enterScrubOverlayMode() {
+        cancelControlOverlayAutoHide()
+        showControlOverlay(animated = false)
+        titleView?.isVisible = false
+        authorView?.isVisible = false
+        controlView?.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        seekView?.isVisible = true
+
+        val density = resources.displayMetrics.density
+        controlElevationBeforeScrub = controlView?.elevation ?: 0f
+        controlView?.elevation = SCRUB_MODE_CONTROL_ELEVATION_DP * density
+        controlView?.let { control ->
+            (control.parent as? android.view.ViewGroup)?.bringChildToFront(control)
+        }
+
+        timeBar?.let { bar ->
+            bar.setScrubVisualExpanded(expanded = true)
+            bar.animate().cancel()
+            bar.scaleX = 1f
+            bar.post {
+                bar.pivotX = bar.width / 2f
+                bar.pivotY = bar.height / 2f
+                bar.animate()
+                    .scaleY(SCRUB_SEEKBAR_SCALE)
+                    .setDuration(SCRUB_SEEKBAR_SCALE_DURATION_MS)
+                    .start()
             }
         }
+    }
+
+    private fun exitScrubOverlayMode() {
+        controlView?.elevation = controlElevationBeforeScrub
+        controlView?.setBackgroundColor(
+            androidx.core.content.ContextCompat.getColor(
+                context,
+                R.color.kinescope_control_overlay_scrim,
+            ),
+        )
+
+        timeBar?.let { bar ->
+            bar.setScrubVisualExpanded(expanded = false)
+            bar.animate().cancel()
+            bar.scaleX = 1f
+            bar.animate()
+                .scaleY(1f)
+                .setDuration(SCRUB_SEEKBAR_SCALE_DURATION_MS)
+                .start()
+        }
+    }
+
+    private fun scheduleControlOverlayAutoHide() {
+        if (kinescopePlayer?.kinescopePlayerOptions?.controls != true) {
+            return
+        }
+        if (settingsMenuView?.isVisible == true || scrubbing) {
+            return
+        }
+        removeCallbacks(hideControlOverlayRunnable)
+        postDelayed(hideControlOverlayRunnable, CONTROL_OVERLAY_AUTO_HIDE_MS)
+    }
+
+    private fun cancelControlOverlayAutoHide() {
+        removeCallbacks(hideControlOverlayRunnable)
+    }
+
+    private fun showControlOverlay(animated: Boolean) {
+        val overlay = controlView ?: return
+        if (overlay.isVisible && overlay.alpha >= 1f) {
+            updateAll()
+            scheduleControlOverlayAutoHide()
+            return
+        }
+        overlay.animate().cancel()
+        overlay.isVisible = true
+        if (!animated) {
+            overlay.alpha = 1f
+            updateAll()
+            scheduleControlOverlayAutoHide()
+            return
+        }
+        overlay.alpha = 0f
+        overlay.animate()
+            .alpha(1f)
+            .setDuration(CONTROL_OVERLAY_FADE_DURATION_MS)
+            .withEndAction {
+                updateAll()
+                scheduleControlOverlayAutoHide()
+            }
+            .start()
+    }
+
+    private fun hideControlOverlay(animated: Boolean) {
+        val overlay = controlView ?: return
+        if (!overlay.isVisible) {
+            return
+        }
+        cancelControlOverlayAutoHide()
+        overlay.animate().cancel()
+        if (!animated) {
+            overlay.isVisible = false
+            overlay.alpha = 1f
+            return
+        }
+        overlay.animate()
+            .alpha(0f)
+            .setDuration(CONTROL_OVERLAY_FADE_DURATION_MS)
+            .withEndAction {
+                overlay.isVisible = false
+                overlay.alpha = 1f
+            }
+            .start()
     }
 
     private fun updateFullscreenButton() {
@@ -778,22 +1062,39 @@ class KinescopePlayerView(
         }
     }
 
+    private fun toggleSettingsMenu() {
+        if (settingsMenuView?.isVisible == true) {
+            settingsMenuView?.dismiss()
+            if (controlView?.isVisible == true) {
+                scheduleControlOverlayAutoHide()
+            }
+            return
+        }
+        showSettingsMenu()
+    }
+
     private fun showSettingsMenu() {
+        cancelControlOverlayAutoHide()
         val playbackSpeedCurrentValue = playbackSpeedVariants
             .find { variant -> variant.speed == kinescopePlayer?.exoPlayer?.playbackSpeed }
             ?.name
             .orEmpty()
 
-        val qualityCurrentValue = when (qualityManager?.isAutoQuality == true) {
-            true -> context.getString(
-                R.string.settings_video_quality_variant_auto_caption,
-                kinescopePlayer?.exoPlayer?.videoSize?.height.toString()
-            )
+        val qualityCurrentValue = when {
+            qualityManager?.isAudioOnlyQuality == true ->
+                context.getString(R.string.settings_video_quality_audio_only)
+
+            qualityManager?.isAutoQuality == true ->
+                context.getString(
+                    R.string.settings_video_quality_variant_auto_caption,
+                    kinescopePlayer?.exoPlayer?.videoSize?.height.toString()
+                )
 
             else -> qualityManager?.selectedVariant?.name.orEmpty()
         }
 
         settingsMenuView?.apply {
+            setFullscreenMode(isVideoFullscreen)
             setParameterCurrentValue(
                 parameter = KinescopeSettingsView.Parameter.PlaybackSpeed,
                 value = playbackSpeedCurrentValue,
@@ -810,7 +1111,28 @@ class KinescopePlayerView(
                 parameter = KinescopeSettingsView.Parameter.VideoQuality,
                 options = getSettingsMenuVideoQualityOptions()
             )
+            setParameterCurrentValue(
+                parameter = KinescopeSettingsView.Parameter.Subtitles,
+                value = getSubtitlesCurrentValueLabel(),
+            )
+            setParameterOptions(
+                parameter = KinescopeSettingsView.Parameter.Subtitles,
+                options = getSettingsMenuSubtitlesOptions(),
+            )
+            setParameterOptions(
+                parameter = KinescopeSettingsView.Parameter.Attachments,
+                options = getSettingsMenuAttachmentsOptions(),
+            )
             show()
+        }
+        bringSettingsAboveOverlay()
+    }
+
+    private fun bringSettingsAboveOverlay() {
+        settingsMenuView?.let { settings ->
+            val density = resources.displayMetrics.density
+            settings.elevation = SETTINGS_MENU_ELEVATION_DP * density
+            (settings.parent as? android.view.ViewGroup)?.bringChildToFront(settings)
         }
     }
 
@@ -824,8 +1146,10 @@ class KinescopePlayerView(
                 )
             }
 
-    private fun getSettingsMenuVideoQualityOptions() =
-        qualityManager?.variants
+    private fun getSettingsMenuVideoQualityOptions(): List<KinescopeSettingsOption> {
+        val options = kinescopePlayer?.kinescopePlayerOptions
+        val includeAudioOnly = options?.showAudioOnlyQualityInSettings != false
+        return qualityManager?.variants
             .orEmpty()
             .map { variant ->
                 KinescopeSettingsOption(
@@ -836,14 +1160,24 @@ class KinescopePlayerView(
             }
             .toMutableList()
             .apply {
+                if (includeAudioOnly) {
+                    add(
+                        KinescopeSettingsOption(
+                            id = KinescopeQualityVariant.QUALITY_VARIANT_AUDIO_ONLY_ID,
+                            title = resources.getString(R.string.settings_video_quality_audio_only),
+                            isSelected = qualityManager?.isAudioOnlyQuality == true
+                        )
+                    )
+                }
                 add(
                     KinescopeSettingsOption(
                         id = KinescopeQualityVariant.QUALITY_VARIANT_AUTO_ID,
                         title = resources.getString(R.string.settings_video_quality_variant_auto),
-                        isSelected = qualityManager?.isAutoQuality ?: false
+                        isSelected = qualityManager?.isAutoQuality == true
                     )
                 )
             }
+    }
 
     private fun onSettingsOptionSelected(
         parameter: KinescopeSettingsView.Parameter,
@@ -857,8 +1191,67 @@ class KinescopePlayerView(
             is KinescopeSettingsView.Parameter.VideoQuality -> qualityManager?.setVariant(
                 id = optionId
             )
+
+            is KinescopeSettingsView.Parameter.Subtitles -> applySubtitlesSelection(optionId)
+
+            is KinescopeSettingsView.Parameter.Attachments ->
+                getVideo()?.attachments?.getOrNull(optionId)?.let { attachment ->
+                    onAttachmentSelected?.invoke(attachment)
+                }
+
+            else -> Unit
         }
     }
+
+    private fun getSubtitlesCurrentValueLabel(): String {
+        if (selectedSubtitleIndex == SUBTITLES_OPTION_OFF_ID) {
+            return context.getString(R.string.settings_subtitles_off)
+        }
+        return getVideo()?.subtitles?.getOrNull(selectedSubtitleIndex)?.displayLabel().orEmpty()
+    }
+
+    private fun getSettingsMenuSubtitlesOptions(): List<KinescopeSettingsOption> {
+        val subtitles = getVideo()?.subtitles.orEmpty()
+        return buildList {
+            add(
+                KinescopeSettingsOption(
+                    id = SUBTITLES_OPTION_OFF_ID,
+                    title = context.getString(R.string.settings_subtitles_off),
+                    isSelected = selectedSubtitleIndex == SUBTITLES_OPTION_OFF_ID,
+                )
+            )
+            subtitles.forEachIndexed { index, subtitle ->
+                add(
+                    KinescopeSettingsOption(
+                        id = index,
+                        title = subtitle.displayLabel(),
+                        isSelected = selectedSubtitleIndex == index,
+                    )
+                )
+            }
+        }
+    }
+
+    private fun getSettingsMenuAttachmentsOptions(): List<KinescopeSettingsOption> =
+        getVideo()?.attachments.orEmpty().mapIndexed { index, attachment ->
+            KinescopeSettingsOption(
+                id = index,
+                title = attachment.title,
+                isSelected = false,
+            )
+        }
+
+    private fun applySubtitlesSelection(optionId: Int) {
+        selectedSubtitleIndex = optionId
+        val trackSelector = kinescopePlayer?.exoPlayer?.trackSelector as? DefaultTrackSelector
+            ?: return
+        trackSelector.parameters = trackSelector.buildUponParameters()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, optionId == SUBTITLES_OPTION_OFF_ID)
+            .build()
+    }
+
+    private fun KinescopeVideoSubtitle.displayLabel(): String =
+        description.ifBlank { language }.ifBlank { id }
 
     private fun shouldShowPauseButton(): Boolean {
         return kinescopePlayer?.exoPlayer != null && kinescopePlayer!!.exoPlayer!!.playbackState != Player.STATE_ENDED && kinescopePlayer!!.exoPlayer!!.playbackState != Player.STATE_IDLE && kinescopePlayer!!.exoPlayer!!.playWhenReady
@@ -877,9 +1270,9 @@ class KinescopePlayerView(
 
         timeBar?.addListener(componentListener)
         playPauseButton?.setOnClickListener(componentListener)
+        pictureInPictureButton?.setOnClickListener(componentListener)
         optionsButton?.setOnClickListener(componentListener)
         fullscreenButton?.setOnClickListener(componentListener)
-        subtitlesButton?.setOnClickListener(componentListener)
 
         liveDataView?.setOnClickListener {
             if (!isLiveSynced) {
@@ -999,8 +1392,12 @@ class KinescopePlayerView(
     }
 
     private fun toggleControlUI() {
-        controlView!!.isVisible = !controlView!!.isVisible
-        updateAll()
+        val overlay = controlView ?: return
+        if (overlay.isVisible) {
+            hideControlOverlay(animated = true)
+        } else {
+            showControlOverlay(animated = true)
+        }
     }
 
     private fun seekToTimeBarPosition(player: Player, positionMs: Long) {
@@ -1050,6 +1447,10 @@ class KinescopePlayerView(
             seekTo(player, player.currentMediaItemIndex, C.TIME_UNSET)
         }
         player.play()
+        updatePlayPauseButton()
+        if (controlView?.isVisible == true) {
+            scheduleControlOverlayAutoHide()
+        }
 
         getAnalyticsArguments().let { args ->
             analyticsManager.play(args = args)
@@ -1058,6 +1459,9 @@ class KinescopePlayerView(
 
     private fun dispatchPause(player: Player) {
         player.pause()
+        if (controlView?.isVisible == true) {
+            scheduleControlOverlayAutoHide()
+        }
 
         if (isLiveState) {
             isLiveSynced = false
@@ -1124,6 +1528,22 @@ class KinescopePlayerView(
     }
     fun hideAllControls(){
         controlView?.isVisible = false
+    }
+
+    /**
+     * Prepares player chrome for Picture-in-Picture: hides controls and overlays so only video is visible.
+     */
+    fun prepareForPictureInPicture(preparing: Boolean) {
+        if (preparing) {
+            settingsMenuView?.isVisible = false
+            seekView?.isVisible = false
+            posterView?.isVisible = false
+            liveStartDateContainerView?.isVisible = false
+            hideAllControls()
+        } else {
+            applyKinescopePlayerOptions()
+            updateAll()
+        }
     }
 
     fun showAllControls() {

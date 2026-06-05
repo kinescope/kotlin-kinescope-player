@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -122,8 +123,20 @@ class KinescopeVideoPlayer(
         )
 
         exoPlayer?.setMediaSource(mediaSource)
-        exoPlayer?.playWhenReady = false
+        applyPlaybackOptions()
+        exoPlayer?.playWhenReady = kinescopePlayerOptions.autoplay
         exoPlayer?.prepare()
+    }
+
+    fun applyPlaybackOptions() {
+        exoPlayer?.let { player ->
+            player.volume = if (kinescopePlayerOptions.muted) 0f else 1f
+            player.repeatMode = if (kinescopePlayerOptions.loop) {
+                Player.REPEAT_MODE_ALL
+            } else {
+                Player.REPEAT_MODE_OFF
+            }
+        }
     }
 
     private fun fetchUpdate() {
@@ -145,11 +158,10 @@ class KinescopeVideoPlayer(
                 if (response.isSuccessful) {
                     val video = response.body()!!
                     setVideo(video)
+                    if (kinescopePlayerOptions.autoplay) {
+                        play()
+                    }
                     onSuccess?.invoke(video)
-
-                    if (onSuccess != null) {
-                        onSuccess(video)
-                    };
                 } else {
                     KinescopeLogger.log(
                         KinescopeLoggerLevel.NETWORK,
@@ -237,5 +249,17 @@ class KinescopeVideoPlayer(
 
     fun setShowFullscreen(value: Boolean) {
         kinescopePlayerOptions.showFullscreenButton = value
+    }
+
+    fun setShowPlayPauseButton(value: Boolean) {
+        kinescopePlayerOptions.showPlayPauseButton = value
+    }
+
+    fun setShowPlaybackSpeedInSettings(value: Boolean) {
+        kinescopePlayerOptions.showPlaybackSpeedInSettings = value
+    }
+
+    fun setShowAudioOnlyQualityInSettings(value: Boolean) {
+        kinescopePlayerOptions.showAudioOnlyQualityInSettings = value
     }
 }

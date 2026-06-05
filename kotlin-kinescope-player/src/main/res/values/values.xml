@@ -4,9 +4,18 @@
 
     <dimen name="kinescope_media_button_height">36dp</dimen>
     <dimen name="kinescope_media_button_width">36dp</dimen>
+    <dimen name="kinescope_play_pause_size">55dp</dimen>
+    <dimen name="kinescope_settings_popup_width">280dp</dimen>
+    <dimen name="kinescope_settings_popup_height">196dp</dimen>
+    <dimen name="kinescope_settings_popup_corner_radius">6dp</dimen>
+    <dimen name="kinescope_settings_popup_padding_vertical">8dp</dimen>
+    <dimen name="kinescope_settings_popup_padding_horizontal">16dp</dimen>
+    <dimen name="kinescope_settings_popup_edge_margin">12dp</dimen>
+    <dimen name="kinescope_settings_popup_anchor_gap">8dp</dimen>
+    <dimen name="kinescope_settings_popup_embedded_offset">55dp</dimen>
     <dimen name="kinescope_media_settings_offset">8dp</dimen>
 
-    <color name="kinescope_progressbar_buffered_color">#FFFFFF</color>
+    <color name="kinescope_progressbar_buffered_color">#33FFFFFF</color>
     <color name="kinescope_progressbar_unplayed_color">#52FFFFFF</color>
 
     <color name="kinescope_circle_animation_color">#4DFFFFFF</color>
@@ -16,6 +25,8 @@
     <color name="kinescope_live_not_synced_color">#52FFFFFF</color>
     <color name="kinescope_live_stream_start_bg_color">#CC222222</color>
 
+    <color name="kinescope_control_overlay_scrim">#BF000000</color>
+
     <color name="kinescope_settings">#222222</color>
     <color name="kinescope_settings_item">#222222</color>
     <color name="kinescope_settings_item_pressed">#444444</color>
@@ -24,6 +35,7 @@
         <item name="android:background">?android:attr/selectableItemBackground</item>
         <item name="android:layout_width">@dimen/kinescope_media_button_height</item>
         <item name="android:layout_height">@dimen/kinescope_media_button_width</item>
+        <item name="android:tint">@color/white</item>
     </style>
 
     <declare-styleable name="KinescopeTimeBar">
@@ -62,8 +74,9 @@
         <item name="bar_height">@dimen/kinescope_progress_bar_height</item>
         <item name="bar_gravity">bottom</item>
         <item name="touch_target_height">@dimen/kinescope_progress_touch_target_height</item>
-        <item name="scrubber_enabled_size">@dimen/kinescope_progress_enabled_thumb_size</item>
-        <item name="scrubber_dragged_size">@dimen/kinescope_progress_dragged_thumb_size</item>
+        <item name="scrubber_enabled_size">0dp</item>
+        <item name="scrubber_disabled_size">0dp</item>
+        <item name="scrubber_dragged_size">0dp</item>
         <item name="android:layout_height">@dimen/kinescope_progress_layout_height</item>
     </style>
     
@@ -72,10 +85,16 @@
         <item name="android:windowExitAnimation">@anim/slide_out_right</item>
     </style>
 
-    <dimen name="kinescope_progress_bar_height">4dp</dimen>
-    <dimen name="kinescope_progress_touch_target_height">48dp</dimen>
+    <dimen name="kinescope_progress_bar_height">3dp</dimen>
+    <dimen name="kinescope_progress_touch_target_height">20dp</dimen>
+    <dimen name="kinescope_progress_control_height">20dp</dimen>
     <dimen name="kinescope_progress_enabled_thumb_size">10dp</dimen>
     <dimen name="kinescope_progress_dragged_thumb_size">14dp</dimen>
     <dimen name="kinescope_progress_layout_height">48dp</dimen>
+    <dimen name="kinescope_control_bar_height">52dp</dimen>
+    <dimen name="kinescope_scrub_seek_icon_width">28dp</dimen>
+    <dimen name="kinescope_scrub_seek_icon_height">18dp</dimen>
+    <dimen name="kinescope_seek_feedback_circle_diameter">280dp</dimen>
+    <dimen name="kinescope_seek_feedback_circle_diameter_fullscreen">360dp</dimen>
 
 </resources>

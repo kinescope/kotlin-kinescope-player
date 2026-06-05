@@ -2,7 +2,7 @@ package io.kinescope.sdk.network
 
 import com.squareup.moshi.Moshi
 import io.kinescope.sdk.api.KinescopeFetch
-import io.kinescope.sdk.utils.kinescopeFetchEndpoint
+import io.kinescope.sdk.api.KinescopeApiConfig
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -31,7 +31,7 @@ object FetchBuilder {
 
     private fun getBuilder(referer: String): Retrofit {
         return Retrofit.Builder()
-            .baseUrl(kinescopeFetchEndpoint)
+            .baseUrl(KinescopeApiConfig.FETCH_BASE_URL)
             .addConverterFactory(MoshiConverterFactory.create(getMoshi()))
             .client(getOkhttpClient(referer))
             .build()

@@ -3,12 +3,10 @@ package io.kinescope.demo.playlist
 import io.kinescope.demo.R
 import io.kinescope.demo.VideosAdapter
 import android.content.pm.ActivityInfo
-import android.graphics.Color
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.view.View
 import android.view.WindowManager
-import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.core.view.isVisible
 import androidx.media3.common.util.UnstableApi
@@ -47,35 +45,9 @@ class PlaylistActivity : AppCompatActivity() {
 
         val videosView = findViewById<RecyclerView>(R.id.rv_videos)
         playerView.setPlayer(kinescopePlayer)
+        playerView.applyTemplateOptions()
         playerView.onFullscreenButtonCallback = { toggleFullscreen() }
         fullscreenPlayerView.onFullscreenButtonCallback = { toggleFullscreen() }
-
-        playerView.apply {
-            showCustomButton(
-                iconRes = R.drawable.ic_chromecats,
-                onClick = { Toast.makeText(context, "Custom icon clicked", Toast.LENGTH_SHORT).show() }
-            )
-            setColors(
-                buttonColor = Color.parseColor("#228B22"),
-                progressBarColor = getColor(R.color.player_custom_color_remaining),
-                scrubberColor = Color.parseColor("#EC3440"),
-                playedColor = Color.parseColor("#EBABCF"),
-                bufferedColor = Color.YELLOW,
-            )
-        }
-        fullscreenPlayerView.apply {
-            showCustomButton(
-                iconRes = R.drawable.ic_chromecats,
-                onClick = { Toast.makeText(context, "Custom icon clicked", Toast.LENGTH_SHORT).show() }
-            )
-            setColors(
-                buttonColor = Color.parseColor("#228B22"),
-                progressBarColor = getColor(R.color.player_custom_color_remaining),
-                scrubberColor = Color.parseColor("#EC3440"),
-                playedColor = Color.parseColor("#EBABCF"),
-                bufferedColor = Color.YELLOW,
-            )
-        }
 
         val adapter = VideosAdapter { videoId ->
             kinescopePlayer.loadVideo(videoId, onSuccess = { data ->

@@ -8,9 +8,9 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface KinescopeFetch {
-    @GET("{video_id}.json")
+    @GET(KinescopeApiConfig.VIDEO_JSON)
     fun getVideo(
-        @Path("video_id") videoId: String,
+        @Path(KinescopeApiConfig.VIDEO_ID_PARAM) videoId: String,
         @Query("sdk") sdk: String = SDK_TYPE
     ): Call<KinescopeVideo>
 }

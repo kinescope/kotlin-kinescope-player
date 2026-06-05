@@ -34,7 +34,8 @@
         android:layout_marginBottom="70dp"
         android:textColor="@color/white"
         android:textSize="19sp"
-        android:textStyle="bold" />
+        android:textStyle="bold"
+        android:fontFamily="@font/roboto" />
 
     <TextView
         android:id="@+id/descriptionVideo"
@@ -47,7 +48,8 @@
         android:layout_marginBottom="38dp"
         android:textColor="@color/white"
         android:textSize="19sp"
-        android:textStyle="bold" />
+        android:textStyle="bold"
+        android:fontFamily="@font/roboto" />
 
     <ProgressBar
         android:id="@+id/downloadProgress"
@@ -61,71 +63,70 @@
         android:progressTint="@color/white"
         android:indeterminate="false"/>
 
-    <ImageButton
-        android:id="@+id/btnLike"
-        android:layout_width="35dp"
-        android:layout_height="43dp"
+    <LinearLayout
+        android:id="@+id/buttonsContainer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
         android:layout_alignParentEnd="true"
         android:layout_marginStart="16dp"
-        android:layout_marginTop="370dp"
-        android:layout_marginEnd="16dp"
+        android:layout_marginTop="390dp"
+        android:layout_marginEnd="10dp"
         android:layout_marginBottom="16dp"
-        android:background="@null"
-        android:contentDescription="@string/player_like"
-        android:src="@drawable/ic_like" />
+        android:gravity="end">
 
-    <ImageButton
-        android:id="@+id/btnDisLike"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_below="@id/btnLike"
-        android:layout_alignParentEnd="true"
-        android:layout_margin="16dp"
-        android:src="@drawable/ic_dislike"
-        android:contentDescription="@string/player_comment"
-        android:background="@null"/>
+        <ImageButton
+            android:id="@+id/btnLike"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@null"
+            android:contentDescription="@string/player_like"
+            android:src="@drawable/ic_like" />
 
-    <ImageButton
-        android:id="@+id/btnComment"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_below="@id/btnDisLike"
-        android:layout_alignParentEnd="true"
-        android:layout_margin="16dp"
-        android:src="@drawable/ic_comment"
-        android:contentDescription="@string/player_comment"
-        android:background="@null"/>
+        <ImageButton
+            android:id="@+id/btnDisLike"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:src="@drawable/ic_dislike"
+            android:contentDescription="@string/player_comment"
+            android:background="@null"/>
 
-    <ImageButton
-        android:id="@+id/btnShare"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_below="@id/btnComment"
-        android:layout_alignParentEnd="true"
-        android:layout_margin="16dp"
-        android:src="@drawable/ic_share"
-        android:contentDescription="@string/player_share"
-        android:background="@null"/>
+        <ImageButton
+            android:id="@+id/btnComment"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@null"
+            android:contentDescription="@string/player_comment"
+            android:src="@drawable/ic_comment" />
 
-    <ImageButton
-        android:id="@+id/btnOffline"
-        android:visibility="gone"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignParentEnd="true"
-        android:layout_margin="50dp"
-        android:src="@drawable/ic_save"
-        android:background="@null"/>
+        <ImageButton
+            android:id="@+id/btnShare"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:src="@drawable/ic_share"
+            android:contentDescription="@string/player_share"
+            android:background="@null"/>
 
-    <ImageButton
-        android:id="@+id/btnShowSavedVideos"
-        android:visibility="gone"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_below="@id/btnOffline"
-        android:layout_alignParentEnd="true"
-        android:layout_margin="50dp"
-        android:src="@drawable/ic_menu"
-        android:background="@null"/>
+        <ImageButton
+            android:id="@+id/btnOffline"
+            android:visibility="gone"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:src="@drawable/ic_save"
+            android:background="@null"/>
+
+        <ImageButton
+            android:id="@+id/btnShowSavedVideos"
+            android:visibility="gone"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:src="@drawable/ic_menu"
+            android:background="@null"/>
+    </LinearLayout>
 
 </RelativeLayout>

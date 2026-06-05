@@ -2,7 +2,7 @@ package io.kinescope.sdk.network
 
 import com.squareup.moshi.Moshi
 import io.kinescope.sdk.api.KinescopeAnalyticsApi
-import io.kinescope.sdk.utils.kinescopeAnalyticsApiEndpoint
+import io.kinescope.sdk.api.KinescopeApiConfig
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -18,7 +18,7 @@ object AnalyticsBuilder {
 
     private fun getBuilder() =
         Retrofit.Builder()
-            .baseUrl(kinescopeAnalyticsApiEndpoint)
+            .baseUrl(KinescopeApiConfig.ANALYTICS_BASE_URL)
             .addConverterFactory(ProtoConverterFactory.create())
             .client(getOkhttpClient())
             .build()

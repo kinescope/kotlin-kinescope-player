@@ -8,6 +8,7 @@ data class KinescopeQualityVariant(
 ) {
     companion object {
         const val QUALITY_VARIANT_AUTO_ID = -1
+        const val QUALITY_VARIANT_AUDIO_ONLY_ID = -2
     }
 }
 

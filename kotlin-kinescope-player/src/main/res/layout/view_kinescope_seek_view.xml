@@ -1,27 +1,177 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:clipChildren="false"
     android:clickable="false"
-    android:focusable="false"
-    android:orientation="horizontal"
-    android:weightSum="2">
+    android:focusable="false">
 
-    <io.kinescope.sdk.view.CircleAnimationView
-        android:id="@+id/cav_left"
-        android:layout_width="0dp"
+    <View
+        android:id="@+id/scrub_overlay"
+        android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_weight="1"
-        android:clickable="false"
-        android:focusable="false"
-        android:visibility="invisible" />
+        android:background="#99000000"
+        android:visibility="gone"
+        tools:visibility="visible" />
 
-    <io.kinescope.sdk.view.CircleAnimationView
-        android:id="@+id/cav_right"
-        android:layout_width="0dp"
+    <LinearLayout
+        android:id="@+id/scrub_top_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="10dp"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <ImageView
+            android:id="@+id/btn_move_back"
+            android:layout_width="@dimen/kinescope_scrub_seek_icon_width"
+            android:layout_height="@dimen/kinescope_scrub_seek_icon_height"
+            android:contentDescription="@string/player_seek_back"
+            android:importantForAccessibility="no"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_move_back" />
+
+        <TextView
+            android:id="@+id/scrub_hint_tv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="8dp"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:text="@string/player_scrub_double_tap_hint"
+            android:textColor="@color/white"
+            android:textSize="14sp" />
+
+        <ImageView
+            android:id="@+id/btn_move_forward"
+            android:layout_width="@dimen/kinescope_scrub_seek_icon_width"
+            android:layout_height="@dimen/kinescope_scrub_seek_icon_height"
+            android:contentDescription="@string/player_seek_forward"
+            android:importantForAccessibility="no"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_move_forward" />
+
+    </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/seek_feedback_back"
+        android:layout_width="wrap_content"
         android:layout_height="match_parent"
-        android:layout_weight="1"
-        android:clickable="false"
-        android:focusable="false" />
+        android:layout_gravity="center_vertical|start"
+        android:clipChildren="false"
+        android:visibility="gone"
+        tools:visibility="visible">
 
-</LinearLayout>
+        <FrameLayout
+            android:id="@+id/seek_feedback_back_hemisphere_clip"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_gravity="center_vertical|start"
+            android:clipChildren="true">
+
+            <View
+                android:id="@+id/seek_feedback_back_hemisphere"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_seek_feedback_circle" />
+
+        </FrameLayout>
+
+        <LinearLayout
+            android:id="@+id/seek_feedback_back_content"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical|start"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:paddingStart="8dp">
+
+            <ImageView
+                android:id="@+id/seek_feedback_back_icon"
+                android:layout_width="@dimen/kinescope_scrub_seek_icon_width"
+                android:layout_height="@dimen/kinescope_scrub_seek_icon_height"
+                android:importantForAccessibility="no"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_move_back" />
+
+            <TextView
+                android:id="@+id/seek_feedback_back_seconds"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:includeFontPadding="false"
+                android:textColor="@color/white"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                tools:text="10 сек" />
+
+        </LinearLayout>
+
+    </FrameLayout>
+
+    <FrameLayout
+        android:id="@+id/seek_feedback_forward"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:layout_gravity="center_vertical|end"
+        android:clipChildren="false"
+        android:visibility="gone">
+
+        <FrameLayout
+            android:id="@+id/seek_feedback_forward_hemisphere_clip"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_gravity="center_vertical|end"
+            android:clipChildren="true">
+
+            <View
+                android:id="@+id/seek_feedback_forward_hemisphere"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_seek_feedback_circle" />
+
+        </FrameLayout>
+
+        <LinearLayout
+            android:id="@+id/seek_feedback_forward_content"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical|end"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:paddingEnd="8dp">
+
+            <ImageView
+                android:id="@+id/seek_feedback_forward_icon"
+                android:layout_width="@dimen/kinescope_scrub_seek_icon_width"
+                android:layout_height="@dimen/kinescope_scrub_seek_icon_height"
+                android:importantForAccessibility="no"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_move_forward" />
+
+            <TextView
+                android:id="@+id/seek_feedback_forward_seconds"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:includeFontPadding="false"
+                android:textColor="@color/white"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                tools:text="10 сек" />
+
+        </LinearLayout>
+
+    </FrameLayout>
+
+</FrameLayout>

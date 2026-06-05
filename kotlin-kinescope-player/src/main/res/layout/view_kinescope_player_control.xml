@@ -6,7 +6,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:layout_gravity="bottom"
-    android:background="#BF000000"
+    android:background="@color/kinescope_control_overlay_scrim"
     android:clickable="false"
     android:layoutDirection="ltr"
     android:orientation="vertical"
@@ -40,14 +40,17 @@
 
     <ImageView
         android:id="@+id/kinescope_play_pause"
-        android:layout_width="56dp"
-        android:layout_height="56dp"
-        android:layout_gravity="center" />
+        android:layout_width="@dimen/kinescope_play_pause_size"
+        android:layout_height="@dimen/kinescope_play_pause_size"
+        android:layout_gravity="center"
+        android:scaleType="centerInside" />
 
     <LinearLayout
+        android:id="@+id/kinescope_control_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
+        android:clipChildren="false"
         android:gravity="center"
         android:orientation="horizontal"
         android:padding="4dp">
@@ -96,6 +99,7 @@
             android:id="@+id/kinescope_position"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
             android:includeFontPadding="false"
             android:textColor="#FFFFFF"
             android:textSize="14sp"
@@ -111,7 +115,8 @@
             android:text="@string/player_time_divider"
             android:textColor="#FFFFFF"
             android:textSize="14sp"
-            android:textStyle="normal" />
+            android:textStyle="normal"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/kinescope_duration"
@@ -121,20 +126,26 @@
             android:textColor="#FFFFFF"
             android:textSize="14sp"
             android:textStyle="normal"
+            android:visibility="gone"
             tools:text="0:00" />
 
         <io.kinescope.sdk.view.KinescopeTimeBar
             android:id="@+id/kinescope_progress"
             android:layout_width="0dp"
-            android:layout_height="26dp"
+            android:layout_height="@dimen/kinescope_progress_control_height"
+            android:layout_marginStart="4dp"
             android:layout_weight="1"
-            app:bar_height="4dp"
-            app:scrubber_drawable="@drawable/ic_scrubber" />
+            app:bar_height="@dimen/kinescope_progress_bar_height"
+            app:scrubber_disabled_size="0dp"
+            app:scrubber_dragged_size="0dp"
+            app:scrubber_enabled_size="0dp"
+            app:touch_target_height="@dimen/kinescope_progress_touch_target_height" />
 
         <LinearLayout
             android:id="@+id/buttons_container_ll"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp">
 
             <ImageButton
                 android:id="@+id/custom_btn"
@@ -143,16 +154,11 @@
                 android:visibility="gone" />
 
             <ImageButton
-                android:id="@+id/kinescope_btn_attachments"
+                android:id="@+id/kinescope_picture_in_picture"
                 style="@style/KinescopeMediaButton"
-                android:importantForAccessibility="no"
-                android:src="@drawable/ic_attachments" />
-
-            <ImageButton
-                android:id="@+id/kinescope_btn_subtitles"
-                style="@style/KinescopeMediaButton"
-                android:importantForAccessibility="no"
-                android:src="@drawable/ic_subtitles" />
+                android:contentDescription="@string/player_picture_in_picture"
+                android:src="@drawable/ic_mini_player"
+                android:visibility="gone" />
 
             <ImageButton
                 android:id="@+id/kinescope_settings"
