@@ -15,3 +15,4 @@ data class KinescopeSpeedVariant(
         const val PLAYBACK_SPEED_VARIANT_2 = 2f
     }
 }
+

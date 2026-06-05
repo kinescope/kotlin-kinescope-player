@@ -115,11 +115,22 @@ The library provides data models for the API:
 
 ## API Endpoints
 
-Kinescope API endpoints:
+Real endpoints used by the SDK (there is no `GET /v1/vod/{videoId}` on `api.kinescope.io`):
 
-- **Get video:** `GET https://api.kinescope.io/v1/vod/{videoId}`
-- **Video list:** `GET https://api.kinescope.io/v1/vod?project_id={projectId}&limit={limit}&offset={offset}`
-- **Video list by folder:** `GET https://api.kinescope.io/v1/vod?folder_id={folderId}&limit={limit}&offset={offset}`
+**Dashboard API** — `https://api.kinescope.io/`
+
+- **Video catalog:** `GET /v1/videos/?page={page}&per_page={per_page}` — `KinescopeApiHelper.getAllVideos()`
+- **Player templates:** `GET/POST/PUT/DELETE /v1/players`
+
+**Playback metadata** — `https://kinescope.io/`
+
+- **Single video (HLS, metadata):** `GET /{video_id}.json?sdk=android` — `KinescopeFetch` / `KinescopeVideoPlayer.loadVideo()`
+
+**DRM license** — `https://license.kinescope.io/`
+
+- **Widevine license:** `GET /v1/vod/{video_id}/acquire/widevine?token=`
+
+For Shorts, implement `KinescopeVideoProvider` using catalog + `/{video_id}.json`. See [API_USAGE_GUIDE.md](../../API_USAGE_GUIDE.md).
 
 ## Dependencies
 

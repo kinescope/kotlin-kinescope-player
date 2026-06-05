@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="player_time_divider">/</string>
+    <string name="player_picture_in_picture">Картинка в картинке</string>
+    <string name="player_scrub_double_tap_hint">Двойное касание ± 10 сек</string>
+    <string name="player_seek_back">Назад на 10 секунд</string>
+    <string name="player_seek_forward">Вперёд на 10 секунд</string>
+    <string name="player_seek_seconds">%d сек</string>
+
+    <string name="live">В эфире</string>
+    <string name="live_time_offset">-%s</string>
+    <string name="live_its_starting_soon">Скоро начнётся</string>
+
+    <string name="settings_parameter_playback_speed">Скорость</string>
+    <string name="settings_parameter_video_quality">Качество</string>
+    <string name="settings_parameter_picture_in_picture">Картинка в картинке</string>
+    <string name="settings_parameter_subtitles">Субтитры</string>
+    <string name="settings_parameter_attachments">Вложения</string>
+    <string name="settings_subtitles_off">Выкл.</string>
+    <string name="settings_video_quality_audio_only">Только звук</string>
+
+    <string name="settings_playback_speed_0_25">0,25×</string>
+    <string name="settings_playback_speed_0_5">0,5×</string>
+    <string name="settings_playback_speed_0_75">0,75×</string>
+    <string name="settings_playback_speed_normal">Обычная</string>
+    <string name="settings_playback_speed_1_25">1,25×</string>
+    <string name="settings_playback_speed_1_5">1,5×</string>
+    <string name="settings_playback_speed_1_75">1,75×</string>
+    <string name="settings_playback_speed_2">2×</string>
+
+    <string name="settings_video_quality_variant">%s p</string>
+    <string name="settings_video_quality_variant_auto">Авто</string>
+    <string name="settings_video_quality_variant_auto_caption">Авто %s p</string>
+
+    <string name="player_like">Нравится</string>
+    <string name="player_share">Поделиться</string>
+    <string name="player_comment">Комментарий</string>
+
+    <string name="download_channel_name">Загрузки видео</string>
+    <string name="download_channel_description">Уведомления о загрузке видео</string>
+    <string name="download_notification_title">Загрузка видео</string>
+    <string name="download_completed">Загрузка завершена</string>
+    <string name="download_failed">Ошибка загрузки</string>
+</resources>

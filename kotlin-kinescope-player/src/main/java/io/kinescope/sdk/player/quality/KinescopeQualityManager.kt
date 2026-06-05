@@ -1,6 +1,7 @@
 package io.kinescope.sdk.player.quality
 
 import android.content.Context
+import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import io.kinescope.sdk.R
@@ -13,6 +14,9 @@ class KinescopeQualityManager(
 ) {
 
     var isAutoQuality: Boolean = true
+        private set
+
+    var isAudioOnlyQuality: Boolean = false
         private set
 
     var variants: List<KinescopeQualityVariantUi> = emptyList()
@@ -37,26 +41,45 @@ class KinescopeQualityManager(
 
     fun setVariant(id: Int) {
         selectedVariantId = id
-        isAutoQuality = if (id == KinescopeQualityVariant.QUALITY_VARIANT_AUTO_ID) {
-            trackSelector.parameters =
-                trackSelector.parameters
-                    .buildUpon()
-                    .clearOverrides()
-                    .build()
-            true
-        } else {
-            variantOverrides.find { variant -> variant.id == id }
-                ?.let { variant ->
-                    variant.override?.let { override ->
-                        trackSelector.parameters =
-                            trackSelector.parameters
-                                .buildUpon()
-                                .clearOverrides()
-                                .addOverride(override)
-                                .build()
+        when (id) {
+            KinescopeQualityVariant.QUALITY_VARIANT_AUTO_ID -> {
+                isAutoQuality = true
+                isAudioOnlyQuality = false
+                trackSelector.parameters =
+                    trackSelector.parameters
+                        .buildUpon()
+                        .clearOverrides()
+                        .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, false)
+                        .build()
+            }
+
+            KinescopeQualityVariant.QUALITY_VARIANT_AUDIO_ONLY_ID -> {
+                isAutoQuality = false
+                isAudioOnlyQuality = true
+                trackSelector.parameters =
+                    trackSelector.parameters
+                        .buildUpon()
+                        .clearOverrides()
+                        .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, true)
+                        .build()
+            }
+
+            else -> {
+                isAutoQuality = false
+                isAudioOnlyQuality = false
+                variantOverrides.find { variant -> variant.id == id }
+                    ?.let { variant ->
+                        variant.override?.let { override ->
+                            trackSelector.parameters =
+                                trackSelector.parameters
+                                    .buildUpon()
+                                    .clearOverrides()
+                                    .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, false)
+                                    .addOverride(override)
+                                    .build()
+                        }
                     }
-                }
-            false
+            }
         }
 
         updateUiVariants(variantOverrides)

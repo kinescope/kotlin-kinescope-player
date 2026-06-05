@@ -2,35 +2,175 @@
 
 ## Overview
 
-The library provides the `KinescopeVideoProvider` interface to connect to the Kinescope API. You need to implement this interface yourself.
+The SDK uses **two separate API layers**. Choose the one that matches your use case:
 
-## Step 1: Implementing KinescopeVideoProvider
+| Use case | Client | You implement? | Documentation |
+|----------|--------|----------------|---------------|
+| **Shorts vertical feed** | `KinescopeVideoProvider` + `KinescopeUrls` | Yes — your HTTP client | This guide |
+| **Player / demo / templates** | `KinescopeApiHelper` via `KinescopeApiConfig.createApiHelper(apiKey)` | No — built into the SDK | [README — Dashboard REST API](../README.md) |
+| **Single video playback** | `KinescopeFetch` via `KinescopeVideoPlayer.loadVideo()` | No — built into the SDK | [README — Quick start](../README.md) |
 
-Create a class that implements `KinescopeVideoProvider`:
+> For **Playlist test**, **Custom Player test**, and player templates you only need `KinescopeApiHelper` and your API key in `KinescopeDemoConfig` — not `KinescopeVideoProvider`.
+
+---
+
+## Built-in Dashboard API (`KinescopeApiHelper`)
+
+Included in `kotlin-kinescope-player`. No custom Retrofit setup required.
 
 ```kotlin
+import io.kinescope.sdk.api.KinescopeApiConfig
+
+// Application.onCreate
+val apiHelper = KinescopeApiConfig.createApiHelper("your-api-key")
+
+// Video catalog (Playlist test)
+apiHelper.getAllVideos().collect { response ->
+    val videos = response.data
+}
+
+// Player templates (Custom Player test)
+apiHelper.getPlayers().collect { response ->
+    val templates = response.data
+}
+```
+
+| Method | Endpoint | Base URL |
+|--------|----------|----------|
+| `getAllVideos()` | `GET /v1/videos/` | `https://api.kinescope.io/` |
+| `getPlayers()` | `GET /v1/players` | `https://api.kinescope.io/` |
+| `getPlayer(id)` | `GET /v1/players/{id}` | `https://api.kinescope.io/` |
+| `createPlayer(request)` | `POST /v1/players` | `https://api.kinescope.io/` |
+| `updatePlayer(id, request)` | `PUT /v1/players/{id}` | `https://api.kinescope.io/` |
+| `deletePlayer(id)` | `DELETE /v1/players/{id}` | `https://api.kinescope.io/` |
+
+API key: [Kinescope dashboard](https://kinescope.io/) → project settings → API / Tokens.
+
+Error helpers: `readApiErrorMessage()`, `isDashboardPlayerDeleteRestriction()`.
+
+### HTTP response codes
+
+| Code | Description | When it occurs |
+|------|-------------|----------------|
+| 200 | OK | Request completed successfully |
+| 400 | Bad Request | Invalid request format or parameters |
+| 401 | Unauthorized | Missing or invalid API token |
+| 402 | Payment Required | Plan limits exceeded |
+| 403 | Forbidden | No permission to perform the operation |
+| 404 | Not Found | Resource not found |
+| 422 | Unprocessable Entity | Data validation error |
+| 429 | Too Many Requests | Rate limit exceeded |
+| 500 | Internal Server Error | Server-side error |
+
+### API error codes
+
+Error responses may include a machine-readable code in the JSON body:
+
+| Code | Name | Description |
+|------|------|-------------|
+| 1 | `IO_ERROR` | Empty request body |
+| 100101 | `AUTH_HEADER_NOT_FOUND` | `Authorization` header is missing |
+| 100102 | `UNAUTHORIZED` | Invalid token |
+| 100103 | `ACCESS_DENIED` | Access denied |
+| 100106 | `LIMIT_REACHED` | Limit reached |
+| 400101 | `JSON_SYNTAX_ERROR` | JSON syntax error |
+| 400201 | `ALREADY_EXISTS` | Resource already exists |
+| 402402 | `VALIDATION_ERROR` | Validation error |
+| 404404 | `NOT_FOUND` | Resource not found |
+| 500500 | `INTERNAL_ERROR` | Internal server error |
+
+```kotlin
+import io.kinescope.sdk.api.readApiErrorMessage
+
+apiHelper.getPlayers()
+    .catch { error ->
+        val message = error.readApiErrorMessage() // parses message / error.detail from body
+        Log.e("API", "Error: $message")
+    }
+    .collect { /* ... */ }
+```
+
+### Pagination
+
+List endpoints return paginated results. Use query parameters:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `page` | integer | `1` | Page number |
+| `per_page` | integer | `10` | Items per page (max `100`) |
+
+Example:
+
+```bash
+curl "https://api.kinescope.io/v1/videos?page=2&per_page=25" \
+  -H "Authorization: Bearer YOUR_API_TOKEN"
+```
+
+In the SDK, `getAllVideos()` parses pagination into `response.meta.pagination`:
+
+```kotlin
+apiHelper.getAllVideos().collect { response ->
+    val videos = response.data
+    val pagination = response.meta.pagination
+    // pagination?.page, pagination?.perPage, pagination?.total
+}
+```
+
+> The current `KinescopeApiHelper.getAllVideos()` does not accept `page` / `per_page` parameters — it requests the default first page. For custom pagination, extend `KinescopeApi` or call the REST API directly.
+
+### API versions
+
+| Version | Path | Status | SDK support |
+|---------|------|--------|-------------|
+| v1 | `/v1/*` | Stable | Yes — `KinescopeApiHelper` (videos, players) |
+| v2 | `/v2/*` | Stable (Live API) | Not wrapped in the SDK yet |
+
+Base URL for Dashboard API: `https://api.kinescope.io/` (`KinescopeApiConfig.API_BASE_URL`).
+
+---
+
+## Shorts feed: `KinescopeVideoProvider`
+
+For the **Shorts vertical feed**, implement `KinescopeVideoProvider` yourself and pass it to `KinescopeUrls`.
+
+ Endpoints:
+
+| Task | Endpoint | Base URL | Used by |
+|------|----------|----------|---------|
+| Video catalog (ids, titles) | `GET /v1/videos/?page=&per_page=` | `https://api.kinescope.io/` | `KinescopeApiHelper.getAllVideos()` |
+| Single video (HLS, metadata) | `GET /{video_id}.json?sdk=android` | `https://kinescope.io/` | `KinescopeFetch` / `KinescopeVideoPlayer.loadVideo()` |
+
+`GET /v1/videos/` returns a lightweight catalog (`id`, `title`). For Shorts you need `hlsLink` — fetch each video via `/{video_id}.json` or call `loadVideo(videoId)` in your provider.
+
+### Step 1: Recommended — delegate to built-in SDK clients
+
+```kotlin
+import io.kinescope.sdk.api.KinescopeApiConfig
+import io.kinescope.sdk.api.KinescopeApiHelper
+import io.kinescope.sdk.models.videos.KinescopeVideo
+import io.kinescope.sdk.network.FetchBuilder
 import io.kinescope.sdk.shorts.interfaces.KinescopeVideoProvider
 import io.kinescope.sdk.shorts.models.VideoData
-import io.kinescope.sdk.shorts.models.DrmInfo
-import io.kinescope.sdk.shorts.models.WidevineInfo
+import kotlinx.coroutines.flow.first
 
-class MyKinescopeVideoProvider(
-    private val apiToken: String
+class SdkKinescopeVideoProvider(
+    apiKey: String,
+    private val referer: String = "https://kinescope.io",
 ) : KinescopeVideoProvider {
-    
-    // Your API client (Retrofit, Ktor, etc.)
-    private val apiService = createApiService()
-    
+
+    private val apiHelper: KinescopeApiHelper = KinescopeApiConfig.createApiHelper(apiKey)
+    private val fetch = FetchBuilder.getKinescopeFetch(referer)
+
     override suspend fun loadVideo(videoId: String): VideoData? {
         return try {
-            val response = apiService.getVideo(videoId)
-            convertToVideoData(response.data)
+            val response = fetch.getVideo(videoId).execute()
+            if (!response.isSuccessful) return null
+            response.body()?.let { convertToVideoData(it) }
         } catch (e: Exception) {
-            Log.e("MyKinescopeVideoProvider", "Error loading video: $videoId", e)
             null
         }
     }
-    
+
     override suspend fun loadVideos(
         projectId: String?,
         folderId: String?,
@@ -38,101 +178,66 @@ class MyKinescopeVideoProvider(
         offset: Int
     ): List<VideoData> {
         return try {
-            val response = apiService.getVideos(projectId, folderId, limit, offset)
-            response.data.mapNotNull { convertToVideoData(it) }
+            val catalog = apiHelper.getAllVideos().first()
+            catalog.data
+                .drop(offset)
+                .take(limit)
+                .mapNotNull { item -> loadVideo(item.id) }
         } catch (e: Exception) {
-            Log.e("MyKinescopeVideoProvider", "Error loading videos", e)
             emptyList()
         }
     }
-    
-    private fun convertToVideoData(kinescopeData: KinescopeVideoData): VideoData? {
-        val hlsLink = kinescopeData.hls_link ?: kinescopeData.player?.hls ?: return null
-        
-        val drm = kinescopeData.drm?.widevine?.licenseUrl?.let { url ->
-            DrmInfo(widevine = WidevineInfo(licenseUrl = url))
-        }
-        
+
+    private fun convertToVideoData(video: KinescopeVideo): VideoData? {
+        val hlsLink = video.hlsLink ?: return null
         return VideoData(
             hlsLink = hlsLink,
-            drm = drm,
-            title = kinescopeData.title ?: "Untitled",
-            subtitle = kinescopeData.subtitle,
-            description = kinescopeData.description
+            drm = null, // add Widevine license URL if your videos use DRM
+            title = video.title,
+            subtitle = video.subtitle,
+            description = video.description,
         )
     }
 }
 ```
 
-## Step 2: Example with Retrofit
+### Step 2: Example with Retrofit (custom client)
 
-If you use Retrofit:
+If you do not use `KinescopeApiHelper` / `FetchBuilder`, call the same endpoints directly. You need **two base URLs**:
 
 ```kotlin
-import retrofit2.Retrofit
+import io.kinescope.sdk.models.common.KinescopeAllVideosResponse
+import io.kinescope.sdk.models.videos.KinescopeVideo
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.Path
 import retrofit2.http.Query
-import retrofit2.http.Header
 
-// API interface
-interface KinescopeApiService {
-    @GET("v1/vod/{videoId}")
-    suspend fun getVideo(
-        @Path("videoId") videoId: String,
-        @Header("Authorization") token: String? = null
-    ): KinescopeVideoResponse
-    
-    @GET("v1/vod")
+// Catalog — api.kinescope.io
+interface KinescopeDashboardApi {
+    @GET("v1/videos/")
     suspend fun getVideos(
-        @Query("project_id") projectId: String? = null,
-        @Query("folder_id") folderId: String? = null,
-        @Query("limit") limit: Int = 50,
-        @Query("offset") offset: Int = 0,
-        @Header("Authorization") token: String? = null
-    ): KinescopeVideoListResponse
+        @Query("page") page: Int = 1,
+        @Query("per_page") perPage: Int = 50,
+        @Header("Authorization") token: String,
+    ): KinescopeAllVideosResponse
 }
 
-// Provider implementation
-class RetrofitKinescopeVideoProvider(
-    private val apiToken: String
-) : KinescopeVideoProvider {
-    
-    private val retrofit = Retrofit.Builder()
-        .baseUrl("https://api.kinescope.io/")
-        .addConverterFactory(/* your converter */)
-        .build()
-    
-    private val apiService = retrofit.create(KinescopeApiService::class.java)
-    
-    override suspend fun loadVideo(videoId: String): VideoData? {
-        return try {
-            val response = apiService.getVideo(videoId, "Bearer $apiToken")
-            convertToVideoData(response.data)
-        } catch (e: Exception) {
-            null
-        }
-    }
-    
-    override suspend fun loadVideos(
-        projectId: String?,
-        folderId: String?,
-        limit: Int,
-        offset: Int
-    ): List<VideoData> {
-        return try {
-            val response = apiService.getVideos(projectId, folderId, limit, offset, "Bearer $apiToken")
-            response.data.mapNotNull { convertToVideoData(it) }
-        } catch (e: Exception) {
-            emptyList()
-        }
-    }
-    
-    // ... convertToVideoData
+// Playback metadata — kinescope.io (same as KinescopeVideoPlayer)
+interface KinescopePlaybackApi {
+    @GET("{video_id}.json")
+    suspend fun getVideo(
+        @Path("video_id") videoId: String,
+        @Query("sdk") sdk: String = "android",
+    ): KinescopeVideo
 }
 ```
 
-## Step 3: Using with KinescopeUrls
+> **Note.** `projectId` / `folderId` in `KinescopeVideoProvider.loadVideos()` are not used by `GET /v1/videos/` in the current SDK. Filter on the client side if needed, or extend the API client when the backend supports those query params.
+
+> API errors (401, 404, …): see [API_TROUBLESHOOTING.md](API_TROUBLESHOOTING.md).
+
+### Step 3: Using with KinescopeUrls
 
 After implementing the provider, use it with `KinescopeUrls`:
 
@@ -145,21 +250,17 @@ import kotlinx.coroutines.launch
 private fun loadVideos() {
     CoroutineScope(Dispatchers.Main).launch {
         try {
-            // Create provider
             val videoProvider = MyKinescopeVideoProvider(apiToken = "your-token")
-            
-            // Use with KinescopeUrls
+
             val kinescopeVideo = KinescopeUrls(
                 videoProvider = videoProvider,
                 projectId = "your-project-id",
                 folderId = "your-folder-id" // optional
             )
-            
-            // Load videos
+
             val videos = kinescopeVideo.getVideosFromApi()
-            
+
             if (videos.isEmpty()) {
-                // Fallback to hardcoded if API returns empty list
                 val fallbackVideos = kinescopeVideo.getNextVideoUrls()
                 setupViewPager(fallbackVideos)
             } else {
@@ -167,7 +268,6 @@ private fun loadVideos() {
             }
         } catch (e: Exception) {
             Log.e("MainActivity", "Error loading videos", e)
-            // Fallback to hardcoded on error
             val kinescopeVideo = KinescopeUrls()
             val fallbackVideos = kinescopeVideo.getNextVideoUrls()
             setupViewPager(fallbackVideos)
@@ -176,22 +276,24 @@ private fun loadVideos() {
 }
 ```
 
-## Step 4: Loading a single video by ID
+Without a provider, `KinescopeUrls()` falls back to a built-in hardcoded video list.
+
+### Step 4: Loading a single video by ID
 
 ```kotlin
 lifecycleScope.launch {
     val videoProvider = MyKinescopeVideoProvider(apiToken = "your-token")
     val kinescopeVideo = KinescopeUrls(videoProvider = videoProvider)
-    
-    // Get one video by ID
+
     val video = kinescopeVideo.getVideoById("b4081a51-e5a3-4586-8e6a-72e2f3eb3075")
-    
+
     video?.let {
-        // Use the video
         player.loadVideo(it)
     }
 }
 ```
+
+---
 
 ## Where to get the parameters
 
@@ -201,7 +303,9 @@ lifecycleScope.launch {
 3. Find the "API" or "Tokens" section
 4. Create a new token or use an existing one
 
-**Note:** The token is optional if your videos are public.
+Used by both `KinescopeApiHelper` and your `KinescopeVideoProvider`.
+
+**Note:** The token may be optional if your videos are public (Shorts provider only).
 
 ### Project ID
 1. In the Kinescope dashboard
@@ -214,15 +318,41 @@ lifecycleScope.launch {
 2. Video ID is in the video URL
 3. Format: `b4081a51-e5a3-4586-8e6a-72e2f3eb3075`
 
-## API Endpoints
+---
 
-Kinescope API endpoints:
+## API endpoints reference
 
-- **Get video:** `GET https://api.kinescope.io/v1/vod/{videoId}`
-- **Video list:** `GET https://api.kinescope.io/v1/vod?project_id={projectId}&limit={limit}&offset={offset}`
-- **Video list by folder:** `GET https://api.kinescope.io/v1/vod?folder_id={folderId}&limit={limit}&offset={offset}`
+### Dashboard API (`KinescopeApiHelper` — built-in)
+
+Base URL: `https://api.kinescope.io/`
+
+- **Video catalog:** `GET /v1/videos/?page={page}&per_page={per_page}`
+- **Player templates:** `GET/POST/PUT/DELETE /v1/players`
+
+### Video playback (`KinescopeVideoPlayer` / Shorts `loadVideo`)
+
+Base URL: `https://kinescope.io/`
+
+- **Video metadata + HLS link:** `GET /{video_id}.json?sdk=android`
+
+### DRM license (Widevine, not video metadata)
+
+Base URL: `https://license.kinescope.io/`
+
+- **License acquire:** `GET /v1/vod/{video_id}/acquire/widevine?token=`
+
+### Shorts feed (`KinescopeVideoProvider`)
+
+Combine catalog + playback:
+
+1. `GET https://api.kinescope.io/v1/videos/` — list video ids
+2. `GET https://kinescope.io/{video_id}.json?sdk=android` — HLS URL and metadata per video
+
+---
 
 ## Error handling
+
+### Shorts provider
 
 ```kotlin
 lifecycleScope.launch {
@@ -230,38 +360,49 @@ lifecycleScope.launch {
         val videoProvider = MyKinescopeVideoProvider(apiToken)
         val kinescopeVideo = KinescopeUrls(videoProvider = videoProvider, projectId = "your-project-id")
         val videos = kinescopeVideo.getVideosFromApi()
-        
+
         when {
-            videos.isEmpty() -> {
-                // No videos
-                showMessage("No videos found")
-            }
-            else -> {
-                // Loaded successfully
-                adapter.updateVideos(videos)
-            }
+            videos.isEmpty() -> showMessage("No videos found")
+            else -> adapter.updateVideos(videos)
         }
     } catch (e: Exception) {
-        // Error handling
         Log.e("API", "Error loading videos", e)
         showError("Failed to load videos: ${e.message}")
-        
-        // Fallback to hardcoded
+
         val fallback = KinescopeUrls().getNextVideoUrls()
         adapter.updateVideos(fallback)
     }
 }
 ```
 
+If list endpoints return **404**, see [API_TROUBLESHOOTING.md](API_TROUBLESHOOTING.md).
+
+### Dashboard API
+
+```kotlin
+import io.kinescope.sdk.api.readApiErrorMessage
+
+apiHelper.getPlayers()
+    .catch { error ->
+        val message = error.readApiErrorMessage() ?: error.message
+        Log.e("API", "Failed to load templates: $message")
+    }
+    .collect { response -> /* ... */ }
+```
+
+---
+
 ## Dependencies
 
-To implement the provider you need:
+To implement `KinescopeVideoProvider` you need:
 
 - HTTP client (Retrofit, Ktor, OkHttp, etc.)
-- JSON parser (Kotlinx Serialization, Gson, etc.)
+- JSON parser (Kotlinx Serialization, Gson, Moshi, etc.)
 - Coroutines for async work
 
-Example with Retrofit and Kotlinx Serialization:
+`KinescopeApiHelper` already includes Retrofit + Moshi — no extra setup.
+
+Example for a custom Shorts provider:
 
 ```kotlin
 // build.gradle.kts
@@ -272,6 +413,8 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.11.0")
 }
 ```
+
+---
 
 ## Debugging
 
@@ -290,3 +433,13 @@ override suspend fun loadVideo(videoId: String): VideoData? {
     }
 }
 ```
+
+---
+
+## Related documentation
+
+| Topic | File |
+|-------|------|
+| Shorts 404 errors | [API_TROUBLESHOOTING.md](API_TROUBLESHOOTING.md) |
+| Shorts feed integration | [LIBRARY_USAGE_GUIDE.md](LIBRARY_USAGE_GUIDE.md) |
+| Dashboard API, player options, PiP | [README.md](../README.md) |

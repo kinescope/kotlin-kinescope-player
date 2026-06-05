@@ -16,7 +16,7 @@ import io.kinescope.sdk.logger.KinescopeLogger
 import io.kinescope.sdk.logger.KinescopeLoggerLevel
 import io.kinescope.sdk.network.AnalyticsBuilder
 import io.kinescope.sdk.utils.currentTimestamp
-import io.kinescope.sdk.utils.kinescopeAnalyticsApiEndpoint
+import io.kinescope.sdk.api.KinescopeApiConfig
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -34,7 +34,7 @@ class KinescopeAnalytics(
     private val viewId = UUID.randomUUID().toString()
 
     var metricUrl: String? = null
-        get() = field.takeIf { !it.isNullOrEmpty() } ?: kinescopeAnalyticsApiEndpoint
+        get() = field.takeIf { !it.isNullOrEmpty() } ?: KinescopeApiConfig.ANALYTICS_BASE_URL
 
     fun sendEvent(
         event: Event,

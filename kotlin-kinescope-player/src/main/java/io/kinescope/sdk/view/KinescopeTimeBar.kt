@@ -144,6 +144,8 @@ class KinescopeTimeBar @JvmOverloads constructor(
     private val scrubberPaint: Paint
     private var scrubberDrawable: Drawable? = null
     private var barHeight = 0
+    private var baseBarHeight = 0
+    private var barHeightAnimator: ValueAnimator? = null
     private var touchTargetHeight = 0
     private var barGravity = 0
     private var scrubberEnabledSize = 0
@@ -278,20 +280,10 @@ class KinescopeTimeBar @JvmOverloads constructor(
                     R.styleable.KinescopeTimeBar_unplayed_color,
                     unplayedColorDefault
                 )
-                /*val adMarkerColor = a.getInt(
-                    R.styleable.DefaultTimeBar_ad_marker_color,
-                    DEFAULT_AD_MARKER_COLOR
-                )
-                val playedAdMarkerColor = a.getInt(
-                    R.styleable.DefaultTimeBar_played_ad_marker_color,
-                    DEFAULT_PLAYED_AD_MARKER_COLOR
-                )*/
                 playedPaint.color = playedColor
                 scrubberPaint.color = scrubberColor
                 bufferedPaint.color = bufferedColor
                 unplayedPaint.color = unplayedColor
-                //adMarkerPaint.color = adMarkerColor
-                //playedAdMarkerPaint.color = playedAdMarkerColor
             } finally {
                 a.recycle()
             }
@@ -299,7 +291,6 @@ class KinescopeTimeBar @JvmOverloads constructor(
             barHeight = defaultBarHeight
             touchTargetHeight = defaultTouchTargetHeight
             barGravity = BAR_GRAVITY_CENTER
-            //adMarkerWidth = defaultAdMarkerWidth
             scrubberEnabledSize = defaultScrubberEnabledSize
             scrubberDisabledSize = defaultScrubberDisabledSize
             scrubberDraggedSize = defaultScrubberDraggedSize
@@ -309,10 +300,10 @@ class KinescopeTimeBar @JvmOverloads constructor(
             bufferedPaint.color = bufferedColorDefault
             unplayedPaint.color = unplayedColorDefault
 
-            //adMarkerPaint.color = DEFAULT_AD_MARKER_COLOR
             playedAdMarkerPaint.color = DEFAULT_PLAYED_AD_MARKER_COLOR
             scrubberDrawable = null
         }
+        baseBarHeight = barHeight
         formatBuilder = StringBuilder()
         formatter = Formatter(formatBuilder, Locale.getDefault())
         stopScrubbingRunnable = Runnable { stopScrubbing( /* canceled= */false) }
@@ -443,6 +434,31 @@ class KinescopeTimeBar @JvmOverloads constructor(
     fun setUnplayedColor(@ColorInt unplayedColor: Int) {
         unplayedPaint.color = unplayedColor
         invalidate(seekBounds)
+    }
+
+    fun setScrubVisualExpanded(expanded: Boolean, animate: Boolean = true) {
+        val targetHeight = if (expanded) {
+            (baseBarHeight * SCRUB_BAR_HEIGHT_SCALE).toInt().coerceAtLeast(baseBarHeight + 1)
+        } else {
+            baseBarHeight
+        }
+        if (barHeight == targetHeight) {
+            return
+        }
+        barHeightAnimator?.cancel()
+        if (!animate) {
+            barHeight = targetHeight
+            requestLayout()
+            return
+        }
+        barHeightAnimator = ValueAnimator.ofInt(barHeight, targetHeight).apply {
+            duration = SCRUB_BAR_HEIGHT_ANIMATION_MS
+            addUpdateListener { animation ->
+                barHeight = animation.animatedValue as Int
+                requestLayout()
+            }
+            start()
+        }
     }
 
     /**
@@ -652,18 +668,19 @@ class KinescopeTimeBar @JvmOverloads constructor(
         val height = bottom - top
         val seekLeft = paddingLeft
         val seekRight = width - paddingRight
+        val contentHeight = (height - paddingTop - paddingBottom).coerceAtLeast(0)
+        val effectiveTouchHeight = Math.min(touchTargetHeight, contentHeight)
         val seekBoundsY: Int
         val progressBarY: Int
         val scrubberPadding = if (scrubberPaddingDisabled) 0 else scrubberPadding
         if (barGravity == BAR_GRAVITY_BOTTOM) {
-            seekBoundsY = height - paddingBottom - touchTargetHeight
-            progressBarY =
-                height - paddingBottom - barHeight - Math.max(scrubberPadding - barHeight / 2, 0)
+            seekBoundsY = height - paddingBottom - effectiveTouchHeight
+            progressBarY = seekBoundsY + (effectiveTouchHeight - barHeight) / 2
         } else {
-            seekBoundsY = (height - touchTargetHeight) / 2
-            progressBarY = (height - barHeight) / 2
+            seekBoundsY = paddingTop + (contentHeight - effectiveTouchHeight) / 2
+            progressBarY = seekBoundsY + (effectiveTouchHeight - barHeight) / 2
         }
-        seekBounds[seekLeft, seekBoundsY, seekRight] = seekBoundsY + touchTargetHeight
+        seekBounds[seekLeft, seekBoundsY, seekRight] = seekBoundsY + effectiveTouchHeight
         progressBar[seekBounds.left + scrubberPadding, progressBarY, seekBounds.right - scrubberPadding] =
             progressBarY + barHeight
         if (Util.SDK_INT >= 29) {
@@ -824,58 +841,25 @@ class KinescopeTimeBar @JvmOverloads constructor(
 
     private fun drawTimeBar(canvas: Canvas) {
         val progressBarHeight = progressBar.height()
-        val barTop = progressBar.centerY() - progressBarHeight / 2
+        val barTop = progressBar.centerY() - progressBarHeight / 2f
         val barBottom = barTop + progressBarHeight
-        if (duration <= 0) {
-            canvas.drawRoundRect(
-                progressBar.left.toFloat(),
-                barTop.toFloat(),
-                progressBar.right.toFloat(),
-                barBottom.toFloat(),
-                rx,
-                ry,
-                unplayedPaint
-            )
+        val left = progressBar.left.toFloat()
+        val right = progressBar.right.toFloat()
 
+        canvas.drawRect(left, barTop, right, barBottom, unplayedPaint)
+
+        if (duration <= 0) {
             return
         }
-        var bufferedLeft = bufferedBar.left
-        val bufferedRight = bufferedBar.right
-        val progressLeft = Math.max(Math.max(progressBar.left, bufferedRight), scrubberBar.right)
-        if (progressLeft < progressBar.right) {
-            canvas.drawRoundRect(
-                progressLeft.toFloat() - rx,
-                barTop.toFloat(),
-                progressBar.right.toFloat(),
-                barBottom.toFloat(),
-                rx,
-                ry,
-                unplayedPaint
-            )
-        }
-        bufferedLeft = Math.max(bufferedLeft, scrubberBar.right)
-        if (bufferedRight > bufferedLeft) {
-            canvas.drawRoundRect(
-                bufferedLeft.toFloat(),
-                barTop.toFloat(),
-                bufferedRight.toFloat(),
-                barBottom.toFloat(),
-                rx,
-                ry,
-                bufferedPaint
-            )
 
+        val playedEnd = scrubberBar.right.toFloat().coerceIn(left, right)
+        val bufferedEnd = bufferedBar.right.toFloat().coerceIn(left, right)
+
+        if (bufferedEnd > playedEnd) {
+            canvas.drawRect(playedEnd, barTop, bufferedEnd, barBottom, bufferedPaint)
         }
-        if (scrubberBar.width() > 0) {
-            canvas.drawRoundRect(
-                scrubberBar.left.toFloat(),
-                barTop.toFloat(),
-                scrubberBar.right.toFloat(),
-                barBottom.toFloat(),
-                rx,
-                ry,
-                playedPaint
-            )
+        if (playedEnd > left) {
+            canvas.drawRect(left, barTop, playedEnd, barBottom, playedPaint)
         }
     }
 
@@ -888,7 +872,13 @@ class KinescopeTimeBar @JvmOverloads constructor(
         if (scrubberDrawable == null) {
             val scrubberSize =
                 if (scrubbing || isFocused) scrubberDraggedSize else if (isEnabled) scrubberEnabledSize else scrubberDisabledSize
+            if (scrubberSize <= 0) {
+                return
+            }
             val playheadRadius = (scrubberSize * scrubberScale / 2).toInt()
+            if (playheadRadius <= 0) {
+                return
+            }
             canvas.drawCircle(
                 playheadX.toFloat(),
                 playheadY.toFloat(),
@@ -955,6 +945,9 @@ class KinescopeTimeBar @JvmOverloads constructor(
 
         /** Default diameter for the scrubber when dragged, in dp.  */
         const val DEFAULT_SCRUBBER_DRAGGED_SIZE_DP = 16
+
+        private const val SCRUB_BAR_HEIGHT_SCALE = 1.6f
+        private const val SCRUB_BAR_HEIGHT_ANIMATION_MS = 150L
 
 //        /** Default color for the played portion of the time bar.  */
 //        const val DEFAULT_PLAYED_COLOR = -0x1

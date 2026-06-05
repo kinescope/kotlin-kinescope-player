@@ -1,13 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="player_time_divider">/</string>
+    <string name="player_picture_in_picture">Picture in picture</string>
+    <string name="player_scrub_double_tap_hint">Double tap ± 10 sec</string>
+    <string name="player_seek_back">Seek back 10 seconds</string>
+    <string name="player_seek_forward">Seek forward 10 seconds</string>
+    <string name="player_seek_seconds">%d sec</string>
 
     <string name="live">Live</string>
     <string name="live_time_offset">-%s</string>
     <string name="live_its_starting_soon">It\'s starting soon</string>
 
-    <string name="settings_parameter_playback_speed">Playback speed</string>
-    <string name="settings_parameter_video_quality">Video quality</string>
+    <string name="settings_parameter_playback_speed">Speed</string>
+    <string name="settings_parameter_video_quality">Quality</string>
+    <string name="settings_parameter_picture_in_picture">Picture in picture</string>
+    <string name="settings_parameter_subtitles">Subtitles</string>
+    <string name="settings_parameter_attachments">Attachments</string>
+    <string name="settings_subtitles_off">Off</string>
+    <string name="settings_video_quality_audio_only">Audio only</string>
 
     <string name="settings_playback_speed_0_25">0.25x</string>
     <string name="settings_playback_speed_0_5">0.5x</string>
@@ -22,13 +32,13 @@
     <string name="settings_video_quality_variant_auto">Auto</string>
     <string name="settings_video_quality_variant_auto_caption">Auto %sp</string>
 
-    <string name="player_like">Лайк</string>
-    <string name="player_share">Поделится</string>
-    <string name="player_comment">Коммент</string>
+    <string name="player_like">Like</string>
+    <string name="player_share">Share</string>
+    <string name="player_comment">Comment</string>
 
-    <string name="download_channel_name">Загрузки видео</string>
-    <string name="download_channel_description">Уведомления о загрузке видео</string>
-    <string name="download_notification_title">Загрузка видео</string>
-    <string name="download_completed">Загрузка завершена</string>
-    <string name="download_failed">Ошибка загрузки</string>
+    <string name="download_channel_name">Video downloads</string>
+    <string name="download_channel_description">Video download notifications</string>
+    <string name="download_notification_title">Downloading video</string>
+    <string name="download_completed">Download completed</string>
+    <string name="download_failed">Download failed</string>
 </resources>

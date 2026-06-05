@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="custom_player_preload_values">
+        <item>none</item>
+        <item>metadata</item>
+        <item>auto</item>
+    </string-array>
+    <string-array name="custom_player_quality_values">
+        <item>auto</item>
+        <item>360</item>
+        <item>480</item>
+        <item>720</item>
+        <item>1080</item>
+        <item>audio</item>
+    </string-array>
+</resources>

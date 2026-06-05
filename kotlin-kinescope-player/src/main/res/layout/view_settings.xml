@@ -1,54 +1,86 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    android:id="@+id/settings_menu_fl"
-    android:layout_width="300dp"
-    android:layout_height="match_parent"
-    android:layout_gravity="end"
-    android:background="@color/kinescope_settings"
-    android:translationX="300dp">
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
 
     <LinearLayout
-        android:id="@+id/parameters_ll"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:id="@+id/settings_popup_container"
+        android:layout_width="@dimen/kinescope_settings_popup_width"
+        android:layout_height="@dimen/kinescope_settings_popup_height"
+        android:background="@drawable/bg_options_rect"
+        android:elevation="8dp"
         android:orientation="vertical"
-        android:paddingVertical="8dp" />
-
-    <LinearLayout
-        android:id="@+id/options_ll"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@color/kinescope_settings"
-        android:orientation="vertical"
-        android:paddingVertical="8dp"
+        android:paddingStart="@dimen/kinescope_settings_popup_padding_horizontal"
+        android:paddingTop="@dimen/kinescope_settings_popup_padding_vertical"
+        android:paddingEnd="@dimen/kinescope_settings_popup_padding_horizontal"
+        android:paddingBottom="@dimen/kinescope_settings_popup_padding_vertical"
         android:visibility="gone"
-        android:translationX="300dp">
+        tools:visibility="visible">
 
-        <TextView
-            android:id="@+id/parameter_options_title_tv"
+        <LinearLayout
+            android:id="@+id/options_popup_fl"
             android:layout_width="match_parent"
-            android:layout_height="40dp"
-            android:background="@drawable/sel_settings_item"
-            android:drawableStart="@drawable/ic_chevron_left"
-            android:drawablePadding="4dp"
-            android:gravity="center_vertical"
-            android:includeFontPadding="false"
-            android:textAppearance="@style/Bold.14.White"
-            tools:ignore="UseCompatTextViewDrawableXml"
-            tools:text="Quality" />
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:visibility="gone"
+            tools:visibility="gone">
 
-        <ScrollView
+            <TextView
+                android:id="@+id/parameter_options_title_tv"
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:background="@drawable/sel_settings_item"
+                android:drawableStart="@drawable/ic_arrow_back"
+                android:drawablePadding="8dp"
+                android:gravity="center_vertical"
+                android:includeFontPadding="false"
+                android:paddingHorizontal="0dp"
+                android:textAppearance="@style/Bold.14.White"
+                tools:ignore="UseCompatTextViewDrawableXml"
+                tools:text="Quality" />
+
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:overScrollMode="never">
+
+                <LinearLayout
+                    android:id="@+id/parameter_options_ll"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+
+            </ScrollView>
+
+        </LinearLayout>
+
+        <View
+            android:id="@+id/settings_sections_divider"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:visibility="gone" />
+
+        <FrameLayout
+            android:id="@+id/settings_menu_fl"
             android:layout_width="match_parent"
             android:layout_height="match_parent">
 
-            <LinearLayout
-                android:id="@+id/parameter_options_ll"
+            <ScrollView
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical" />
+                android:layout_height="match_parent"
+                android:overScrollMode="never">
 
-        </ScrollView>
+                <LinearLayout
+                    android:id="@+id/parameters_ll"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+
+            </ScrollView>
+
+        </FrameLayout>
 
     </LinearLayout>
 

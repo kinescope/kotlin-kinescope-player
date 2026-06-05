@@ -53,6 +53,13 @@
             android:exported="true" />
 
         <activity
+            android:name=".customplayer.CustomPlayerActivity"
+            android:configChanges="orientation|screenSize|screenLayout|layoutDirection|smallestScreenSize"
+            android:exported="false"
+            android:label="@string/custom_player_title"
+            android:supportsPictureInPicture="true" />
+
+        <activity
             android:name=".live.LiveActivity"
             android:configChanges="orientation|screenSize|screenLayout|layoutDirection"
             android:exported="true" />

@@ -19,7 +19,7 @@ import io.kinescope.sdk.shorts.models.PlayerItem
 import io.kinescope.sdk.shorts.utils.KinescopeUrls
 import io.kinescope.sdk.shorts.adapters.ViewPager2Adapter
 import io.kinescope.sdk.shorts.cache.VideoCache
-import io.kinescope.demo.databinding.ActivityMainBinding
+import io.kinescope.demo.databinding.ActivityShortsBinding
 import io.kinescope.sdk.shorts.download.VideoDownloadManager
 import io.kinescope.sdk.shorts.drm.DrmConfigurator
 import io.kinescope.sdk.shorts.managers.NotificationHelper
@@ -36,7 +36,7 @@ import kotlin.OptIn
 @OptIn(InternalSerializationApi::class)
 class ShortsActivity : AppCompatActivity(), ActivityProvider {
 
-    private lateinit var binding: ActivityMainBinding
+    private lateinit var binding: ActivityShortsBinding
     private lateinit var adapter: ViewPager2Adapter
     private val exoPlayerItems = ArrayList<PlayerItem>()
     private val drmConfigurator = DrmConfigurator(this)
@@ -46,12 +46,10 @@ class ShortsActivity : AppCompatActivity(), ActivityProvider {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        binding = ActivityMainBinding.inflate(layoutInflater)
+        binding = ActivityShortsBinding.inflate(layoutInflater)
         setContentView(binding.root)
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
 
-        binding.mainButtonsLayout.visibility = android.view.View.GONE
-        binding.viewPager2.visibility = android.view.View.VISIBLE
         binding.viewPager2.offscreenPageLimit = 1
 
         VideoCache.initialize(this)
