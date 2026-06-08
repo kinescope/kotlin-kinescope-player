@@ -26,14 +26,12 @@
         android:visibility="gone"
         tools:visibility="visible">
 
-        <ImageView
+        <io.kinescope.sdk.view.SeekDirectionIconView
             android:id="@+id/btn_move_back"
             android:layout_width="@dimen/kinescope_scrub_seek_icon_width"
             android:layout_height="@dimen/kinescope_scrub_seek_icon_height"
             android:contentDescription="@string/player_seek_back"
-            android:importantForAccessibility="no"
-            android:scaleType="fitCenter"
-            android:src="@drawable/ic_move_back" />
+            android:importantForAccessibility="no" />
 
         <TextView
             android:id="@+id/scrub_hint_tv"
@@ -48,14 +46,12 @@
             android:textColor="@color/white"
             android:textSize="14sp" />
 
-        <ImageView
+        <io.kinescope.sdk.view.SeekDirectionIconView
             android:id="@+id/btn_move_forward"
             android:layout_width="@dimen/kinescope_scrub_seek_icon_width"
             android:layout_height="@dimen/kinescope_scrub_seek_icon_height"
             android:contentDescription="@string/player_seek_forward"
-            android:importantForAccessibility="no"
-            android:scaleType="fitCenter"
-            android:src="@drawable/ic_move_forward" />
+            android:importantForAccessibility="no" />
 
     </LinearLayout>
 
@@ -94,24 +90,22 @@
             android:orientation="vertical"
             android:paddingStart="8dp">
 
-            <ImageView
+            <io.kinescope.sdk.view.SeekDirectionIconView
                 android:id="@+id/seek_feedback_back_icon"
-                android:layout_width="@dimen/kinescope_scrub_seek_icon_width"
-                android:layout_height="@dimen/kinescope_scrub_seek_icon_height"
-                android:importantForAccessibility="no"
-                android:scaleType="fitCenter"
-                android:src="@drawable/ic_move_back" />
+                android:layout_width="@dimen/kinescope_seek_feedback_icon_width"
+                android:layout_height="@dimen/kinescope_seek_feedback_icon_height"
+                android:importantForAccessibility="no" />
 
             <TextView
                 android:id="@+id/seek_feedback_back_seconds"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="@dimen/kinescope_seek_feedback_label_gap"
                 android:includeFontPadding="false"
                 android:textColor="@color/white"
-                android:textSize="13sp"
+                android:textSize="12sp"
                 android:textStyle="bold"
-                tools:text="10 сек" />
+                tools:text="10 sec" />
 
         </LinearLayout>
 
@@ -151,24 +145,22 @@
             android:orientation="vertical"
             android:paddingEnd="8dp">
 
-            <ImageView
+            <io.kinescope.sdk.view.SeekDirectionIconView
                 android:id="@+id/seek_feedback_forward_icon"
-                android:layout_width="@dimen/kinescope_scrub_seek_icon_width"
-                android:layout_height="@dimen/kinescope_scrub_seek_icon_height"
-                android:importantForAccessibility="no"
-                android:scaleType="fitCenter"
-                android:src="@drawable/ic_move_forward" />
+                android:layout_width="@dimen/kinescope_seek_feedback_icon_width"
+                android:layout_height="@dimen/kinescope_seek_feedback_icon_height"
+                android:importantForAccessibility="no" />
 
             <TextView
                 android:id="@+id/seek_feedback_forward_seconds"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="@dimen/kinescope_seek_feedback_label_gap"
                 android:includeFontPadding="false"
                 android:textColor="@color/white"
-                android:textSize="16sp"
+                android:textSize="12sp"
                 android:textStyle="bold"
-                tools:text="10 сек" />
+                tools:text="10 sec" />
 
         </LinearLayout>
 

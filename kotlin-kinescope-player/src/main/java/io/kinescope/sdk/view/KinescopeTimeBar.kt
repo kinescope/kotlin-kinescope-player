@@ -172,9 +172,9 @@ class KinescopeTimeBar @JvmOverloads constructor(
     private var duration: Long
     private var position: Long = 0
     private var bufferedPosition: Long = 0
+    private var scrubVisualExpanded = false
+    private val scrubBarCornerRadiusPx: Float
 
-    private val rx = 8.0f
-    private val ry = 8.0f
     //private var adGroupCount = 0
     //private var adGroupTimesMs: LongArray? = null
     //private var playedAdGroups: BooleanArray? = null
@@ -205,6 +205,7 @@ class KinescopeTimeBar @JvmOverloads constructor(
         val res = context.resources
         val displayMetrics = res.displayMetrics
         density = displayMetrics.density
+        scrubBarCornerRadiusPx = dpToPx(density, SCRUB_BAR_CORNER_RADIUS_DP).toFloat()
         fineScrubYThreshold = dpToPx(
             density,
             FINE_SCRUB_Y_THRESHOLD_DP
@@ -437,6 +438,7 @@ class KinescopeTimeBar @JvmOverloads constructor(
     }
 
     fun setScrubVisualExpanded(expanded: Boolean, animate: Boolean = true) {
+        scrubVisualExpanded = expanded
         val targetHeight = if (expanded) {
             (baseBarHeight * SCRUB_BAR_HEIGHT_SCALE).toInt().coerceAtLeast(baseBarHeight + 1)
         } else {
@@ -845,8 +847,9 @@ class KinescopeTimeBar @JvmOverloads constructor(
         val barBottom = barTop + progressBarHeight
         val left = progressBar.left.toFloat()
         val right = progressBar.right.toFloat()
+        val cornerRadius = currentBarCornerRadius(progressBarHeight)
 
-        canvas.drawRect(left, barTop, right, barBottom, unplayedPaint)
+        drawBarSegment(canvas, left, right, barTop, barBottom, cornerRadius, unplayedPaint)
 
         if (duration <= 0) {
             return
@@ -856,10 +859,54 @@ class KinescopeTimeBar @JvmOverloads constructor(
         val bufferedEnd = bufferedBar.right.toFloat().coerceIn(left, right)
 
         if (bufferedEnd > playedEnd) {
-            canvas.drawRect(playedEnd, barTop, bufferedEnd, barBottom, bufferedPaint)
+            drawBarSegment(canvas, playedEnd, bufferedEnd, barTop, barBottom, cornerRadius, bufferedPaint)
         }
         if (playedEnd > left) {
-            canvas.drawRect(left, barTop, playedEnd, barBottom, playedPaint)
+            drawBarSegment(canvas, left, playedEnd, barTop, barBottom, cornerRadius, playedPaint)
+        }
+    }
+
+    private fun currentBarCornerRadius(barHeightPx: Int): Float {
+        if (baseBarHeight <= 0) {
+            return 0f
+        }
+
+        val expandedHeight = (baseBarHeight * SCRUB_BAR_HEIGHT_SCALE)
+            .toInt()
+            .coerceAtLeast(baseBarHeight + 1)
+        val heightExpansion = if (barHeight > baseBarHeight) {
+            ((barHeight - baseBarHeight).toFloat() / (expandedHeight - baseBarHeight)).coerceIn(0f, 1f)
+        } else {
+            0f
+        }
+        val scaleExpansion = if (scaleY > 1f) {
+            ((scaleY - 1f) / (SCRUB_BAR_HEIGHT_SCALE - 1f)).coerceIn(0f, 1f)
+        } else {
+            0f
+        }
+        val expansion = maxOf(heightExpansion, scaleExpansion)
+        if (!scrubVisualExpanded && expansion <= 0f) {
+            return 0f
+        }
+        return minOf(scrubBarCornerRadiusPx * expansion, barHeightPx / 2f)
+    }
+
+    private fun drawBarSegment(
+        canvas: Canvas,
+        left: Float,
+        right: Float,
+        top: Float,
+        bottom: Float,
+        cornerRadius: Float,
+        paint: Paint,
+    ) {
+        if (right <= left) {
+            return
+        }
+        if (cornerRadius <= 0f) {
+            canvas.drawRect(left, top, right, bottom, paint)
+        } else {
+            canvas.drawRoundRect(left, top, right, bottom, cornerRadius, cornerRadius, paint)
         }
     }
 
@@ -946,8 +993,9 @@ class KinescopeTimeBar @JvmOverloads constructor(
         /** Default diameter for the scrubber when dragged, in dp.  */
         const val DEFAULT_SCRUBBER_DRAGGED_SIZE_DP = 16
 
-        private const val SCRUB_BAR_HEIGHT_SCALE = 1.6f
+        private const val SCRUB_BAR_HEIGHT_SCALE = 1.85f
         private const val SCRUB_BAR_HEIGHT_ANIMATION_MS = 150L
+        private const val SCRUB_BAR_CORNER_RADIUS_DP = 2
 
 //        /** Default color for the played portion of the time bar.  */
 //        const val DEFAULT_PLAYED_COLOR = -0x1

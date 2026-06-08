@@ -5,90 +5,65 @@
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/white"
     android:focusable="true"
     android:keepScreenOn="true"
     tools:context=".MainActivity">
 
     <LinearLayout
         android:id="@+id/main_buttons_layout"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
         android:gravity="center"
         android:orientation="vertical"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent">
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.5">
 
-        <androidx.appcompat.widget.AppCompatButton
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_playlist"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:backgroundTint="@color/kinescope_primary_color"
-            android:text="Playlist test"
-            android:textColor="@color/white"
-            android:textSize="24sp" />
+            style="@style/DemoAccentButton"
+            android:text="Playlist test" />
 
-        <androidx.appcompat.widget.AppCompatButton
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_subtitles"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="32dp"
-            android:backgroundTint="@color/kinescope_primary_color"
-            android:text="Subtitles test"
-            android:textColor="@color/white"
-            android:textSize="24sp" />
+            style="@style/DemoAccentButton"
+            android:layout_marginTop="25dp"
+            android:text="Subtitles test" />
 
-        <androidx.appcompat.widget.AppCompatButton
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_custom_ui"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="32dp"
-            android:backgroundTint="@color/kinescope_primary_color"
-            android:text="Custom UI test"
-            android:textColor="@color/white"
-            android:textSize="24sp" />
+            style="@style/DemoAccentButton"
+            android:layout_marginTop="25dp"
+            android:text="Custom UI test" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_custom_player"
-            style="@style/Widget.MaterialComponents.Button"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="32dp"
-            android:backgroundTint="@color/kinescope_primary_color"
-            android:text="@string/custom_player_title"
-            android:textColor="@color/white"
-            android:textSize="24sp" />
+            style="@style/DemoAccentButton"
+            android:layout_marginTop="25dp"
+            android:text="@string/custom_player_title" />
 
-        <androidx.appcompat.widget.AppCompatButton
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_live"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="32dp"
-            android:backgroundTint="@color/kinescope_primary_color"
-            android:text="Live test"
-            android:textColor="@color/white"
-            android:textSize="24sp" />
+            style="@style/DemoAccentButton"
+            android:layout_marginTop="25dp"
+            android:text="Live test" />
 
-        <androidx.appcompat.widget.AppCompatButton
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_shorts"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="32dp"
-            android:backgroundTint="@color/kinescope_primary_color"
-            android:text="Shorts"
-            android:textColor="@color/white"
-            android:textSize="24sp" />
+            style="@style/DemoAccentButton"
+            android:layout_marginTop="25dp"
+            android:text="Shorts" />
 
-        <androidx.appcompat.widget.AppCompatButton
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_offline_drm"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="32dp"
-            android:backgroundTint="@color/kinescope_primary_color"
-            android:text="Offline viewing"
-            android:textColor="@color/white"
-            android:textSize="24sp" />
+            style="@style/DemoAccentButton"
+            android:layout_marginTop="25dp"
+            android:text="Offline viewing" />
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

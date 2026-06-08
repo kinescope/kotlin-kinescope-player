@@ -43,4 +43,9 @@
     <string name="custom_player_delete_default_blocked">Cannot delete a template created in the web dashboard</string>
     <string name="custom_player_delete_dashboard_blocked">Dashboard templates cannot be deleted.</string>
     <string name="custom_player_template_dashboard_suffix"> (dashboard)</string>
+    <string name="playlist_title">Playlist</string>
+    <string name="playlist_progress">%1$d of %2$d videos</string>
+    <string name="playlist_copy_link">Copy link</string>
+    <string name="playlist_link_copied">Link copied</string>
+    <string name="playlist_close">Close playlist</string>
 </resources>

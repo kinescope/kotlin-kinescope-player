@@ -4,7 +4,6 @@ import android.content.Intent
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.view.WindowManager
-import androidx.appcompat.widget.AppCompatButton
 import com.google.android.material.button.MaterialButton
 import io.kinescope.demo.customplayer.CustomPlayerActivity
 import io.kinescope.demo.customui.CustomUIActivity
@@ -22,13 +21,13 @@ class MainActivity : AppCompatActivity() {
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE,
             WindowManager.LayoutParams.FLAG_SECURE);
 
-        val btnPlaylist = findViewById<AppCompatButton>(R.id.btn_playlist)
-        val btnSubtitles = findViewById<AppCompatButton>(R.id.btn_subtitles)
-        val btnCustomUI = findViewById<AppCompatButton>(R.id.btn_custom_ui)
+        val btnPlaylist = findViewById<MaterialButton>(R.id.btn_playlist)
+        val btnSubtitles = findViewById<MaterialButton>(R.id.btn_subtitles)
+        val btnCustomUI = findViewById<MaterialButton>(R.id.btn_custom_ui)
         val btnCustomPlayer = findViewById<MaterialButton>(R.id.btn_custom_player)
-        val btnLive = findViewById<AppCompatButton>(R.id.btn_live)
-        val btnShorts = findViewById<AppCompatButton>(R.id.btn_shorts)
-        val btnOfflineDrm = findViewById<AppCompatButton>(R.id.btn_offline_drm)
+        val btnLive = findViewById<MaterialButton>(R.id.btn_live)
+        val btnShorts = findViewById<MaterialButton>(R.id.btn_shorts)
+        val btnOfflineDrm = findViewById<MaterialButton>(R.id.btn_offline_drm)
 
         btnPlaylist.setOnClickListener {
             val intent =  Intent(this, PlaylistActivity::class.java)

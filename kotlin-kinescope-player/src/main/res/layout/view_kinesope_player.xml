@@ -19,11 +19,23 @@
             app:show_buffering="never"
             app:use_controller="false" />
 
-        <include
-            android:id="@+id/view_buffering"
-            layout="@layout/view_kinescope_buffering"
+        <View
+            android:id="@+id/kinescope_mobile_header_gradient"
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            android:layout_height="@dimen/kinescope_mobile_background_gradient_height"
+            android:layout_gravity="top"
+            android:background="@drawable/bg_player_gradient_header_mobile"
+            android:importantForAccessibility="no"
+            android:visibility="gone" />
+
+        <View
+            android:id="@+id/kinescope_mobile_footer_gradient"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/kinescope_mobile_background_gradient_height"
+            android:layout_gravity="bottom"
+            android:background="@drawable/bg_player_gradient_footer_mobile"
+            android:importantForAccessibility="no"
+            android:visibility="gone" />
 
         <io.kinescope.sdk.view.KinesopeSeekView
             android:id="@+id/kinescope_seek_view"
@@ -44,6 +56,13 @@
             android:clickable="true"
             android:focusable="true"
             android:visibility="gone" />
+
+        <include
+            android:id="@+id/view_buffering"
+            layout="@layout/view_kinescope_buffering"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:elevation="16dp" />
 
         <LinearLayout
             android:id="@+id/live_start_date_ll"

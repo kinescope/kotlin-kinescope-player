@@ -1,5 +1,6 @@
 package io.kinescope.demo
 
+import android.util.Log
 import androidx.lifecycle.*
 import androidx.lifecycle.viewmodel.CreationExtras
 import io.kinescope.sdk.api.KinescopeApiHelper
@@ -11,6 +12,9 @@ import kotlinx.coroutines.launch
 
 
 class KinescopeViewModel(private val apiHelper: KinescopeApiHelper) : ViewModel() {
+    private companion object {
+        const val TAG = "KinescopeViewModel"
+    }
     private val _allVideos: MutableLiveData<ArrayList<KinescopeVideoApi>> =
         MutableLiveData(arrayListOf())
     val allVideos: LiveData<ArrayList<KinescopeVideoApi>>
@@ -20,10 +24,11 @@ class KinescopeViewModel(private val apiHelper: KinescopeApiHelper) : ViewModel(
         viewModelScope.launch {
             apiHelper.getAllVideos().flowOn(Dispatchers.IO)
                 .catch { e ->
-                    e
+                    Log.e(TAG, "Failed to load videos", e)
                 }
-                .collect() {
-                    _allVideos.value = ArrayList(it.data)
+                .collect { response ->
+                    Log.d(TAG, "Loaded ${response.data.size} videos")
+                    _allVideos.value = ArrayList(response.data)
                 }
         }
     }
