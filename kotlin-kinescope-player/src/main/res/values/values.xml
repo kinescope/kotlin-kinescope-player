@@ -85,7 +85,26 @@
         <item name="android:windowExitAnimation">@anim/slide_out_right</item>
     </style>
 
-    <dimen name="kinescope_progress_bar_height">3dp</dimen>
+    <dimen name="kinescope_mobile_layout_max_width">480dp</dimen>
+    <dimen name="kinescope_mobile_control_margin_horizontal">16dp</dimen>
+    <dimen name="kinescope_mobile_control_margin_bottom">8dp</dimen>
+    <dimen name="kinescope_mobile_control_gap">12dp</dimen>
+    <dimen name="kinescope_mobile_control_time_height">24dp</dimen>
+    <dimen name="kinescope_control_section_gap">12dp</dimen>
+    <dimen name="kinescope_control_progress_leading_gap">4dp</dimen>
+    <dimen name="kinescope_mobile_media_button_size">28dp</dimen>
+    <dimen name="kinescope_mobile_title_text_size">14sp</dimen>
+    <dimen name="kinescope_mobile_author_text_size">12sp</dimen>
+    <dimen name="kinescope_mobile_description_gap">4dp</dimen>
+    <dimen name="kinescope_mobile_description_margin">16dp</dimen>
+    <dimen name="kinescope_mobile_progress_bar_height">4dp</dimen>
+    <dimen name="kinescope_mobile_background_gradient_height">120dp</dimen>
+
+    <dimen name="kinescope_seek_feedback_icon_width">31dp</dimen>
+    <dimen name="kinescope_seek_feedback_icon_height">12dp</dimen>
+    <dimen name="kinescope_seek_feedback_label_gap">4dp</dimen>
+
+    <dimen name="kinescope_progress_bar_height">4dp</dimen>
     <dimen name="kinescope_progress_touch_target_height">20dp</dimen>
     <dimen name="kinescope_progress_control_height">20dp</dimen>
     <dimen name="kinescope_progress_enabled_thumb_size">10dp</dimen>

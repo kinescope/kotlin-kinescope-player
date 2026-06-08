@@ -15,7 +15,7 @@ data class KinescopePlayerOptions(
     var pictureInPicture: Boolean = true,
     var fullscreen: Boolean = true,
     var playbackRate: Boolean = true,
-    var accentColor: String = "#3B82F6",
+    var accentColor: String = "#6161FC",
     var showFullscreenButton: Boolean = true,
     var showOptionsButton: Boolean = true,
     var showSubtitlesButton: Boolean = false,

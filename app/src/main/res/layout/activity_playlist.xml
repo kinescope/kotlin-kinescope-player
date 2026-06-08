@@ -4,28 +4,90 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    tools:context=".MainActivity">
-
+    android:background="@color/playlist_background"
+    tools:context=".playlist.PlaylistActivity">
 
     <io.kinescope.sdk.view.KinescopePlayerView
         android:id="@+id/kinescope_player"
-        android:layout_width="match_parent"
-        android:layout_height="260dp"
+        android:layout_width="0dp"
+        android:layout_height="211dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/rv_videos"
-        android:layout_width="match_parent"
+    <LinearLayout
+        android:id="@+id/playlist_panel"
+        android:layout_width="0dp"
         android:layout_height="0dp"
+        android:background="@drawable/bg_playlist_panel"
+        android:orientation="vertical"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/kinescope_player"
-        tools:itemCount="5"
-        tools:listitem="@layout/item_video" />
+        app:layout_constraintTop_toBottomOf="@id/kinescope_player">
+
+        <View
+            android:layout_width="32dp"
+            android:layout_height="4dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="3dp"
+            android:background="@drawable/bg_playlist_drag_handle" />
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="16dp"
+            android:paddingTop="16dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="12dp">
+
+            <TextView
+                android:id="@+id/tv_playlist_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif-medium"
+                android:includeFontPadding="false"
+                android:text="@string/playlist_title"
+                android:textColor="@color/playlist_text_primary"
+                android:textSize="16sp"
+                app:layout_constraintEnd_toStartOf="@id/btn_close_playlist"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <TextView
+                android:id="@+id/tv_playlist_progress"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:includeFontPadding="false"
+                android:textColor="@color/playlist_text_secondary"
+                android:textSize="12sp"
+                app:layout_constraintEnd_toStartOf="@id/btn_close_playlist"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/tv_playlist_title"
+                tools:text="3 of 7 videos" />
+
+            <ImageButton
+                android:id="@+id/btn_close_playlist"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/playlist_close"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_playlist_close"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rv_videos"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clipToPadding="false"
+            tools:itemCount="5"
+            tools:listitem="@layout/item_video" />
+    </LinearLayout>
 
     <io.kinescope.sdk.view.KinescopePlayerView
         android:id="@+id/v_kinescope_player_fullscreen"

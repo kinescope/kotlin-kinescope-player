@@ -2,11 +2,16 @@ package io.kinescope.demo.playlist
 
 import io.kinescope.demo.R
 import io.kinescope.demo.VideosAdapter
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.pm.ActivityInfo
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.view.View
 import android.view.WindowManager
+import android.widget.ImageButton
+import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.core.view.isVisible
 import androidx.media3.common.util.UnstableApi
@@ -14,6 +19,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import io.kinescope.demo.KinescopeViewModel
 import io.kinescope.demo.application.KinescopeSDKDemoApplication
+import io.kinescope.sdk.models.videos.KinescopeVideoApi
 import io.kinescope.sdk.player.KinescopeVideoPlayer
 import io.kinescope.sdk.view.KinescopePlayerView
 
@@ -24,6 +30,8 @@ class PlaylistActivity : AppCompatActivity() {
     }
 
     private var isVideoFullscreen = false
+    private lateinit var videosAdapter: VideosAdapter
+    private lateinit var playlistProgressView: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,24 +52,56 @@ class PlaylistActivity : AppCompatActivity() {
         fullscreenPlayerView.setIsFullscreen(true)
 
         val videosView = findViewById<RecyclerView>(R.id.rv_videos)
+        playlistProgressView = findViewById(R.id.tv_playlist_progress)
+        findViewById<ImageButton>(R.id.btn_close_playlist).setOnClickListener {
+            finish()
+        }
         playerView.setPlayer(kinescopePlayer)
         playerView.applyTemplateOptions()
         playerView.onFullscreenButtonCallback = { toggleFullscreen() }
         fullscreenPlayerView.onFullscreenButtonCallback = { toggleFullscreen() }
 
-        val adapter = VideosAdapter { videoId ->
-            kinescopePlayer.loadVideo(videoId, onSuccess = { data ->
-                kinescopePlayer.play()
-            })
-        }
+        videosAdapter = VideosAdapter(
+            onVideoClick = { videoId ->
+                playVideo(videoId)
+            },
+            onCopyLinkClick = { video ->
+                copyVideoLink(video)
+            },
+            onSelectionChanged = { selectedIndex, totalCount ->
+                updatePlaylistProgress(selectedIndex, totalCount)
+            },
+        )
 
         videosView.layoutManager = LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false)
-        videosView.adapter = adapter
+        videosView.adapter = videosAdapter
 
-        viewModel.allVideos.observe(this) {
-            adapter.updateData(it)
+        viewModel.allVideos.observe(this) { videos ->
+            videosAdapter.updateData(videos)
         }
         viewModel.getAllVideos()
+    }
+
+    private fun playVideo(videoId: String) {
+        videosAdapter.setSelectedVideoId(videoId)
+        kinescopePlayer.loadVideo(videoId, onSuccess = {
+            kinescopePlayer.play()
+        })
+    }
+
+    private fun updatePlaylistProgress(selectedIndex: Int, totalCount: Int) {
+        playlistProgressView.text = if (totalCount > 0 && selectedIndex > 0) {
+            getString(R.string.playlist_progress, selectedIndex, totalCount)
+        } else {
+            ""
+        }
+    }
+
+    private fun copyVideoLink(video: KinescopeVideoApi) {
+        val link = "https://kinescope.io/${video.id}"
+        val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("video_link", link))
+        Toast.makeText(this, R.string.playlist_link_copied, Toast.LENGTH_SHORT).show()
     }
 
     override fun onStop() {

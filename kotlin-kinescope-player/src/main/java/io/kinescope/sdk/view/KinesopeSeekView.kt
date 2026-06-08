@@ -1,14 +1,11 @@
 package io.kinescope.sdk.view
 
-import android.animation.ObjectAnimator
-import android.animation.ValueAnimator
 import android.content.Context
 import android.util.AttributeSet
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup.MarginLayoutParams
 import android.widget.FrameLayout
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.view.isVisible
@@ -25,8 +22,8 @@ class KinesopeSeekView(
 
     private val scrubOverlay: View
     private val scrubTopBar: LinearLayout
-    private val moveBackButton: ImageView
-    private val moveForwardButton: ImageView
+    private val moveBackButton: SeekDirectionIconView
+    private val moveForwardButton: SeekDirectionIconView
 
     private val seekFeedbackBack: FrameLayout
     private val seekFeedbackForward: FrameLayout
@@ -34,20 +31,18 @@ class KinesopeSeekView(
     private val seekFeedbackForwardHemisphere: View
     private val seekFeedbackBackHemisphereClip: FrameLayout
     private val seekFeedbackForwardHemisphereClip: FrameLayout
-    private val seekFeedbackBackIcon: ImageView
-    private val seekFeedbackForwardIcon: ImageView
+    private val seekFeedbackBackIcon: SeekDirectionIconView
+    private val seekFeedbackForwardIcon: SeekDirectionIconView
     private val seekFeedbackBackSeconds: TextView
     private val seekFeedbackForwardSeconds: TextView
     private val seekFeedbackBackContent: View
     private val seekFeedbackForwardContent: View
 
-    private var backShiftAnimator: ObjectAnimator? = null
-    private var forwardShiftAnimator: ObjectAnimator? = null
-    private var feedbackIconAnimator: ObjectAnimator? = null
 
     private var hideSeekFeedbackRunnable: Runnable? = null
     private var visibleEdgeForward: Boolean? = null
     private var isFullscreenMode = false
+    private var isMobilePlayerChrome = false
 
     init {
         inflate(context, R.layout.view_kinescope_seek_view, this)
@@ -55,6 +50,8 @@ class KinesopeSeekView(
         scrubTopBar = findViewById(R.id.scrub_top_bar)
         moveBackButton = findViewById(R.id.btn_move_back)
         moveForwardButton = findViewById(R.id.btn_move_forward)
+        moveBackButton.forward = false
+        moveForwardButton.forward = true
 
         seekFeedbackBack = findViewById(R.id.seek_feedback_back)
         seekFeedbackForward = findViewById(R.id.seek_feedback_forward)
@@ -64,6 +61,8 @@ class KinesopeSeekView(
         seekFeedbackForwardHemisphereClip = findViewById(R.id.seek_feedback_forward_hemisphere_clip)
         seekFeedbackBackIcon = findViewById(R.id.seek_feedback_back_icon)
         seekFeedbackForwardIcon = findViewById(R.id.seek_feedback_forward_icon)
+        seekFeedbackBackIcon.forward = false
+        seekFeedbackForwardIcon.forward = true
         seekFeedbackBackSeconds = findViewById(R.id.seek_feedback_back_seconds)
         seekFeedbackForwardSeconds = findViewById(R.id.seek_feedback_forward_seconds)
         seekFeedbackBackContent = findViewById(R.id.seek_feedback_back_content)
@@ -79,14 +78,29 @@ class KinesopeSeekView(
         applyEdgeFeedbackStyle(fullscreen)
     }
 
+    fun setMobilePlayerChrome(mobile: Boolean) {
+        if (isMobilePlayerChrome == mobile) {
+            return
+        }
+        isMobilePlayerChrome = mobile
+        applyEdgeFeedbackStyle(isFullscreenMode)
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        if (isMobilePlayerChrome && w != oldw && w > 0) {
+            applyEdgeFeedbackStyle(isFullscreenMode)
+        }
+    }
+
     private fun applyEdgeFeedbackStyle(fullscreen: Boolean) {
-        val diameter = resources.getDimensionPixelSize(
-            if (fullscreen) {
-                R.dimen.kinescope_seek_feedback_circle_diameter_fullscreen
-            } else {
-                R.dimen.kinescope_seek_feedback_circle_diameter
-            },
-        )
+        val diameter = when {
+            isMobilePlayerChrome && width > 0 -> width
+            fullscreen -> resources.getDimensionPixelSize(
+                R.dimen.kinescope_seek_feedback_circle_diameter_fullscreen,
+            )
+            else -> resources.getDimensionPixelSize(R.dimen.kinescope_seek_feedback_circle_diameter)
+        }
         val radius = diameter / 2
         val contentOffset = (radius * CONTENT_OFFSET_IN_RADIUS).toInt()
 
@@ -140,6 +154,7 @@ class KinesopeSeekView(
 
     fun showScrubOverlay() {
         if (scrubOverlay.isVisible) {
+            startScrubHintIconAnimations()
             return
         }
         scrubOverlay.alpha = 0f
@@ -201,10 +216,8 @@ class KinesopeSeekView(
             container.alpha = 1f
             container.scaleX = 1f
             container.scaleY = 1f
-            startFeedbackIconAnimation(icon, forward)
         } else {
             showEdgePanel(forward = forward, animated = true)
-            startFeedbackIconAnimation(icon, forward)
         }
 
         hideSeekFeedbackRunnable = Runnable {
@@ -284,66 +297,30 @@ class KinesopeSeekView(
         seekFeedbackForwardSeconds.isVisible = visible
     }
 
-    private fun startFeedbackIconAnimation(icon: ImageView, forward: Boolean) {
-        stopFeedbackIconAnimation()
-        val shiftPx = 8f * resources.displayMetrics.density
-        val targetTranslation = if (forward) -shiftPx else shiftPx
-        feedbackIconAnimator = ObjectAnimator.ofFloat(
-            icon,
-            View.TRANSLATION_X,
-            0f,
-            targetTranslation,
-        ).apply {
-            duration = SEEK_BUTTON_ANIMATION_MS
-            repeatCount = ValueAnimator.INFINITE
-            repeatMode = ValueAnimator.REVERSE
-            start()
+    private fun startFeedbackIconAnimation(icon: SeekDirectionIconView, forward: Boolean) {
+        if (forward) {
+            seekFeedbackBackIcon.stopRippleAnimation()
+        } else {
+            seekFeedbackForwardIcon.stopRippleAnimation()
         }
+        icon.forward = forward
+        icon.startRippleAnimation()
     }
 
     private fun stopFeedbackIconAnimation() {
-        feedbackIconAnimator?.cancel()
-        feedbackIconAnimator = null
-        seekFeedbackBackIcon.translationX = 0f
-        seekFeedbackForwardIcon.translationX = 0f
+        seekFeedbackBackIcon.stopRippleAnimation()
+        seekFeedbackForwardIcon.stopRippleAnimation()
     }
 
     private fun startScrubHintIconAnimations() {
         stopScrubHintIconAnimations()
-        val shiftPx = 8f * resources.displayMetrics.density
-
-        backShiftAnimator = ObjectAnimator.ofFloat(
-            moveBackButton,
-            View.TRANSLATION_X,
-            0f,
-            -shiftPx,
-        ).apply {
-            duration = SEEK_BUTTON_ANIMATION_MS
-            repeatCount = ValueAnimator.INFINITE
-            repeatMode = ValueAnimator.REVERSE
-            start()
-        }
-
-        forwardShiftAnimator = ObjectAnimator.ofFloat(
-            moveForwardButton,
-            View.TRANSLATION_X,
-            0f,
-            shiftPx,
-        ).apply {
-            duration = SEEK_BUTTON_ANIMATION_MS
-            repeatCount = ValueAnimator.INFINITE
-            repeatMode = ValueAnimator.REVERSE
-            start()
-        }
+        moveBackButton.startRippleAnimation()
+        moveForwardButton.startRippleAnimation()
     }
 
     private fun stopScrubHintIconAnimations() {
-        backShiftAnimator?.cancel()
-        forwardShiftAnimator?.cancel()
-        backShiftAnimator = null
-        forwardShiftAnimator = null
-        moveBackButton.translationX = 0f
-        moveForwardButton.translationX = 0f
+        moveBackButton.stopRippleAnimation()
+        moveForwardButton.stopRippleAnimation()
     }
 
     override fun onDetachedFromWindow() {
@@ -356,10 +333,9 @@ class KinesopeSeekView(
     private companion object {
         private const val CONTENT_OFFSET_IN_RADIUS = 0.42f
         private const val SCRUB_OVERLAY_FADE_MS = 150L
-        private const val SEEK_BUTTON_ANIMATION_MS = 450L
         private const val FEEDBACK_SHOW_MS = 180L
         private const val FEEDBACK_HIDE_MS = 150L
-        private const val DOUBLE_TAP_FEEDBACK_VISIBLE_MS = 1500L
+        private const val DOUBLE_TAP_FEEDBACK_VISIBLE_MS = 500L
         private const val FEEDBACK_SCALE_COLLAPSED = 0.88f
     }
 }
