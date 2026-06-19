@@ -32,7 +32,7 @@ import io.kinescope.sdk.models.players.KinescopeUpdatePlayerRequest
 import io.kinescope.sdk.models.players.applyTo
 import io.kinescope.sdk.models.players.syncLegacyChromeFlags
 import io.kinescope.sdk.models.players.toPlayerSettings
-import io.kinescope.sdk.player.KinescopePictureInPicture
+import io.kinescope.sdk.player.KinescopePictureInPictureSession
 import io.kinescope.sdk.player.KinescopePlayerOptions
 import io.kinescope.sdk.player.KinescopeVideoPlayer
 import io.kinescope.sdk.R as SdkR
@@ -52,7 +52,7 @@ class CustomPlayerActivity : AppCompatActivity() {
     private var isVideoFullscreen = false
     private var settingsScrollView: View? = null
     private var playerLayoutParamsBackup: ConstraintLayout.LayoutParams? = null
-    private var stopPlaybackAfterPipExit = false
+    private lateinit var pipSession: KinescopePictureInPictureSession
     private var suppressUiCallbacks = false
     private var selectedTemplate: KinescopePlayerTemplate? = null
 
@@ -86,13 +86,21 @@ class CustomPlayerActivity : AppCompatActivity() {
         fullscreenPlayerView = findViewById(R.id.kinescope_player_fullscreen)
         settingsScrollView = findViewById(R.id.settings_scroll_view)
         playerLayoutParamsBackup = playerView.layoutParams as ConstraintLayout.LayoutParams
+        pipSession = KinescopePictureInPictureSession(
+            activity = this,
+            playerView = { playerView },
+            player = { player },
+            additionalPlayerViews = { listOf(fullscreenPlayerView) },
+        ).apply {
+            onEnteringPip = { applyPictureInPictureLayout() }
+            onExitingPip = { restorePictureInPictureLayout() }
+        }
         playerView.setIsFullscreen(false)
         fullscreenPlayerView.setIsFullscreen(true)
         playerView.setPlayer(player)
         playerView.onFullscreenButtonCallback = { toggleFullscreen() }
         fullscreenPlayerView.onFullscreenButtonCallback = { toggleFullscreen() }
-        playerView.onPictureInPictureButtonCallback = { enterPictureInPicture() }
-        fullscreenPlayerView.onPictureInPictureButtonCallback = { enterPictureInPicture() }
+        pipSession.attach()
 
         bindUiFromOptions(player.kinescopePlayerOptions)
         setupListeners()
@@ -126,13 +134,7 @@ class CustomPlayerActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode) {
-            stopPlaybackAfterPipExit = true
-            super.onStop()
-            return
-        }
-        stopPlaybackAfterPipExit = false
-        player.stop()
+        pipSession.onStop()
         super.onStop()
     }
 
@@ -602,26 +604,7 @@ class CustomPlayerActivity : AppCompatActivity() {
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        if (isInPictureInPictureMode) {
-            applyPictureInPictureLayout()
-            playerView.prepareForPictureInPicture(true)
-            player.exoPlayer?.playWhenReady = true
-            player.play()
-        } else {
-            restorePictureInPictureLayout()
-            playerView.prepareForPictureInPicture(false)
-            playerView.refreshPlayerChrome()
-            if (stopPlaybackAfterPipExit) {
-                stopPlaybackAfterPipExit = false
-                player.stop()
-            } else {
-                KinescopePictureInPicture.onExitedPictureInPictureMode(
-                    activity = this,
-                    anchorView = playerView,
-                    onDismissed = { player.stop() },
-                )
-            }
-        }
+        pipSession.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
     }
 
     private fun applyPictureInPictureLayout() {
@@ -638,29 +621,6 @@ class CustomPlayerActivity : AppCompatActivity() {
         settingsScrollView?.isVisible = true
         supportActionBar?.show()
         playerLayoutParamsBackup?.let { playerView.layoutParams = it }
-    }
-
-    private fun enterPictureInPicture() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            return
-        }
-        if (player.exoPlayer?.isPlaying != true) {
-            player.play()
-        }
-        applyPictureInPictureLayout()
-        playerView.prepareForPictureInPicture(true)
-        val aspectRatio = KinescopePictureInPicture.getAspectRatio(player.exoPlayer)
-        val entered = KinescopePictureInPicture.enter(
-            activity = this,
-            playerView = playerView,
-            aspectRatio = aspectRatio,
-        )
-        if (!entered) {
-            restorePictureInPictureLayout()
-            playerView.prepareForPictureInPicture(false)
-            playerView.refreshPlayerChrome()
-            Toast.makeText(this, R.string.custom_player_pip_unavailable, Toast.LENGTH_SHORT).show()
-        }
     }
 
     private fun resolveDeleteErrorMessage(error: Throwable): String {

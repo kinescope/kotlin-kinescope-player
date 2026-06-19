@@ -1,7 +1,22 @@
 # Changelog
 
+## [0.0.9] — 19.06.2026
 
-## [0.0.8] — 08.06.2026
+### Playback & reliability
+- **Lifecycle** — `bindLifecycle()` pauses on `onStop`, resumes on `onStart`; skipped while PiP is active; `release()` on `onDestroy`
+- **Subtitles** — external tracks (VTT, TTML, SRT) merged into DASH via `MergingMediaSource`; runtime track switching; progressive word-by-word reveal; first track auto-enabled when `showSubtitlesButton` is on
+- **Chromecast** — manifest + DRM license sent to Kinescope receiver; position sync on connect/disconnect; local player paused while casting; overlay controls (play/pause, seek, stop)
+- **View switching** — `KinescopePlayerHost` for swapping active `Player` (local ↔ cast); `switchTargetView` for fullscreen without losing state
+
+
+### Added (UI & integration)
+- **Settings menu** — nested UI: quality, playback speed, subtitle tracks, subtitle appearance (`SubtitleStyle`)
+- **Dependencies** — `media3-cast`, Play Services Cast Framework; `KinescopeCastOptionsProvider` merged from library manifest
+
 
 ### Changed
-- **Player UI** — refined player interface: mobile chrome, header/footer gradients (including fullscreen), play/pause animation, seekbar and double-tap seek, options panel, buffering overlay
+- **Player options** — new chrome flags: `showCastButton`, `showSubtitlesButton`, `showFullscreenButton`, `showOptionsButton`, `showSeekBar`, `showDuration`, `showPlayPauseButton`, `showPlaybackSpeedInSettings`, `showAudioOnlyQualityInSettings`
+- **Quality manager** — improved variant labelling and auto-quality caption in settings
+
+### Fixed
+- PiP aspect ratio accounts for video rotation; PiP remote actions stay in sync with playback state

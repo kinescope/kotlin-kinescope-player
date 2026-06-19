@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "com.github.kinescope"
-version = "0.0.7"
+version = "0.0.9"
 
 android {
     namespace = "io.kinescope.sdk.shorts"
@@ -73,7 +73,7 @@ afterEvaluate {
             create<MavenPublication>("release") {
                 groupId = "com.github.kinescope"
                 artifactId = "kotlin-kinescope-shorts"
-                version = "0.0.7"
+                version = "0.0.9"
                 from(components["release"])
             }
         }

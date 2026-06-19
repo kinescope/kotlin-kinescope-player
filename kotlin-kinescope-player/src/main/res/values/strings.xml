@@ -2,10 +2,20 @@
 <resources>
     <string name="player_time_divider">/</string>
     <string name="player_picture_in_picture">Picture in picture</string>
+    <string name="player_pip_unavailable">Picture in picture is not available on this device</string>
+    <string name="player_pip_play">Play</string>
+    <string name="player_pip_pause">Pause</string>
+    <string name="player_pip_close">Close</string>
+    <string name="player_pip_expand">Expand to full screen</string>
     <string name="player_scrub_double_tap_hint">Double tap ± 10 sec</string>
     <string name="player_seek_back">Seek back 10 seconds</string>
     <string name="player_seek_forward">Seek forward 10 seconds</string>
     <string name="player_seek_seconds">%d sec</string>
+    <string name="player_play">Play</string>
+    <string name="player_cast">Cast</string>
+    <string name="player_cast_device">Casting to %1$s</string>
+    <string name="player_cast_device_unknown">device</string>
+    <string name="player_cast_stop">Stop casting</string>
 
     <string name="live">Live</string>
     <string name="live_time_offset">-%s</string>
@@ -17,6 +27,21 @@
     <string name="settings_parameter_subtitles">Subtitles</string>
     <string name="settings_parameter_attachments">Attachments</string>
     <string name="settings_subtitles_off">Off</string>
+    <string name="settings_subtitles_appearance">Settings</string>
+    <string name="settings_subtitles_appearance_title">Settings</string>
+    <string name="settings_subtitles_reset">Reset</string>
+    <string name="settings_subtitles_font_color">Font color</string>
+    <string name="settings_subtitles_font_size">Font size</string>
+    <string name="settings_subtitles_bg_color">Background color</string>
+    <string name="settings_subtitles_bg_opacity">Background opacity</string>
+    <string name="settings_subtitles_color_white">White</string>
+    <string name="settings_subtitles_color_green">Green</string>
+    <string name="settings_subtitles_color_cyan">Cyan</string>
+    <string name="settings_subtitles_color_blue">Blue</string>
+    <string name="settings_subtitles_color_magenta">Magenta</string>
+    <string name="settings_subtitles_color_red">Red</string>
+    <string name="settings_subtitles_color_black">Black</string>
+    <string name="settings_subtitles_color_custom">Custom</string>
     <string name="settings_video_quality_audio_only">Audio only</string>
 
     <string name="settings_playback_speed_0_25">0.25x</string>

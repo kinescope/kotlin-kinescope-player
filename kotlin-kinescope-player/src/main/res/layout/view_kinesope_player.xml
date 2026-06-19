@@ -19,6 +19,15 @@
             app:show_buffering="never"
             app:use_controller="false" />
 
+        <androidx.media3.ui.SubtitleView
+            android:id="@+id/kinescope_subtitle_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:importantForAccessibility="no" />
+
+        <include
+            layout="@layout/view_progressive_subtitle_overlay" />
+
         <View
             android:id="@+id/kinescope_mobile_header_gradient"
             android:layout_width="match_parent"
@@ -63,6 +72,13 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:elevation="16dp" />
+
+        <include
+            android:id="@+id/kinescope_cast_overlay_container"
+            layout="@layout/view_kinescope_cast_overlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:elevation="20dp" />
 
         <LinearLayout
             android:id="@+id/live_start_date_ll"
@@ -113,8 +129,7 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:clipChildren="true"
-            android:clipToPadding="true"
-            android:elevation="24dp" />
+            android:clipToPadding="true" />
 
     </FrameLayout>
 

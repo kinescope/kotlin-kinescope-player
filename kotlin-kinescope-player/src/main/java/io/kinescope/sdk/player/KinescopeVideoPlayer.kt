@@ -2,6 +2,9 @@ package io.kinescope.sdk.player
 
 import android.content.Context
 import android.net.Uri
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -16,7 +19,6 @@ import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.trackselection.AdaptiveTrackSelection
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
-import com.google.common.collect.ImmutableList
 import io.kinescope.sdk.api.KinescopeFetch
 import io.kinescope.sdk.logger.KinescopeLogger
 import io.kinescope.sdk.logger.KinescopeLoggerLevel
@@ -39,6 +41,10 @@ class KinescopeVideoPlayer(
     private val USER_AGENT = "KinescopeAndroidVideoKotlin"
     private var currentKinescopeVideo: KinescopeVideo? = null
     private var fetch: KinescopeFetch
+    private var boundLifecycle: Lifecycle? = null
+    private var lifecycleObserver: DefaultLifecycleObserver? = null
+    private var resumeOnStart = false
+    private var playerHost: KinescopePlayerHost? = null
 
     init {
         exoPlayer = ExoPlayer.Builder(context)
@@ -89,21 +95,17 @@ class KinescopeVideoPlayer(
 
         val mediaSource = when {
             kinescopeVideo.dashLink.isNullOrEmpty().not() -> {
-                val videoBuilder: MediaItem.Builder = MediaItem.Builder()
-                    .setUri(Uri.parse(kinescopeVideo.dashLink))
-
-                if (getShowSubtitles() && kinescopeVideo.subtitles.isNotEmpty()) {
-                    val subtitle: MediaItem.SubtitleConfiguration =
-                        MediaItem.SubtitleConfiguration.Builder(Uri.parse(kinescopeVideo.subtitles.first().url))
-                            .setMimeType(MimeTypes.TEXT_VTT)
-                            .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
-                            .build()
-
-                    videoBuilder.setSubtitleConfigurations(ImmutableList.of(subtitle))
-                }
-
                 source = kinescopeVideo.dashLink.orEmpty()
-                getDashMediaSource(videoBuilder)
+                if (getShowSubtitles() && kinescopeVideo.subtitles.isNotEmpty()) {
+                    KinescopeSubtitleMediaSources.createDashWithSideloadedSubtitles(
+                        video = kinescopeVideo,
+                        referer = kinescopePlayerOptions.referer,
+                    )
+                } else {
+                    getDashMediaSource(
+                        MediaItem.Builder().setUri(Uri.parse(kinescopeVideo.dashLink)),
+                    )
+                }
             }
 
             kinescopeVideo.hlsLink.isNullOrEmpty().not() -> {
@@ -144,6 +146,62 @@ class KinescopeVideoPlayer(
     }
 
     fun getVideo(): KinescopeVideo? = currentKinescopeVideo
+
+    /** Active media3 player for UI binding (local ExoPlayer by default). */
+    val playbackPlayer: Player?
+        get() = exoPlayer
+
+    /**
+     * Facade for swapping the active player (e.g. local ExoPlayer ↔ CastPlayer).
+     * Created lazily from the current ExoPlayer instance.
+     */
+    fun getOrCreatePlayerHost(): KinescopePlayerHost? {
+        val player = exoPlayer ?: return null
+        return playerHost ?: KinescopePlayerHost(player).also { playerHost = it }
+    }
+
+    /**
+     * Binds pause/resume/release to the Android lifecycle.
+     *
+     * @param isPipActive Skip pause on [Lifecycle.Event.ON_STOP] while PiP is active.
+     * @param backgroundPlaybackAllowed Keep playback running across stop/start.
+     */
+    fun bindLifecycle(
+        lifecycle: Lifecycle,
+        isPipActive: () -> Boolean = { false },
+        backgroundPlaybackAllowed: Boolean = false,
+    ) {
+        unbindLifecycle()
+        val observer = object : DefaultLifecycleObserver {
+            override fun onStop(owner: LifecycleOwner) {
+                if (backgroundPlaybackAllowed || isPipActive()) return
+                resumeOnStart = exoPlayer?.playWhenReady == true
+                pause()
+            }
+
+            override fun onStart(owner: LifecycleOwner) {
+                if (backgroundPlaybackAllowed || !resumeOnStart) return
+                resumeOnStart = false
+                play()
+            }
+
+            override fun onDestroy(owner: LifecycleOwner) {
+                unbindLifecycle()
+                release()
+            }
+        }
+        boundLifecycle = lifecycle
+        lifecycleObserver = observer
+        lifecycle.addObserver(observer)
+    }
+
+    fun unbindLifecycle() {
+        val lifecycle = boundLifecycle ?: return
+        lifecycleObserver?.let { lifecycle.removeObserver(it) }
+        boundLifecycle = null
+        lifecycleObserver = null
+        resumeOnStart = false
+    }
 
     fun loadVideo(
         videoId: String,
@@ -199,8 +257,10 @@ class KinescopeVideoPlayer(
     }
 
     fun release() {
+        unbindLifecycle()
         exoPlayer?.release()
         exoPlayer = null
+        playerHost = null
     }
 
     fun seekTo(toMilliSeconds: Long) {
@@ -238,6 +298,12 @@ class KinescopeVideoPlayer(
     fun setShowSubtitles(value: Boolean) {
         kinescopePlayerOptions.showSubtitlesButton = value
     }
+
+    fun setShowCast(value: Boolean) {
+        kinescopePlayerOptions.showCastButton = value
+    }
+
+    fun getShowCast(): Boolean = kinescopePlayerOptions.showCastButton
 
     fun setShowOptions(value: Boolean) {
         kinescopePlayerOptions.showOptionsButton = value

@@ -1,13 +1,14 @@
 package io.kinescope.sdk.player.quality
 
 import android.content.Context
+import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import io.kinescope.sdk.R
 import io.kinescope.sdk.extensions.EMPTY
 
-@UnstableApi
+@OptIn(UnstableApi::class)
 class KinescopeQualityManager(
     private val context: Context,
     private val trackSelector: DefaultTrackSelector,

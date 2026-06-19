@@ -2,10 +2,20 @@
 <resources>
     <string name="player_time_divider">/</string>
     <string name="player_picture_in_picture">Картинка в картинке</string>
+    <string name="player_pip_unavailable">Картинка в картинке недоступна на этом устройстве</string>
+    <string name="player_pip_play">Воспроизвести</string>
+    <string name="player_pip_pause">Пауза</string>
+    <string name="player_pip_close">Закрыть</string>
+    <string name="player_pip_expand">Развернуть на весь экран</string>
     <string name="player_scrub_double_tap_hint">Двойное касание ± 10 сек</string>
     <string name="player_seek_back">Назад на 10 секунд</string>
     <string name="player_seek_forward">Вперёд на 10 секунд</string>
     <string name="player_seek_seconds">%d сек</string>
+    <string name="player_play">Воспроизвести</string>
+    <string name="player_cast">Транслировать</string>
+    <string name="player_cast_device">Трансляция на %1$s</string>
+    <string name="player_cast_device_unknown">устройство</string>
+    <string name="player_cast_stop">Остановить трансляцию</string>
 
     <string name="live">В эфире</string>
     <string name="live_time_offset">-%s</string>
@@ -17,6 +27,21 @@
     <string name="settings_parameter_subtitles">Субтитры</string>
     <string name="settings_parameter_attachments">Вложения</string>
     <string name="settings_subtitles_off">Выкл.</string>
+    <string name="settings_subtitles_appearance">Настройки</string>
+    <string name="settings_subtitles_appearance_title">Настройки</string>
+    <string name="settings_subtitles_reset">Сбросить</string>
+    <string name="settings_subtitles_font_color">Цвет шрифта</string>
+    <string name="settings_subtitles_font_size">Размер шрифта</string>
+    <string name="settings_subtitles_bg_color">Цвет фона</string>
+    <string name="settings_subtitles_bg_opacity">Прозрачность фона</string>
+    <string name="settings_subtitles_color_white">Белый</string>
+    <string name="settings_subtitles_color_green">Зелёный</string>
+    <string name="settings_subtitles_color_cyan">Голубой</string>
+    <string name="settings_subtitles_color_blue">Синий</string>
+    <string name="settings_subtitles_color_magenta">Пурпурный</string>
+    <string name="settings_subtitles_color_red">Красный</string>
+    <string name="settings_subtitles_color_black">Чёрный</string>
+    <string name="settings_subtitles_color_custom">Свой</string>
     <string name="settings_video_quality_audio_only">Только звук</string>
 
     <string name="settings_playback_speed_0_25">0,25×</string>

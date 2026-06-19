@@ -18,7 +18,7 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles "consumer-rules.pro"
 
-        versionName "0.0.8"
+        versionName "0.0.9"
     }
 
     buildTypes {
@@ -78,7 +78,7 @@ afterEvaluate {
             release(MavenPublication) {
                 groupId = 'com.github.kinescope'
                 artifactId = 'kotlin-kinescope-player'
-                version = "0.0.8"
+                version = "0.0.9"
                 
                 from components.release
             }
@@ -90,6 +90,7 @@ dependencies {
     api project(':kotlin-kinescope-shorts')
 
     implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.7'
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
 
@@ -115,6 +116,8 @@ dependencies {
     implementation "androidx.media3:media3-extractor:$media3Version"
     implementation "androidx.media3:media3-container:$media3Version"
     implementation "androidx.media3:media3-decoder:$media3Version"
+
+    implementation "com.google.android.gms:play-services-cast-framework:21.5.0"
 
     implementation "com.github.bumptech.glide:glide:4.16.0"
     implementation "com.google.protobuf:protobuf-java:3.25.3"

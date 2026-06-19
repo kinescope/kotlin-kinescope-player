@@ -5,6 +5,7 @@ import io.kinescope.demo.VideosAdapter
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.view.View
@@ -20,6 +21,8 @@ import androidx.recyclerview.widget.RecyclerView
 import io.kinescope.demo.KinescopeViewModel
 import io.kinescope.demo.application.KinescopeSDKDemoApplication
 import io.kinescope.sdk.models.videos.KinescopeVideoApi
+import io.kinescope.sdk.player.KinescopeCastSession
+import io.kinescope.sdk.player.KinescopePictureInPictureSession
 import io.kinescope.sdk.player.KinescopeVideoPlayer
 import io.kinescope.sdk.view.KinescopePlayerView
 
@@ -32,11 +35,25 @@ class PlaylistActivity : AppCompatActivity() {
     private var isVideoFullscreen = false
     private lateinit var videosAdapter: VideosAdapter
     private lateinit var playlistProgressView: TextView
+    private lateinit var pipSession: KinescopePictureInPictureSession
+    private lateinit var castSession: KinescopeCastSession
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_playlist)
         kinescopePlayer = KinescopeVideoPlayer(this.applicationContext)
+        pipSession = KinescopePictureInPictureSession(
+            activity = this,
+            playerView = { playerView },
+            player = { kinescopePlayer },
+            additionalPlayerViews = { listOf(fullscreenPlayerView) },
+        )
+        castSession = KinescopeCastSession(
+            activity = this,
+            playerView = { playerView },
+            player = { kinescopePlayer },
+            additionalPlayerViews = { listOf(fullscreenPlayerView) },
+        )
     }
 
     lateinit var playerView: KinescopePlayerView
@@ -60,6 +77,8 @@ class PlaylistActivity : AppCompatActivity() {
         playerView.applyTemplateOptions()
         playerView.onFullscreenButtonCallback = { toggleFullscreen() }
         fullscreenPlayerView.onFullscreenButtonCallback = { toggleFullscreen() }
+        pipSession.attach()
+        castSession.attach()
 
         videosAdapter = VideosAdapter(
             onVideoClick = { videoId ->
@@ -105,8 +124,13 @@ class PlaylistActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
-        super.onStop();
-        kinescopePlayer.stop();
+        pipSession.onStop()
+        super.onStop()
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        pipSession.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
     }
 
     private fun setFullscreen(fullscreen: Boolean) {

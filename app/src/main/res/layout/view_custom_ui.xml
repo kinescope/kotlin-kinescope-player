@@ -11,13 +11,13 @@
         style="@style/KinescopeMediaButton"
         android:layout_width="96dp"
         android:layout_height="96dp"
-        android:src="@drawable/kinescope_controls_play" />
+        android:src="@drawable/ic_play" />
 
     <ImageButton
         android:id="@+id/ib_pause"
         style="@style/KinescopeMediaButton"
         android:layout_width="96dp"
         android:layout_height="96dp"
-        android:src="@drawable/kinescope_controls_pause" />
+        android:src="@drawable/ic_pause" />
 
 </LinearLayout>

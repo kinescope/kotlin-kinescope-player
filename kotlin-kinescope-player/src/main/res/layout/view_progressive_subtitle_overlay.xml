@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/kinescope_progressive_subtitle_container"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_gravity="bottom|start"
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    android:importantForAccessibility="no"
+    android:visibility="gone">
+
+    <LinearLayout
+        android:id="@+id/kinescope_progressive_subtitle_lines"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|start"
+        android:background="@drawable/bg_kinescope_caption"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:orientation="vertical"
+        android:paddingLeft="@dimen/kinescope_caption_padding_horizontal"
+        android:paddingTop="@dimen/kinescope_caption_padding_vertical"
+        android:paddingRight="@dimen/kinescope_caption_padding_horizontal"
+        android:paddingBottom="@dimen/kinescope_caption_padding_vertical">
+
+        <TextView
+            android:id="@+id/kinescope_progressive_subtitle_top"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="start"
+            android:hyphenationFrequency="none"
+            android:includeFontPadding="false"
+            android:singleLine="true"
+            android:textAlignment="viewStart"
+            android:textColor="@color/white"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/kinescope_progressive_subtitle_bottom"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="start"
+            android:hyphenationFrequency="none"
+            android:includeFontPadding="false"
+            android:singleLine="true"
+            android:textAlignment="viewStart"
+            android:textColor="@color/white"
+            android:visibility="gone" />
+
+    </LinearLayout>
+
+</FrameLayout>

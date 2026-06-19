@@ -5,4 +5,5 @@ package io.kinescope.demo
  */
 object KinescopeDemoConfig {
     const val API_KEY = "bc50167b-e868-47e4-a55c-07208ef15b22"
+
 }

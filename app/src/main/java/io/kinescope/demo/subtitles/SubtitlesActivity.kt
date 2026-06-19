@@ -9,18 +9,26 @@ import android.view.View
 import android.view.WindowManager
 import androidx.core.view.isVisible
 import androidx.media3.common.util.UnstableApi
+import io.kinescope.sdk.player.KinescopePictureInPictureSession
 import io.kinescope.sdk.player.KinescopeVideoPlayer
 import io.kinescope.sdk.view.KinescopePlayerView
 
 @UnstableApi
 class SubtitlesActivity : AppCompatActivity() {
     private var isVideoFullscreen = false
+    private lateinit var pipSession: KinescopePictureInPictureSession
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_subtitles)
 
         kinescopePlayer = KinescopeVideoPlayer(this)
+        pipSession = KinescopePictureInPictureSession(
+            activity = this,
+            playerView = { playerView },
+            player = { kinescopePlayer },
+            additionalPlayerViews = { listOf(fullscreenPlayerView) },
+        )
     }
 
     private lateinit var playerView: KinescopePlayerView
@@ -38,8 +46,10 @@ class SubtitlesActivity : AppCompatActivity() {
         playerView.setPlayer(kinescopePlayer)
         playerView.onFullscreenButtonCallback = { toggleFullscreen() }
         fullscreenPlayerView.onFullscreenButtonCallback = { toggleFullscreen() }
+        pipSession.attach()
 
-        kinescopePlayer.loadVideo("eNWM8F6wbVTVa8fBeR66y6", onSuccess = {
+        kinescopePlayer.loadVideo("56DsDuWRhJNkXPvUdCgtw9", onSuccess = {
+
             if (it != null) {
                 kinescopePlayer.play()
             }
@@ -47,8 +57,13 @@ class SubtitlesActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
-        super.onStop();
-        kinescopePlayer.stop();
+        pipSession.onStop()
+        super.onStop()
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        pipSession.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {

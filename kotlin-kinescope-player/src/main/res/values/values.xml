@@ -4,8 +4,12 @@
 
     <dimen name="kinescope_media_button_height">36dp</dimen>
     <dimen name="kinescope_media_button_width">36dp</dimen>
-    <dimen name="kinescope_play_pause_size">55dp</dimen>
+    <dimen name="kinescope_play_pause_size">56dp</dimen>
+    <dimen name="kinescope_settings_row_height">36dp</dimen>
     <dimen name="kinescope_settings_popup_width">280dp</dimen>
+    <dimen name="kinescope_settings_popup_max_height">368dp</dimen>
+    <dimen name="kinescope_settings_popup_bottom_offset">48dp</dimen>
+    <dimen name="kinescope_settings_options_max_height">320dp</dimen>
     <dimen name="kinescope_settings_popup_height">196dp</dimen>
     <dimen name="kinescope_settings_popup_corner_radius">6dp</dimen>
     <dimen name="kinescope_settings_popup_padding_vertical">8dp</dimen>
@@ -14,6 +18,11 @@
     <dimen name="kinescope_settings_popup_anchor_gap">8dp</dimen>
     <dimen name="kinescope_settings_popup_embedded_offset">55dp</dimen>
     <dimen name="kinescope_media_settings_offset">8dp</dimen>
+    <dimen name="kinescope_caption_padding_horizontal">8dp</dimen>
+    <dimen name="kinescope_caption_padding_vertical">4dp</dimen>
+    <dimen name="kinescope_caption_margin_start">12dp</dimen>
+    <dimen name="kinescope_caption_max_width">280dp</dimen>
+    <dimen name="kinescope_caption_line_height">28sp</dimen>
 
     <color name="kinescope_progressbar_buffered_color">#33FFFFFF</color>
     <color name="kinescope_progressbar_unplayed_color">#52FFFFFF</color>

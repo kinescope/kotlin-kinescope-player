@@ -10,6 +10,7 @@ import io.kinescope.demo.customui.CustomUIActivity
 import io.kinescope.demo.live.LiveActivity
 import io.kinescope.demo.playlist.PlaylistActivity
 import io.kinescope.demo.subtitles.SubtitlesActivity
+import io.kinescope.demo.drm.DrmViewingActivity
 import io.kinescope.demo.offlinedrm.OfflineDrmDemoActivity
 import io.kinescope.demo.shorts.ShortsActivity
 
@@ -23,6 +24,7 @@ class MainActivity : AppCompatActivity() {
 
         val btnPlaylist = findViewById<MaterialButton>(R.id.btn_playlist)
         val btnSubtitles = findViewById<MaterialButton>(R.id.btn_subtitles)
+        val btnDrmViewing = findViewById<MaterialButton>(R.id.btn_drm_viewing)
         val btnCustomUI = findViewById<MaterialButton>(R.id.btn_custom_ui)
         val btnCustomPlayer = findViewById<MaterialButton>(R.id.btn_custom_player)
         val btnLive = findViewById<MaterialButton>(R.id.btn_live)
@@ -35,8 +37,11 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnSubtitles.setOnClickListener {
-            val intent =  Intent(this, SubtitlesActivity::class.java)
-            startActivity(intent);
+            startActivity(Intent(this, SubtitlesActivity::class.java))
+        }
+
+        btnDrmViewing.setOnClickListener {
+            startActivity(Intent(this, DrmViewingActivity::class.java))
         }
 
         btnCustomUI.setOnClickListener {
