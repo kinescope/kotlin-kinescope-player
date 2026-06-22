@@ -248,7 +248,6 @@ class KinescopePlayerView(
     private var isOptionsBarExpanded = false
     private var isPictureInPictureActive = false
     private var timeBarLayoutWeight = 1f
-    private var layoutParamsBeforePip: ViewGroup.LayoutParams? = null
     private var wasCompactOptionsChrome = false
 
     private var liveDataView: View? = null
@@ -1953,6 +1952,19 @@ class KinescopePlayerView(
         updateAll()
     }
 
+    /**
+     * Re-applies chrome after returning from PiP without flashing the title overlay.
+     */
+    fun refreshPlayerChromeAfterPictureInPictureExit() {
+        kinescopePlayer?.kinescopePlayerOptions?.syncLegacyChromeFlags()
+        applyPlayerChromeLayout()
+        applyAccentColor()
+        dismissControlOverlayForPictureInPictureExit()
+        updatePlayPauseButton()
+        updateBuffering()
+        updateTimeline()
+    }
+
     fun applyTemplateOptions() {
         kinescopePlayer?.applyPlaybackOptions()
         refreshPlayerChrome()
@@ -2927,6 +2939,16 @@ class KinescopePlayerView(
         controlView?.isVisible = false
     }
 
+    /** Hides control chrome after returning from PiP so the title bar does not flash on expand. */
+    fun dismissControlOverlayForPictureInPictureExit() {
+        cancelControlOverlayAutoHide()
+        controlView?.animate()?.cancel()
+        controlView?.isVisible = false
+        titleView?.isVisible = false
+        authorView?.isVisible = false
+        setMobileBackgroundGradientsVisible(visible = false, animated = false)
+    }
+
     /** Поднимает/опускает progressive-субтитры при показе Compose-контролов. */
     fun syncSubtitleChromeForControls(controlsVisible: Boolean) {
         applySubtitleStyle(controlsVisibleOverride = controlsVisible)
@@ -2979,27 +3001,18 @@ class KinescopePlayerView(
             hidePipOverlays()
             isClickable = false
             isFocusable = false
-
-            layoutParamsBeforePip = layoutParams
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
-            exoPlayerView?.layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT,
-            )
-            (parent as? View)?.requestLayout()
             post { hidePipOverlays() }
         } else {
-            layoutParamsBeforePip?.let { saved ->
-                layoutParams = saved
-            }
-            layoutParamsBeforePip = null
             seekView?.isEnabled = true
             isClickable = true
             isFocusable = true
             restorePlayerChromeAfterPipExit()
             setUIListeners()
             applyKinescopePlayerOptions()
-            updateAll()
+            dismissControlOverlayForPictureInPictureExit()
+            updatePlayPauseButton()
+            updateBuffering()
+            updateTimeline()
         }
     }
 

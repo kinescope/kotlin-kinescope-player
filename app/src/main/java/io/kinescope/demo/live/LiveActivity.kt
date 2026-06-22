@@ -13,6 +13,7 @@ import android.widget.LinearLayout
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.media3.common.util.UnstableApi
+import io.kinescope.demo.KinescopeDemoConfig
 import io.kinescope.demo.R
 import io.kinescope.sdk.player.KinescopePictureInPictureSession
 import io.kinescope.sdk.player.KinescopeVideoPlayer
@@ -115,7 +116,7 @@ class LiveActivity : AppCompatActivity() {
     }
 
     private fun tryLoadVideo(id: String) {
-        val liveId = id.takeIf { id.isNotEmpty() } ?: DEFAULT_LIVE_ID
+        val liveId = id.takeIf { it.isNotEmpty() } ?: KinescopeDemoConfig.DEFAULT_LIVE_ID
 
         watchLiveContainerView.isVisible = false
         kinescopePlayer.loadVideo(liveId, { video ->
@@ -189,13 +190,5 @@ class LiveActivity : AppCompatActivity() {
                 kinescopePlayer
             )
         }
-    }
-
-
-    companion object {
-        /**
-         * Used if the live ID field value is empty
-         */
-        private const val DEFAULT_LIVE_ID = "aLJgR9TJfe2EUBejpH5Fuo"
     }
 }

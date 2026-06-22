@@ -110,6 +110,11 @@ object KinescopePictureInPicture {
             }
         }
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            builder.setTitle("")
+            builder.setSubtitle("")
+        }
+
         return builder.build()
     }
 

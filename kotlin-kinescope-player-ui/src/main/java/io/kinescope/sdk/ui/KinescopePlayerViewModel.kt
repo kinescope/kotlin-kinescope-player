@@ -42,7 +42,7 @@ class KinescopePlayerViewModel(
         playerFactory(
             KinescopePlayerOptions(
                 controls = false,
-                backgroundPlaybackAllowed = true,
+                backgroundPlaybackAllowed = false,
                 hdrToneMapping = true,
                 showCastButton = true,
             ),

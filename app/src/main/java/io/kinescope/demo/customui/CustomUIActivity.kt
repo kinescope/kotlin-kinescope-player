@@ -6,6 +6,7 @@ import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.view.View
 import androidx.media3.common.util.UnstableApi
+import io.kinescope.demo.KinescopeDemoConfig
 import io.kinescope.sdk.player.KinescopePictureInPictureSession
 import io.kinescope.sdk.player.KinescopeVideoPlayer
 import io.kinescope.sdk.view.KinescopePlayerView
@@ -36,7 +37,7 @@ class CustomUIActivity : AppCompatActivity() {
         playerView.setPlayer(kinescopeVideoPlayer)
         pipSession.attach()
 
-        kinescopeVideoPlayer.loadVideo("b138bf19-72fc-474b-901b-00f323899598", onSuccess = {
+        kinescopeVideoPlayer.loadVideo(KinescopeDemoConfig.DEFAULT_VIDEO_ID, onSuccess = {
             if (it != null) {
                 kinescopeVideoPlayer.play()
             }

@@ -1,5 +1,6 @@
 package io.kinescope.sdk.player
 
+import android.app.Activity
 import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.DefaultLifecycleObserver
@@ -188,11 +189,18 @@ class KinescopeVideoPlayer(
         lifecycle: Lifecycle,
         isPipActive: () -> Boolean = { false },
         backgroundPlaybackAllowed: Boolean = kinescopePlayerOptions.backgroundPlaybackAllowed,
+        releaseOnDestroy: Boolean = true,
     ) {
         unbindLifecycle()
         val observer = object : DefaultLifecycleObserver {
             override fun onStop(owner: LifecycleOwner) {
                 if (backgroundPlaybackAllowed) {
+                    val finishing = (owner as? Activity)?.isFinishing == true
+                    if (finishing) {
+                        KinescopePlaybackService.disconnect(context)
+                        pause()
+                        return
+                    }
                     KinescopePlaybackService.connect(context, this@KinescopeVideoPlayer)
                     return
                 }
@@ -213,7 +221,9 @@ class KinescopeVideoPlayer(
             override fun onDestroy(owner: LifecycleOwner) {
                 KinescopePlaybackService.disconnect(context)
                 unbindLifecycle()
-                release()
+                if (releaseOnDestroy) {
+                    releasePlayerEngine()
+                }
             }
         }
         boundLifecycle = lifecycle
@@ -283,10 +293,25 @@ class KinescopeVideoPlayer(
     }
 
     fun release() {
+        KinescopePlaybackService.disconnect(context)
         unbindLifecycle()
+        releasePlayerEngine()
+    }
+
+    private fun releasePlayerEngine() {
         exoPlayer?.release()
         exoPlayer = null
         playerHost = null
+    }
+
+    /**
+     * Swaps the local ExoPlayer instance (e.g. custom offline DRM engine).
+     * Re-attach [io.kinescope.sdk.view.KinescopePlayerView] via [setPlayer] after calling this.
+     */
+    fun replaceExoPlayer(player: ExoPlayer) {
+        exoPlayer?.release()
+        exoPlayer = player
+        playerHost = KinescopePlayerHost(player)
     }
 
     fun seekTo(toMilliSeconds: Long) {

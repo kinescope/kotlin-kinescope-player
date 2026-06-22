@@ -32,6 +32,7 @@ import io.kinescope.sdk.models.players.KinescopeUpdatePlayerRequest
 import io.kinescope.sdk.models.players.applyTo
 import io.kinescope.sdk.models.players.syncLegacyChromeFlags
 import io.kinescope.sdk.models.players.toPlayerSettings
+import io.kinescope.demo.KinescopeDemoConfig
 import io.kinescope.sdk.player.KinescopePictureInPictureSession
 import io.kinescope.sdk.player.KinescopePlayerOptions
 import io.kinescope.sdk.player.KinescopeVideoPlayer
@@ -126,7 +127,7 @@ class CustomPlayerActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
-        player.loadVideo(DEMO_VIDEO_ID, onSuccess = { video ->
+        player.loadVideo(KinescopeDemoConfig.DEFAULT_VIDEO_ID, onSuccess = { video ->
             if (video != null && player.kinescopePlayerOptions.autoplay) {
                 player.play()
             }
@@ -632,9 +633,5 @@ class CustomPlayerActivity : AppCompatActivity() {
             return getString(R.string.custom_player_delete_error_detail, apiMessage)
         }
         return getString(R.string.custom_player_delete_error)
-    }
-
-    private companion object {
-        const val DEMO_VIDEO_ID = "b138bf19-72fc-474b-901b-00f323899598"
     }
 }

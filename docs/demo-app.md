@@ -6,17 +6,19 @@ The demo is **not** published to JitPack; clone the repo and build locally.
 
 ## Configuration
 
-**1.** Set your Kinescope API key in [`KinescopeDemoConfig`](../app/src/main/java/io/kinescope/demo/KinescopeDemoConfig.kt):
+**1.** Set your Kinescope API key and sample video IDs in [`KinescopeDemoConfig`](../app/src/main/java/io/kinescope/demo/KinescopeDemoConfig.kt):
 
 ```kotlin
 object KinescopeDemoConfig {
     const val API_KEY = "your-api-key"
+    const val DEFAULT_VIDEO_ID = "..."      // Custom UI, Custom Player, Compose
+    const val DRM_VIDEO_ID = "..."          // DRM viewing
+    const val SUBTITLES_VIDEO_ID = "..."    // Subtitles test
+    const val DEFAULT_LIVE_ID = "..."       // Live test (empty input fallback)
 }
 ```
 
-The key is used by [`KinescopeSDKDemoApplication`](../app/src/main/java/io/kinescope/demo/application/KinescopeSDKDemoApplication.kt) to create `KinescopeApiHelper` for Dashboard API screens (playlist, custom player templates).
-
-**2.** Some screens use hard-coded demo video IDs from the Kinescope sample project. If playback fails, replace them with video IDs from your own account.
+The API key is also appended to Widevine license URLs for offline downloads.
 
 ## Build and install
 

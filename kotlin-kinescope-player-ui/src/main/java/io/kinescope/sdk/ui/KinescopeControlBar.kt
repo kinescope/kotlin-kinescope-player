@@ -87,37 +87,45 @@ fun KinescopeControlBar(
             .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val shownMs = scrub?.let { (it * state.durationMs).toLong() } ?: state.positionMs
-        Row(
-            modifier = Modifier
-                .animateContentSize(tween(100, easing = FastOutSlowInEasing))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                ) { showTotal = !showTotal },
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = formatTime(shownMs),
-                color = colors.iconPrimary,
-                fontSize = 14.sp, lineHeight = 21.sp,
-                fontWeight = FontWeight.Normal, fontFamily = RobotoFontFamily,
-                textAlign = TextAlign.Center,
-            )
-            if (showTotal) {
+        if (expandAnim < 1f) {
+            val shownMs = scrub?.let { (it * state.durationMs).toLong() } ?: state.positionMs
+            Row(
+                modifier = Modifier
+                    .animateContentSize(tween(100, easing = FastOutSlowInEasing))
+                    .graphicsLayer { alpha = 1f - expandAnim }
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { showTotal = !showTotal },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
-                    text = " / ${formatTime(state.durationMs)}",
-                    color = colors.textSecondary,
-                    fontSize = 14.sp, lineHeight = 21.sp,
-                    fontWeight = FontWeight.Normal, fontFamily = RobotoFontFamily,
-                    maxLines = 1, softWrap = false,
+                    text = formatTime(shownMs),
+                    color = colors.iconPrimary,
+                    fontSize = 14.sp,
+                    lineHeight = 21.sp,
+                    fontWeight = FontWeight.Normal,
+                    fontFamily = RobotoFontFamily,
+                    textAlign = TextAlign.Center,
                 )
+                if (showTotal) {
+                    Text(
+                        text = " / ${formatTime(state.durationMs)}",
+                        color = colors.textSecondary,
+                        fontSize = 14.sp,
+                        lineHeight = 21.sp,
+                        fontWeight = FontWeight.Normal,
+                        fontFamily = RobotoFontFamily,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                }
             }
         }
         BoxWithConstraints(
             Modifier
                 .weight(1f)
-                .padding(start = 12.dp)
+                .padding(start = if (expandAnim < 1f) 12.dp else 0.dp)
                 .clipToBounds(),
             contentAlignment = Alignment.Center,
         ) {
@@ -179,7 +187,10 @@ fun KinescopeControlBar(
             onClick = onFullscreenClick,
         )
         Spacer(Modifier.width(12.dp))
-        BarIcon(R.drawable.ic_dots, "Ещё", onClick = { expanded = !expanded })
+        BarIcon(R.drawable.ic_dots, "Ещё", onClick = {
+            expanded = !expanded
+            if (expanded) showTotal = false
+        })
     }
 }
 

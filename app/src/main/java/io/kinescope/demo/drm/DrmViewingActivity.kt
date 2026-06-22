@@ -8,6 +8,7 @@ import android.view.WindowManager
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.media3.common.util.UnstableApi
+import io.kinescope.demo.KinescopeDemoConfig
 import io.kinescope.demo.R
 import io.kinescope.sdk.player.KinescopePictureInPictureSession
 import io.kinescope.sdk.player.KinescopeVideoPlayer
@@ -45,7 +46,7 @@ class DrmViewingActivity : AppCompatActivity() {
         fullscreenPlayerView.onFullscreenButtonCallback = { toggleFullscreen() }
         pipSession.attach()
 
-        kinescopePlayer.loadVideo(DEMO_DRM_VIDEO_ID, onSuccess = { video ->
+        kinescopePlayer.loadVideo(KinescopeDemoConfig.DRM_VIDEO_ID, onSuccess = { video ->
             if (video != null) {
                 kinescopePlayer.play()
             }
@@ -106,9 +107,5 @@ class DrmViewingActivity : AppCompatActivity() {
             return
         }
         super.onBackPressed()
-    }
-
-    private companion object {
-        private const val DEMO_DRM_VIDEO_ID = "eNWM8F6wbVTVa8fBeR66y6"
     }
 }

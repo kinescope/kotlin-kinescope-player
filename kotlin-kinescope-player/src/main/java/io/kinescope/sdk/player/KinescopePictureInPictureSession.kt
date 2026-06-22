@@ -8,6 +8,7 @@ import android.content.res.Configuration
 import android.os.Build
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.doOnLayout
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.media3.common.Player
@@ -92,7 +93,6 @@ class KinescopePictureInPictureSession(
         val view = playerView()
         val videoPlayer = player()
         if (isInPictureInPictureMode) {
-            onEnteringPip?.invoke()
             prepareAllPlayerViewsForPictureInPicture(true)
             videoPlayer.play()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -101,7 +101,7 @@ class KinescopePictureInPictureSession(
         } else {
             onExitingPip?.invoke()
             prepareAllPlayerViewsForPictureInPicture(false)
-            refreshAllPlayerViewsChrome()
+            refreshPlayerChromeAfterPictureInPictureExit()
             if (stopPlaybackAfterPipExit) {
                 stopPlaybackAfterPipExit = false
                 videoPlayer.stop()
@@ -118,6 +118,12 @@ class KinescopePictureInPictureSession(
     private fun prepareAllPlayerViewsForPictureInPicture(preparing: Boolean) {
         (listOf(playerView()) + additionalPlayerViews()).distinct().forEach { view ->
             view.prepareForPictureInPicture(preparing)
+        }
+    }
+
+    private fun refreshPlayerChromeAfterPictureInPictureExit() {
+        (listOf(playerView()) + additionalPlayerViews()).distinct().forEach { view ->
+            view.refreshPlayerChromeAfterPictureInPictureExit()
         }
     }
 
@@ -138,18 +144,23 @@ class KinescopePictureInPictureSession(
         }
         onEnteringPip?.invoke()
         prepareAllPlayerViewsForPictureInPicture(true)
-        view.post {
-            val entered = KinescopePictureInPicture.enter(
-                activity = activity,
-                anchorView = view.getPipAnchorView(),
-                aspectRatio = KinescopePictureInPicture.getAspectRatio(videoPlayer.exoPlayer),
-                exoPlayer = videoPlayer.exoPlayer,
-            )
-            if (!entered) {
-                onExitingPip?.invoke()
-                prepareAllPlayerViewsForPictureInPicture(false)
-                refreshAllPlayerViewsChrome()
-                Toast.makeText(activity, R.string.player_pip_unavailable, Toast.LENGTH_SHORT).show()
+        val anchorView = view.getPipAnchorView()
+        view.doOnLayout {
+            anchorView.doOnLayout {
+                view.post {
+                    val entered = KinescopePictureInPicture.enter(
+                        activity = activity,
+                        anchorView = anchorView,
+                        aspectRatio = KinescopePictureInPicture.getAspectRatio(videoPlayer.exoPlayer),
+                        exoPlayer = videoPlayer.exoPlayer,
+                    )
+                    if (!entered) {
+                        onExitingPip?.invoke()
+                        prepareAllPlayerViewsForPictureInPicture(false)
+                        refreshAllPlayerViewsChrome()
+                        Toast.makeText(activity, R.string.player_pip_unavailable, Toast.LENGTH_SHORT).show()
+                    }
+                }
             }
         }
     }

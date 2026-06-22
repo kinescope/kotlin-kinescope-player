@@ -5,6 +5,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -36,6 +37,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,6 +67,10 @@ import kotlinx.coroutines.delay
 private const val DOUBLE_TAP_SEEK_STREAK_WINDOW_MS = 1500L
 private const val DOUBLE_TAP_FEEDBACK_VISIBLE_MS = 500L
 private const val DOUBLE_TAP_FEEDBACK_HIDE_MS = 150L
+private const val CONTROLS_OVERLAY_FADE_MS = 220
+
+private val controlsOverlayEnter = fadeIn(tween(CONTROLS_OVERLAY_FADE_MS, easing = FastOutSlowInEasing))
+private val controlsOverlayExit = fadeOut(tween(CONTROLS_OVERLAY_FADE_MS, easing = FastOutSlowInEasing))
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -99,6 +105,8 @@ fun KinescopePlayerScreen(
     var lastSeekTapTimeMs by remember { mutableLongStateOf(0L) }
     var lastSeekTapSide by remember { mutableIntStateOf(0) }
     var seekHoldPlaying by remember { mutableStateOf(false) }
+    val currentHasStarted by rememberUpdatedState(state.hasStarted)
+    val currentControlsVisible by rememberUpdatedState(controlsVisible)
 
 
     LaunchedEffect(castState.isCasting) {
@@ -193,6 +201,7 @@ fun KinescopePlayerScreen(
                     isFocusable = false
                     setOnTouchListener { _, _ -> false }
                     findViewById<View>(io.kinescope.sdk.R.id.kinescope_buffering)?.visibility = View.GONE
+                    findViewById<View>(io.kinescope.sdk.R.id.kinescope_time_container)?.visibility = View.GONE
                     findViewById<androidx.media3.ui.PlayerView>(io.kinescope.sdk.R.id.view_exoplayer)
                         ?.subtitleView?.visibility = View.GONE
                     findViewById<View>(io.kinescope.sdk.R.id.kinescope_seek_view)?.visibility = View.GONE
@@ -206,13 +215,24 @@ fun KinescopePlayerScreen(
         val gestureModifier = Modifier
             .fillMaxSize()
             .pointerInput(state.hasStarted) {
+                var controlsVisibleAtPress = false
                 detectTapGestures(
+                    onPress = {
+                        controlsVisibleAtPress = currentControlsVisible
+                        if (currentHasStarted && !currentControlsVisible) {
+                            controlsVisible = true
+                        }
+                        tryAwaitRelease()
+                    },
                     onTap = {
-                        if (!state.hasStarted) controller.playPause()
-                        else controlsVisible = !controlsVisible
+                        if (!currentHasStarted) {
+                            controller.playPause()
+                        } else if (controlsVisibleAtPress) {
+                            controlsVisible = false
+                        }
                     },
                     onDoubleTap = { offset ->
-                        if (state.hasStarted) {
+                        if (currentHasStarted) {
                             val side = if (offset.x > size.width / 2f) 1 else -1
                             val now = System.currentTimeMillis()
                             seekStreakCount = if (
@@ -249,8 +269,8 @@ fun KinescopePlayerScreen(
 
         AnimatedVisibility(
             visible = showMobileGradients,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = controlsOverlayEnter,
+            exit = controlsOverlayExit,
             modifier = Modifier.align(Alignment.TopCenter),
         ) {
             Box(
@@ -309,8 +329,8 @@ fun KinescopePlayerScreen(
 
         AnimatedVisibility(
             visible = showMobileGradients,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = controlsOverlayEnter,
+            exit = controlsOverlayExit,
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
             Box(
@@ -359,10 +379,20 @@ fun KinescopePlayerScreen(
 
                 !state.hasStarted -> PosterPlayButton { controller.playPause() }
 
-                controlsVisible -> PlayPauseMorph(
+                else -> Unit
+            }
+            AnimatedVisibility(
+                visible = state.hasStarted &&
+                    controlsVisible &&
+                    state.error == null &&
+                    !state.hasEnded &&
+                    !(state.isBuffering && seekSide == 0),
+                enter = controlsOverlayEnter,
+                exit = controlsOverlayExit,
+            ) {
+                PlayPauseMorph(
                     isPlaying = if (seekSide != 0) seekHoldPlaying else state.isPlaying,
-                    tint = if (scrubbing) colors.iconDimmed
-                    else colors.iconPrimary,
+                    tint = if (scrubbing) colors.iconDimmed else colors.iconPrimary,
                     onClick = { controller.playPause() },
                 )
             }
@@ -396,8 +426,8 @@ fun KinescopePlayerScreen(
 
         AnimatedVisibility(
             visible = state.hasStarted && controlsVisible,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = controlsOverlayEnter,
+            exit = controlsOverlayExit,
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
             KinescopeControlBar(

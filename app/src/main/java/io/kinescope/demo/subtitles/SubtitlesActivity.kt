@@ -9,6 +9,7 @@ import android.view.View
 import android.view.WindowManager
 import androidx.core.view.isVisible
 import androidx.media3.common.util.UnstableApi
+import io.kinescope.demo.KinescopeDemoConfig
 import io.kinescope.sdk.player.KinescopePictureInPictureSession
 import io.kinescope.sdk.player.KinescopeVideoPlayer
 import io.kinescope.sdk.view.KinescopePlayerView
@@ -48,8 +49,7 @@ class SubtitlesActivity : AppCompatActivity() {
         fullscreenPlayerView.onFullscreenButtonCallback = { toggleFullscreen() }
         pipSession.attach()
 
-        kinescopePlayer.loadVideo("4CCHqgs4MkL33akyL7jJtS", onSuccess = {
-            "56DsDuWRhJNkXPvUdCgtw9"
+        kinescopePlayer.loadVideo(KinescopeDemoConfig.SUBTITLES_VIDEO_ID, onSuccess = {
             if (it != null) {
                 kinescopePlayer.play()
             }
