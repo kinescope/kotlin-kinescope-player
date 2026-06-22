@@ -24,8 +24,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
 import androidx.media3.ui.TimeBar
 import io.kinescope.sdk.R
-import java.util.Formatter
-import java.util.Locale
+import io.kinescope.sdk.utils.formatPlayerTime
 import java.util.concurrent.CopyOnWriteArraySet
 
 /*
@@ -153,8 +152,6 @@ class KinescopeTimeBar @JvmOverloads constructor(
     private var scrubberDraggedSize = 0
     private var scrubberPadding = 0
     private val fineScrubYThreshold: Int
-    private val formatBuilder: StringBuilder
-    private val formatter: Formatter
     private val stopScrubbingRunnable: Runnable
     private val listeners: CopyOnWriteArraySet<TimeBar.OnScrubListener>
     private val touchPosition: Point
@@ -305,8 +302,6 @@ class KinescopeTimeBar @JvmOverloads constructor(
             scrubberDrawable = null
         }
         baseBarHeight = barHeight
-        formatBuilder = StringBuilder()
-        formatter = Formatter(formatBuilder, Locale.getDefault())
         stopScrubbingRunnable = Runnable { stopScrubbing( /* canceled= */false) }
         scrubberPadding = if (scrubberDrawable != null) {
             (scrubberDrawable!!.minimumWidth + 1) / 2
@@ -966,7 +961,7 @@ class KinescopeTimeBar @JvmOverloads constructor(
     }
 
     private val progressText: String
-        private get() = Util.getStringForTime(formatBuilder, formatter, position)
+        private get() = formatPlayerTime(position)
     private val positionIncrement: Long
         private get() = if (keyTimeIncrement == C.TIME_UNSET) (if (duration == C.TIME_UNSET) 0 else (duration / keyCountIncrement)) else keyTimeIncrement
 

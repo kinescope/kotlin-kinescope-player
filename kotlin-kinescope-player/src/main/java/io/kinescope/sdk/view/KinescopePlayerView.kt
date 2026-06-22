@@ -9,8 +9,11 @@ import android.media.AudioManager
 import android.os.Looper
 import android.util.AttributeSet
 import android.util.TypedValue
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.view.GestureDetector
+import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -48,6 +51,7 @@ import androidx.media3.ui.PlayerControlView
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.SubtitleView
 import androidx.media3.ui.TimeBar
+import androidx.interpolator.view.animation.FastOutSlowInInterpolator
 import com.bumptech.glide.Glide
 import io.kinescope.sdk.R
 import io.kinescope.sdk.analytics.KinescopeAnalyticsManager
@@ -75,6 +79,8 @@ import io.kinescope.sdk.settings.SubtitleStyle
 import io.kinescope.sdk.settings.qualityBadgeForVariant
 import io.kinescope.sdk.cast.KinescopeCastState
 import io.kinescope.sdk.utils.formatLiveStartDate
+import io.kinescope.sdk.utils.formatPlayerTime
+import kotlin.math.roundToInt
 
 
 @UnstableApi
@@ -114,7 +120,7 @@ class KinescopePlayerView(
 
                     it.positionView?.isVisible = false
                     it.durationView?.isVisible = false
-                    it.timeSeparatorView?.isVisible = false
+                    it.timeDurationSuffixClip?.isVisible = false
                     it.liveDataView?.isVisible = true
                 }
             }
@@ -126,6 +132,9 @@ class KinescopePlayerView(
         private const val MAX_UPDATE_INTERVAL_MS = 1000
         private const val CONTROL_OVERLAY_FADE_DURATION_MS = 200L
         private const val CONTROL_OVERLAY_AUTO_HIDE_MS = 3000L
+        private const val TIME_DURATION_TOGGLE_ANIMATION_MS = 100L
+        private const val TIME_DURATION_LABEL_FADE_START = 0.4f
+        private const val TIME_LABEL_SEPARATOR = " / "
         private const val SCRUB_MODE_CONTROL_ELEVATION_DP = 8f
         private const val SETTINGS_MENU_ELEVATION_DP = 24f
         private const val SCRUB_SEEKBAR_SCALE = 1.85f
@@ -142,6 +151,7 @@ class KinescopePlayerView(
         private const val SUBTITLE_PROGRESS_UPDATE_INTERVAL_MS = 16
         private const val SUBTITLE_SIZE_FRACTION_OF_HEIGHT = 0.062f
         private val optionsBarAnimationInterpolator = DecelerateInterpolator()
+        private val timeDurationToggleInterpolator = FastOutSlowInInterpolator()
     }
 
     private val gestureDetector: GestureDetectorCompat
@@ -200,9 +210,6 @@ class KinescopePlayerView(
     var onPictureInPictureButtonCallback: (() -> Unit)? = null
     var onAttachmentSelected: ((KinescopeVideoAttachments) -> Unit)? = null
 
-    private val formatBuilder: StringBuilder = StringBuilder()
-    private val formatter = java.util.Formatter(formatBuilder, java.util.Locale.getDefault())
-
     private var posterView: ImageView? = null
 
     private var kinescopePlayer: KinescopeVideoPlayer? = null
@@ -215,7 +222,7 @@ class KinescopePlayerView(
     private var bufferingView: View? = null
     private var positionView: TextView? = null
     private var durationView: TextView? = null
-    private var timeSeparatorView: View? = null
+    private var timeDurationSuffixClip: View? = null
     private var timeBar: KinescopeTimeBar? = null
 
     private var buttonsContainer: ViewGroup? = null
@@ -244,8 +251,10 @@ class KinescopePlayerView(
     private var optionsExpandableStrip: View? = null
     private var optionsExpandableContent: View? = null
     private var optionsExpandableStripAnimator: ValueAnimator? = null
+    private var timeDurationSuffixAnimator: Animator? = null
     private var isMobilePlayerChrome = false
     private var isOptionsBarExpanded = false
+    private var showTotalDuration = false
     private var isPictureInPictureActive = false
     private var timeBarLayoutWeight = 1f
     private var wasCompactOptionsChrome = false
@@ -578,7 +587,7 @@ class KinescopePlayerView(
                 return
             }
 
-            positionView?.text = Util.getStringForTime(formatBuilder, formatter, position)
+            positionView?.text = formatPlayerTime(position)
 
             getAnalyticsArguments().let { args ->
                 analyticsManager.seek(args = args)
@@ -595,7 +604,7 @@ class KinescopePlayerView(
                 return
             }
 
-            positionView?.text = Util.getStringForTime(formatBuilder, formatter, position)
+            positionView?.text = formatPlayerTime(position)
         }
 
         override fun onScrubStop(timeBar: TimeBar, position: Long, canceled: Boolean) {
@@ -672,7 +681,7 @@ class KinescopePlayerView(
         timeBar = controlView?.findViewById(R.id.kinescope_progress)
         positionView = controlView?.findViewById(R.id.kinescope_position)
         durationView = controlView?.findViewById(R.id.kinescope_duration)
-        timeSeparatorView = controlView?.findViewById(R.id.time_separator_view)
+        timeDurationSuffixClip = controlView?.findViewById(R.id.kinescope_time_duration_suffix_clip)
 
         buttonsContainer = controlView?.findViewById(R.id.buttons_container_ll)
         optionsExpandedGroup = controlView?.findViewById(R.id.kinescope_options_expanded_group)
@@ -875,7 +884,7 @@ class KinescopePlayerView(
 
         positionView?.isVisible = false
         durationView?.isVisible = false
-        timeSeparatorView?.isVisible = false
+        timeDurationSuffixClip?.isVisible = false
         liveDataView?.isVisible = true
     }
 
@@ -1735,6 +1744,187 @@ class KinescopePlayerView(
         return !isLiveState && (isMobilePlayerChrome || options?.showDuration == true)
     }
 
+    private fun shouldShowTotalDurationInBar(): Boolean {
+        return showTotalDuration && !isLiveState && shouldShowTimeContainerInBar()
+    }
+
+    private fun toggleTotalDurationVisibility() {
+        if (isLiveState || !shouldShowTimeContainerInBar()) {
+            return
+        }
+        showTotalDuration = !showTotalDuration
+        updateTotalDurationVisibility(animated = true)
+        cancelControlOverlayAutoHide()
+        scheduleControlOverlayAutoHide()
+    }
+
+    private fun durationLabelText(durationMs: Long): String {
+        return TIME_LABEL_SEPARATOR + formatPlayerTime(durationMs)
+    }
+
+    private fun updateTotalDurationVisibility(animated: Boolean = false) {
+        val show = shouldShowTotalDurationInBar()
+        val label = durationView ?: return
+        val clip = timeDurationSuffixClip ?: return
+        val secondaryColor = ContextCompat.getColor(context, R.color.white_secondary)
+        label.setTextColor(secondaryColor)
+        if (!animated) {
+            cancelTimeDurationSuffixAnimation()
+            if (show) {
+                val targetWidth = measureTimeDurationSuffixWidth()
+                lockTimeDurationLabelWidth(targetWidth)
+                updateTimeDurationSuffixClipWidth(targetWidth)
+                label.alpha = 1f
+                clip.isVisible = true
+            } else {
+                updateTimeDurationSuffixClipWidth(0)
+                label.alpha = 1f
+                clip.isVisible = false
+            }
+            return
+        }
+        if (show) {
+            animateTimeDurationSuffixIn()
+        } else {
+            animateTimeDurationSuffixOut()
+        }
+    }
+
+    private fun cancelTimeDurationSuffixAnimation() {
+        timeDurationSuffixAnimator?.cancel()
+        timeDurationSuffixAnimator = null
+        durationView?.animate()?.cancel()
+    }
+
+    private fun timeDurationRowHeightPx(): Int {
+        return resources.getDimensionPixelSize(R.dimen.kinescope_mobile_control_time_height)
+    }
+
+    private fun timeDurationWidthFraction(progress: Float): Float = progress
+
+    private fun timeDurationLabelAlpha(progress: Float): Float {
+        return ((progress - TIME_DURATION_LABEL_FADE_START) / (1f - TIME_DURATION_LABEL_FADE_START))
+            .coerceIn(0f, 1f)
+    }
+
+    private fun measureTimeDurationSuffixWidth(): Int {
+        val label = durationView ?: return 0
+        val widthSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        val heightSpec = View.MeasureSpec.makeMeasureSpec(timeDurationRowHeightPx(), View.MeasureSpec.EXACTLY)
+        label.measure(widthSpec, heightSpec)
+        return label.measuredWidth
+    }
+
+    private fun lockTimeDurationLabelWidth(widthPx: Int) {
+        val label = durationView ?: return
+        val params = (label.layoutParams as? FrameLayout.LayoutParams)
+            ?: FrameLayout.LayoutParams(widthPx, timeDurationRowHeightPx())
+        params.width = widthPx
+        params.height = timeDurationRowHeightPx()
+        params.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+        label.layoutParams = params
+    }
+
+    private fun updateTimeDurationSuffixClipWidth(widthPx: Int) {
+        val clip = timeDurationSuffixClip ?: return
+        val params = (clip.layoutParams as? LinearLayout.LayoutParams)
+            ?: LinearLayout.LayoutParams(widthPx, timeDurationRowHeightPx())
+        params.width = widthPx.coerceAtLeast(0)
+        params.height = timeDurationRowHeightPx()
+        params.gravity = Gravity.CENTER_VERTICAL
+        clip.layoutParams = params
+        (clip.parent as? View)?.requestLayout()
+    }
+
+    private fun syncTimeDurationSuffixLayoutIfExpanded() {
+        if (!shouldShowTotalDurationInBar() || timeDurationSuffixAnimator != null) {
+            return
+        }
+        val targetWidth = measureTimeDurationSuffixWidth()
+        if (targetWidth <= 0) {
+            return
+        }
+        lockTimeDurationLabelWidth(targetWidth)
+        updateTimeDurationSuffixClipWidth(targetWidth)
+    }
+
+    private fun animateTimeDurationSuffixIn() {
+        val label = durationView ?: return
+        val clip = timeDurationSuffixClip ?: return
+        cancelTimeDurationSuffixAnimation()
+        clip.isVisible = true
+        label.alpha = 0f
+        updateTimeDurationSuffixClipWidth(0)
+        clip.post {
+            val targetWidth = measureTimeDurationSuffixWidth()
+            if (targetWidth <= 0) {
+                clip.isVisible = false
+                label.alpha = 1f
+                return@post
+            }
+            lockTimeDurationLabelWidth(targetWidth)
+            timeDurationSuffixAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = TIME_DURATION_TOGGLE_ANIMATION_MS
+                interpolator = timeDurationToggleInterpolator
+                addUpdateListener { animator ->
+                    val progress = animator.animatedValue as Float
+                    updateTimeDurationSuffixClipWidth(
+                        (targetWidth * timeDurationWidthFraction(progress)).roundToInt(),
+                    )
+                    label.alpha = timeDurationLabelAlpha(progress)
+                }
+                addListener(object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: Animator) {
+                        timeDurationSuffixAnimator = null
+                        lockTimeDurationLabelWidth(targetWidth)
+                        updateTimeDurationSuffixClipWidth(targetWidth)
+                        label.alpha = 1f
+                        clip.isVisible = true
+                    }
+                })
+                start()
+            }
+        }
+    }
+
+    private fun animateTimeDurationSuffixOut() {
+        val label = durationView ?: return
+        val clip = timeDurationSuffixClip ?: return
+        if (!clip.isVisible) {
+            return
+        }
+        cancelTimeDurationSuffixAnimation()
+        val startWidth = clip.width.takeIf { it > 0 } ?: measureTimeDurationSuffixWidth()
+        if (startWidth <= 0) {
+            clip.isVisible = false
+            label.alpha = 1f
+            updateTimeDurationSuffixClipWidth(0)
+            return
+        }
+        lockTimeDurationLabelWidth(startWidth)
+        updateTimeDurationSuffixClipWidth(startWidth)
+        timeDurationSuffixAnimator = ValueAnimator.ofFloat(1f, 0f).apply {
+            duration = TIME_DURATION_TOGGLE_ANIMATION_MS
+            interpolator = timeDurationToggleInterpolator
+            addUpdateListener { animator ->
+                val progress = animator.animatedValue as Float
+                updateTimeDurationSuffixClipWidth(
+                    (startWidth * timeDurationWidthFraction(progress)).roundToInt(),
+                )
+                label.alpha = timeDurationLabelAlpha(progress)
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    timeDurationSuffixAnimator = null
+                    clip.isVisible = false
+                    label.alpha = 1f
+                    updateTimeDurationSuffixClipWidth(0)
+                }
+            })
+            start()
+        }
+    }
+
     private fun updateProgressControlsVisibility(animated: Boolean = false) {
         val showProgress = shouldShowProgressControlsInBar()
         val showTimeContainer = shouldShowTimeContainerInBar()
@@ -1748,6 +1938,7 @@ class KinescopePlayerView(
             timeBar?.isVisible = showProgress
             timeContainer?.isVisible = showTimeContainer
             controlBarEndSpacer?.isVisible = pinButtonsToEnd && !showProgress
+            updateTotalDurationVisibility(animated = false)
             return
         }
 
@@ -1764,6 +1955,9 @@ class KinescopePlayerView(
             animateControlBarSubviewVisibility(timeBar, showProgress)
         }
         animateControlBarSubviewVisibility(timeContainer, showTimeContainer)
+        if (!animated) {
+            updateTotalDurationVisibility(animated = false)
+        }
     }
 
     private fun animateControlBarSubviewVisibility(
@@ -1845,6 +2039,8 @@ class KinescopePlayerView(
         if (!usesCompactOptionsChrome() || isOptionsBarExpanded) {
             return
         }
+        showTotalDuration = false
+        updateTotalDurationVisibility(animated = true)
         isOptionsBarExpanded = true
         if (!animated) {
             controlBarEndSpacer?.isVisible = true
@@ -1909,8 +2105,7 @@ class KinescopePlayerView(
                 !isLiveState &&
                 (isMobilePlayerChrome || options.showDuration) &&
                 shouldShowTimeContainerInBar()
-            durationView?.isVisible = false
-            timeSeparatorView?.isVisible = false
+            updateTotalDurationVisibility(animated = false)
             timeBar?.isVisible = showControls && options.showSeekBar && shouldShowProgressControlsInBar()
             timeContainer?.isVisible = showControls && shouldShowTimeContainerInBar()
             settingsMenuView?.setParameterVisible(
@@ -2469,6 +2664,7 @@ class KinescopePlayerView(
         optionsButton?.setOnClickListener(componentListener)
         optionsDotsButton?.setOnClickListener { onOptionsDotsButtonClick() }
         fullscreenButton?.setOnClickListener(componentListener)
+        timeContainer?.setOnClickListener { toggleTotalDurationVisibility() }
 
         liveDataView?.setOnClickListener {
             if (!isLiveSynced) {
@@ -2503,7 +2699,8 @@ class KinescopePlayerView(
             }
         }
         val durationMs = Util.usToMs(durationUs)
-        durationView?.text = Util.getStringForTime(formatBuilder, formatter, durationMs)
+        durationView?.text = durationLabelText(durationMs)
+        syncTimeDurationSuffixLayoutIfExpanded()
         timeBar?.setDuration(durationMs)
         updateProgress()
     }
@@ -2549,10 +2746,11 @@ class KinescopePlayerView(
         positionView
             ?.takeIf { !scrubbing }
             ?.let {
-                it.text = Util.getStringForTime(formatBuilder, formatter, position)
+                it.text = formatPlayerTime(position)
             }
 
-        durationView?.text = Util.getStringForTime(formatBuilder, formatter, duration)
+        durationView?.text = durationLabelText(duration)
+        syncTimeDurationSuffixLayoutIfExpanded()
 
         timeBar?.setPosition(position)
         timeBar?.setBufferedPosition(bufferedPosition)
@@ -2915,11 +3113,7 @@ class KinescopePlayerView(
             isVisible = isShown
             text = resources.getString(
                 R.string.live_time_offset,
-                Util.getStringForTime(
-                    formatBuilder,
-                    formatter,
-                    scrubbingLiveDurationCached - position
-                )
+                formatPlayerTime(scrubbingLiveDurationCached - position),
             )
         }
     }
@@ -3073,8 +3267,8 @@ class KinescopePlayerView(
         castDurationView?.isVisible = showSeek
 
         if (showSeek) {
-            castPositionView?.text = Util.getStringForTime(formatBuilder, formatter, position)
-            castDurationView?.text = Util.getStringForTime(formatBuilder, formatter, duration)
+            castPositionView?.text = formatPlayerTime(position)
+            castDurationView?.text = formatPlayerTime(duration)
             isUpdatingCastSeekBar = true
             castSeekBar?.progress = ((position.toFloat() / duration) * 1000).toInt().coerceIn(0, 1000)
             isUpdatingCastSeekBar = false

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="player_time_divider">/</string>
+    <string name="player_time_divider"><![CDATA[ / ]]></string>
     <string name="player_picture_in_picture">Picture in picture</string>
     <string name="player_pip_unavailable">Picture in picture is not available on this device</string>
     <string name="player_pip_play">Play</string>

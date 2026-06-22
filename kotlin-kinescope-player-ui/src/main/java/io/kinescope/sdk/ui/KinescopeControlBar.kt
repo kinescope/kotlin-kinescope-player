@@ -1,10 +1,14 @@
 package io.kinescope.sdk.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -51,7 +55,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Text
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.kinescope.sdk.ui.R
-import java.util.concurrent.TimeUnit
+import io.kinescope.sdk.utils.formatPlayerTime
 
 @Composable
 fun KinescopeControlBar(
@@ -91,7 +95,6 @@ fun KinescopeControlBar(
             val shownMs = scrub?.let { (it * state.durationMs).toLong() } ?: state.positionMs
             Row(
                 modifier = Modifier
-                    .animateContentSize(tween(100, easing = FastOutSlowInEasing))
                     .graphicsLayer { alpha = 1f - expandAnim }
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
@@ -100,7 +103,7 @@ fun KinescopeControlBar(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = formatTime(shownMs),
+                    text = formatPlayerTime(shownMs),
                     color = colors.iconPrimary,
                     fontSize = 14.sp,
                     lineHeight = 21.sp,
@@ -108,9 +111,21 @@ fun KinescopeControlBar(
                     fontFamily = RobotoFontFamily,
                     textAlign = TextAlign.Center,
                 )
-                if (showTotal) {
+                AnimatedVisibility(
+                    visible = showTotal,
+                    enter = fadeIn(tween(100, easing = FastOutSlowInEasing)) +
+                        expandHorizontally(
+                            animationSpec = tween(100, easing = FastOutSlowInEasing),
+                            expandFrom = Alignment.Start,
+                        ),
+                    exit = fadeOut(tween(100, easing = FastOutSlowInEasing)) +
+                        shrinkHorizontally(
+                            animationSpec = tween(100, easing = FastOutSlowInEasing),
+                            shrinkTowards = Alignment.Start,
+                        ),
+                ) {
                     Text(
-                        text = " / ${formatTime(state.durationMs)}",
+                        text = " / ${formatPlayerTime(state.durationMs)}",
                         color = colors.textSecondary,
                         fontSize = 14.sp,
                         lineHeight = 21.sp,
@@ -363,9 +378,3 @@ fun ReplayButton(modifier: Modifier = Modifier, onClick: () -> Unit) {
     }
 }
 
-private fun formatTime(ms: Long): String {
-    if (ms <= 0) return "0:00"
-    val total = TimeUnit.MILLISECONDS.toSeconds(ms)
-    val h = total / 3600; val m = (total % 3600) / 60; val s = total % 60
-    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
-}

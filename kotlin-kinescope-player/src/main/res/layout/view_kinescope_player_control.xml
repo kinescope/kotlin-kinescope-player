@@ -56,7 +56,8 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
         android:baselineAligned="false"
-        android:clipChildren="false"
+        android:clipChildren="true"
+        android:clipToPadding="true"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
@@ -65,6 +66,10 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_vertical"
+            android:clickable="true"
+            android:clipChildren="true"
+            android:clipToPadding="true"
+            android:focusable="true"
             android:gravity="center_vertical"
             android:minHeight="@dimen/kinescope_mobile_control_time_height"
             android:orientation="horizontal">
@@ -111,7 +116,8 @@
             <TextView
                 android:id="@+id/kinescope_position"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_height="@dimen/kinescope_mobile_control_time_height"
+                android:gravity="center_vertical"
                 android:includeFontPadding="false"
                 android:minEms="2"
                 android:textColor="#FFFFFF"
@@ -119,28 +125,30 @@
                 android:textStyle="normal"
                 tools:text="12:49" />
 
-            <TextView
-                android:id="@+id/time_separator_view"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginHorizontal="4dp"
-                android:includeFontPadding="false"
-                android:text="@string/player_time_divider"
-                android:textColor="#FFFFFF"
-                android:textSize="14sp"
-                android:textStyle="normal"
-                android:visibility="gone" />
+            <FrameLayout
+                android:id="@+id/kinescope_time_duration_suffix_clip"
+                android:layout_width="0dp"
+                android:layout_height="@dimen/kinescope_mobile_control_time_height"
+                android:clipChildren="true"
+                android:clipToPadding="true"
+                android:visibility="gone">
 
-            <TextView
-                android:id="@+id/kinescope_duration"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:includeFontPadding="false"
-                android:textColor="#FFFFFF"
-                android:textSize="14sp"
-                android:textStyle="normal"
-                android:visibility="gone"
-                tools:text="0:00" />
+                <TextView
+                    android:id="@+id/kinescope_duration"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:layout_gravity="start|center_vertical"
+                    android:ellipsize="none"
+                    android:gravity="center_vertical"
+                    android:includeFontPadding="false"
+                    android:maxLines="1"
+                    android:singleLine="true"
+                    android:textColor="@color/white_secondary"
+                    android:textSize="14sp"
+                    android:textStyle="normal"
+                    tools:text=" / 0:00" />
+
+            </FrameLayout>
 
         </LinearLayout>
 
