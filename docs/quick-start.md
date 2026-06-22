@@ -53,6 +53,8 @@ When `autoplay = true`, playback starts automatically after `loadVideo` succeeds
 - [Player options](player-options.md)
 - [Customization](customization.md) — accent colour, poster, custom button
 - [Subtitles & settings](subtitles-and-settings.md)
+- [Compose UI](compose-ui.md)
+- [Demo app](demo-app.md)
 - [Picture-in-Picture](picture-in-picture.md)
 - [Chromecast](chromecast.md)
 - [Fullscreen](fullscreen.md)

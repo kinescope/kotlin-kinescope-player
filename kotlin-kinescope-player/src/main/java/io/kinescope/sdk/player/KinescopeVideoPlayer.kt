@@ -47,13 +47,21 @@ class KinescopeVideoPlayer(
     private var playerHost: KinescopePlayerHost? = null
 
     init {
-        exoPlayer = ExoPlayer.Builder(context)
+        val toneMapToSdr = KinescopeHdrHelper.shouldToneMapToSdr(context, kinescopePlayerOptions.hdrToneMapping)
+        val playerBuilder = ExoPlayer.Builder(context)
             .setTrackSelector(DefaultTrackSelector(context, AdaptiveTrackSelection.Factory()))
             .setSeekBackIncrementMs(10000)
             .setSeekForwardIncrementMs(10000)
-            .build()
+        if (toneMapToSdr) {
+            playerBuilder.setRenderersFactory(
+                KinescopeToneMappingRenderersFactory(context, requestOpenGlToneMapping = true),
+            )
+        }
+        exoPlayer = playerBuilder.build()
+        playerHost = exoPlayer?.let { KinescopePlayerHost(it) }
 
         fetch = FetchBuilder.getKinescopeFetch(kinescopePlayerOptions.referer)
+        exoPlayer?.let { KinescopeHdrHelper.configure(it, context, kinescopePlayerOptions.hdrToneMapping) }
     }
 
     private fun getDashMediaSource(videoBuilder: MediaItem.Builder): DashMediaSource {
@@ -147,17 +155,27 @@ class KinescopeVideoPlayer(
 
     fun getVideo(): KinescopeVideo? = currentKinescopeVideo
 
-    /** Active media3 player for UI binding (local ExoPlayer by default). */
+    /** Active media3 player for UI binding (local ExoPlayer by default, CastPlayer when casting). */
     val playbackPlayer: Player?
-        get() = exoPlayer
+        get() = playerHost?.activePlayer
+
+    val isCasting: Boolean
+        get() = playerHost?.isCasting == true
 
     /**
      * Facade for swapping the active player (e.g. local ExoPlayer ↔ CastPlayer).
-     * Created lazily from the current ExoPlayer instance.
      */
     fun getOrCreatePlayerHost(): KinescopePlayerHost? {
         val player = exoPlayer ?: return null
         return playerHost ?: KinescopePlayerHost(player).also { playerHost = it }
+    }
+
+    fun switchToCastPlayer(castPlayer: Player) {
+        playerHost?.switchTo(castPlayer)
+    }
+
+    fun switchToLocalPlayer() {
+        playerHost?.switchToLocal()
     }
 
     /**
@@ -169,23 +187,31 @@ class KinescopeVideoPlayer(
     fun bindLifecycle(
         lifecycle: Lifecycle,
         isPipActive: () -> Boolean = { false },
-        backgroundPlaybackAllowed: Boolean = false,
+        backgroundPlaybackAllowed: Boolean = kinescopePlayerOptions.backgroundPlaybackAllowed,
     ) {
         unbindLifecycle()
         val observer = object : DefaultLifecycleObserver {
             override fun onStop(owner: LifecycleOwner) {
-                if (backgroundPlaybackAllowed || isPipActive()) return
-                resumeOnStart = exoPlayer?.playWhenReady == true
+                if (backgroundPlaybackAllowed) {
+                    KinescopePlaybackService.connect(context, this@KinescopeVideoPlayer)
+                    return
+                }
+                if (isPipActive()) return
+                resumeOnStart = playbackPlayer?.playWhenReady == true
                 pause()
             }
 
             override fun onStart(owner: LifecycleOwner) {
+                if (backgroundPlaybackAllowed) {
+                    KinescopePlaybackService.disconnect(context)
+                }
                 if (backgroundPlaybackAllowed || !resumeOnStart) return
                 resumeOnStart = false
                 play()
             }
 
             override fun onDestroy(owner: LifecycleOwner) {
+                KinescopePlaybackService.disconnect(context)
                 unbindLifecycle()
                 release()
             }
@@ -242,17 +268,17 @@ class KinescopeVideoPlayer(
     }
 
     fun play() {
-        exoPlayer?.play()
+        playbackPlayer?.play()
         KinescopeLogger.log(KinescopeLoggerLevel.PLAYER, "Start playing")
     }
 
     fun pause() {
-        exoPlayer?.pause()
+        playbackPlayer?.pause()
         KinescopeLogger.log(KinescopeLoggerLevel.PLAYER, "Pause playing")
     }
 
     fun stop() {
-        exoPlayer?.stop()
+        playbackPlayer?.stop()
         KinescopeLogger.log(KinescopeLoggerLevel.PLAYER, "Stop playing")
     }
 
@@ -264,23 +290,24 @@ class KinescopeVideoPlayer(
     }
 
     fun seekTo(toMilliSeconds: Long) {
-        exoPlayer?.seekTo(exoPlayer!!.contentPosition + toMilliSeconds)
+        val player = playbackPlayer ?: return
+        player.seekTo(player.contentPosition + toMilliSeconds)
         KinescopeLogger.log(KinescopeLoggerLevel.PLAYER, "seek to ${toMilliSeconds / 1000} seconds")
     }
 
     fun moveForward() {
-        exoPlayer?.seekForward()
+        playbackPlayer?.seekForward()
         KinescopeLogger.log(
             KinescopeLoggerLevel.PLAYER,
-            "Moved forward to ${exoPlayer!!.seekParameters.toleranceAfterUs}"
+            "Moved forward to ${exoPlayer?.seekParameters?.toleranceAfterUs}"
         )
     }
 
     fun moveBack() {
-        exoPlayer?.seekBack()
+        playbackPlayer?.seekBack()
         KinescopeLogger.log(
             KinescopeLoggerLevel.PLAYER,
-            "Moved back to ${exoPlayer!!.seekParameters.toleranceBeforeUs}"
+            "Moved back to ${exoPlayer?.seekParameters?.toleranceBeforeUs}"
         )
     }
 
@@ -292,6 +319,9 @@ class KinescopeVideoPlayer(
 
     fun setPlaybackSpeed(speed: Float) {
         exoPlayer?.setPlaybackSpeed(speed)
+        if (isCasting) {
+            playbackPlayer?.setPlaybackSpeed(speed)
+        }
         KinescopeLogger.log(KinescopeLoggerLevel.PLAYER, "Playback speed changed to $speed")
     }
 
@@ -327,5 +357,9 @@ class KinescopeVideoPlayer(
 
     fun setShowAudioOnlyQualityInSettings(value: Boolean) {
         kinescopePlayerOptions.showAudioOnlyQualityInSettings = value
+    }
+
+    fun setShowAudioTracksInSettings(value: Boolean) {
+        kinescopePlayerOptions.showAudioTracksInSettings = value
     }
 }

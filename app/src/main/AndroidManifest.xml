@@ -101,6 +101,12 @@
             android:configChanges="orientation|screenSize|screenLayout|layoutDirection"
             android:exported="false" />
 
+        <activity
+            android:name=".compose.ComposePlayerActivity"
+            android:configChanges="orientation|screenSize|screenLayout|layoutDirection|smallestScreenSize"
+            android:exported="true"
+            android:label="Compose player" />
+
         <service
             android:name="io.kinescope.sdk.shorts.download.VideoDownloadService"
             android:exported="false"

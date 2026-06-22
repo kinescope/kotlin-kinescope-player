@@ -1,12 +1,11 @@
 package io.kinescope.sdk.player.subtitles
 
+import android.animation.ValueAnimator
 import android.graphics.Typeface
 import android.text.TextPaint
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
-import android.view.ViewGroup
-import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -24,28 +23,22 @@ internal class ProgressiveSubtitleOverlay(
     private var cueWords: List<String> = emptyList()
     private var cachedTopLine = ""
     private var cachedBottomLine = ""
-    private var lastRenderedTopLine = ""
-    private var lastRenderedBottomLine = ""
-    private var lastContainerContentWidthPx = 0
-    private var isLineTransitionAnimating = false
-    private var pendingWordCount = 0
     private var onEnsureUpdatesRunning: (() -> Unit)? = null
     private var displayedCueStartUs = 0L
     private var styledTextSizePx = 0f
     private var styledTypeface: Typeface = Typeface.DEFAULT
     private var textMaxWidthPx = 0
-    private var lockedTextMaxWidthPx = 0
+    private var lastResolvedParentWidthPx = 0
+    private var lastBottomPaddingPx = -1
+    private var bottomMarginAnimator: ValueAnimator? = null
 
     private val measurePaint = TextPaint(TextPaint.ANTI_ALIAS_FLAG)
-    private val fadeInterpolator = DecelerateInterpolator()
 
     init {
         container.layoutTransition = null
         linesContainer.layoutTransition = null
         linesContainer.orientation = LinearLayout.VERTICAL
-        linesContainer.gravity = Gravity.START
-        topView.gravity = Gravity.START
-        bottomView.gravity = Gravity.START
+        applyTextAlignment(hasTop = false, hasBottom = false)
         topView.ellipsize = null
         bottomView.ellipsize = null
     }
@@ -62,21 +55,28 @@ internal class ProgressiveSubtitleOverlay(
         applyTextStyle(bottomView, style, textSizePx)
 
         if (textSizeChanged) {
-            lockedTextMaxWidthPx = 0
+            textMaxWidthPx = 0
+            lastResolvedParentWidthPx = 0
         }
 
+        val resources = container.resources
+        val startMarginPx = resources.getDimensionPixelSize(R.dimen.kinescope_caption_margin_start)
+        val endMarginPx = resources.getDimensionPixelSize(R.dimen.kinescope_caption_margin_end)
+
         (container.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
-            val startMarginPx = container.resources.getDimensionPixelSize(
-                R.dimen.kinescope_caption_margin_start,
-            )
             params.width = FrameLayout.LayoutParams.WRAP_CONTENT
             params.height = FrameLayout.LayoutParams.WRAP_CONTENT
-            params.bottomMargin = bottomPaddingPx
             params.marginStart = startMarginPx
             params.leftMargin = startMarginPx
+            params.marginEnd = endMarginPx
+            params.rightMargin = endMarginPx
             params.gravity = Gravity.BOTTOM or Gravity.START
             container.layoutParams = params
         }
+
+        val animateBottomMargin = lastBottomPaddingPx >= 0 && lastBottomPaddingPx != bottomPaddingPx
+        lastBottomPaddingPx = bottomPaddingPx
+        setBottomMargin(bottomPaddingPx, animate = animateBottomMargin)
 
         if (textSizeChanged && lastVisibleWordCount > 0 && isLayoutReady()) {
             updateTextMaxWidth()
@@ -92,17 +92,21 @@ internal class ProgressiveSubtitleOverlay(
             syncCueWords(state.words)
         }
 
-        val targetCount = state.visibleWordCount.coerceIn(0, cueWords.size)
+        val rawTargetCount = state.visibleWordCount.coerceIn(0, cueWords.size)
+        val targetCount = if (textMaxWidthPx > 0) {
+            ProgressiveSubtitleLineLayout.snapToLineRevealWordCount(
+                rawWordCount = rawTargetCount,
+                words = cueWords,
+                lineFits = ::lineFits,
+            )
+        } else {
+            rawTargetCount
+        }
         if (targetCount <= lastVisibleWordCount) {
             return
         }
 
-        if (isLineTransitionAnimating) {
-            pendingWordCount = pendingWordCount.coerceAtLeast(targetCount)
-            return
-        }
-
-        showWord(lastVisibleWordCount + 1)
+        showWord(targetCount)
     }
 
     fun setOnEnsureUpdatesRunning(listener: (() -> Unit)?) {
@@ -116,6 +120,8 @@ internal class ProgressiveSubtitleOverlay(
     fun setAdvancementEnabled(@Suppress("UNUSED_PARAMETER") enabled: Boolean) = Unit
 
     fun clear() {
+        bottomMarginAnimator?.cancel()
+        bottomMarginAnimator = null
         resetCueState()
         resetViewState()
     }
@@ -140,7 +146,7 @@ internal class ProgressiveSubtitleOverlay(
         )
     }
 
-    fun isAnimating(): Boolean = isLineTransitionAnimating
+    fun isAnimating(): Boolean = bottomMarginAnimator?.isRunning == true
 
     private fun resetForNewCue(state: ProgressiveSubtitleState, cueStartUs: Long) {
         resetCueState()
@@ -154,18 +160,12 @@ internal class ProgressiveSubtitleOverlay(
         cueWords = emptyList()
         cachedTopLine = ""
         cachedBottomLine = ""
-        lastRenderedTopLine = ""
-        lastRenderedBottomLine = ""
-        lastContainerContentWidthPx = 0
         textMaxWidthPx = 0
-        lockedTextMaxWidthPx = 0
+        lastResolvedParentWidthPx = 0
         displayedCueStartUs = 0L
-        pendingWordCount = 0
-        isLineTransitionAnimating = false
     }
 
     private fun resetViewState() {
-        cancelLineTransitionAnimation()
         topView.text = ""
         bottomView.text = ""
         topView.visibility = View.GONE
@@ -212,124 +212,24 @@ internal class ProgressiveSubtitleOverlay(
         linesContainer.visibility = View.VISIBLE
         container.visibility = View.VISIBLE
 
-        if (shouldAnimateLineRollUp()) {
-            animateLineRollUp()
-            return
-        }
-
+        applyTextAlignment(hasTop, hasBottom)
         applyContainerSize(hasTop, hasBottom)
         applyLineViews(hasTop, hasBottom)
-        lastRenderedTopLine = if (hasTop) cachedTopLine else ""
-        lastRenderedBottomLine = if (hasBottom) cachedBottomLine else ""
     }
 
-    private fun shouldAnimateLineRollUp(): Boolean {
-        if (isLineTransitionAnimating || lastRenderedBottomLine.isBlank()) {
-            return false
-        }
-        val hasTop = cachedTopLine.isNotBlank()
-        val hasBottom = cachedBottomLine.isNotBlank()
-        if (!hasTop || !hasBottom) {
-            return false
-        }
-        return cachedTopLine != lastRenderedTopLine &&
-            cachedBottomLine != lastRenderedBottomLine &&
-            !lastRenderedBottomLine.startsWith(cachedBottomLine)
-    }
-
-    private fun animateLineRollUp() {
-        topView.animate().cancel()
-        bottomView.animate().cancel()
-        topView.translationY = 0f
-        bottomView.translationY = 0f
-        topView.alpha = 1f
-        bottomView.alpha = 1f
-        isLineTransitionAnimating = true
-
-        applyContainerSize(hasTop = true, hasBottom = true)
-        bottomView.text = lastRenderedBottomLine
-        bottomView.visibility = View.VISIBLE
-
-        val shiftPx = measureLineHeightPx().toFloat()
-        val shouldFadeOldTop = lastRenderedTopLine.isNotBlank() &&
-            topView.visibility == View.VISIBLE &&
-            cachedTopLine != lastRenderedTopLine
-
-        val startSlide = {
-            reserveTopLineSlot()
-            bottomView.translationY = 0f
-            bottomView.animate()
-                .translationY(-shiftPx)
-                .setDuration(ROLL_UP_MS)
-                .setInterpolator(fadeInterpolator)
-                .withEndAction { commitLineRollUp() }
-                .start()
-        }
-
-        if (shouldFadeOldTop) {
-            topView.animate()
-                .alpha(0f)
-                .setDuration(TOP_LINE_FADE_MS)
-                .setInterpolator(fadeInterpolator)
-                .withEndAction {
-                    topView.alpha = 1f
-                    startSlide()
-                }
-                .start()
+    private fun applyTextAlignment(hasTop: Boolean, hasBottom: Boolean) {
+        val twoLines = hasTop && hasBottom
+        val lineGravity = if (twoLines) Gravity.CENTER_HORIZONTAL else Gravity.START
+        val textAlignment = if (twoLines) {
+            View.TEXT_ALIGNMENT_CENTER
         } else {
-            startSlide()
+            View.TEXT_ALIGNMENT_VIEW_START
         }
-    }
-
-    private fun commitLineRollUp() {
-        topView.animate().cancel()
-        bottomView.animate().cancel()
-
-        releaseTopLineSlot()
-        bottomView.visibility = View.INVISIBLE
-        bottomView.translationY = 0f
-        applyLineViews(hasTop = true, hasBottom = true)
-        bottomView.visibility = View.VISIBLE
-
-        isLineTransitionAnimating = false
-        lastRenderedTopLine = cachedTopLine
-        lastRenderedBottomLine = cachedBottomLine
-
-        val pending = pendingWordCount
-        pendingWordCount = 0
-        if (pending > lastVisibleWordCount) {
-            showWord(lastVisibleWordCount + 1)
-        }
-    }
-
-    private fun reserveTopLineSlot() {
-        val params = topView.layoutParams as LinearLayout.LayoutParams
-        params.height = measureLineHeightPx()
-        params.width = lastContainerContentWidthPx.coerceAtLeast(1)
-        topView.layoutParams = params
-        topView.text = ""
-        topView.visibility = View.INVISIBLE
-        topView.alpha = 0f
-        topView.translationY = 0f
-        linesContainer.requestLayout()
-    }
-
-    private fun releaseTopLineSlot() {
-        val params = topView.layoutParams as LinearLayout.LayoutParams
-        params.height = LinearLayout.LayoutParams.WRAP_CONTENT
-        params.width = LinearLayout.LayoutParams.WRAP_CONTENT
-        topView.layoutParams = params
-    }
-
-    private fun cancelLineTransitionAnimation() {
-        topView.animate().cancel()
-        bottomView.animate().cancel()
-        topView.translationY = 0f
-        bottomView.translationY = 0f
-        topView.alpha = 1f
-        bottomView.alpha = 1f
-        isLineTransitionAnimating = false
-        pendingWordCount = 0
+        linesContainer.gravity = lineGravity
+        topView.gravity = lineGravity
+        bottomView.gravity = lineGravity
+        topView.textAlignment = textAlignment
+        bottomView.textAlignment = textAlignment
     }
 
     private fun applyLineViews(hasTop: Boolean, hasBottom: Boolean) {
@@ -338,17 +238,11 @@ internal class ProgressiveSubtitleOverlay(
             topView.ellipsize = null
             topView.text = cachedTopLine
             topView.visibility = View.VISIBLE
-            topView.alpha = 1f
-            topView.translationY = 0f
         } else {
             topView.text = ""
             topView.visibility = View.GONE
         }
 
-        applyBottomLine(hasBottom)
-    }
-
-    private fun applyBottomLine(hasBottom: Boolean) {
         bottomView.maxWidth = textMaxWidthPx
         bottomView.ellipsize = null
         if (hasBottom) {
@@ -361,29 +255,63 @@ internal class ProgressiveSubtitleOverlay(
     }
 
     private fun applyContainerSize(hasTop: Boolean, hasBottom: Boolean) {
-        val topWidth = if (hasTop) measureLineWidth(cachedTopLine) else 0
-        val bottomWidth = if (hasBottom) measureLineWidth(cachedBottomLine) else 0
-        val contentWidth = maxOf(topWidth, bottomWidth, 1)
-        lastContainerContentWidthPx = contentWidth
-
-        if (hasTop) {
-            setLineViewWidth(topView, contentWidth)
-        }
-        if (hasBottom) {
-            setLineViewWidth(bottomView, contentWidth)
+        val parent = container.parent as? View
+        val parentWidth = parent?.width ?: 0
+        val backgroundWidthPx = if (parentWidth > 0) {
+            resolveBackgroundWidthPx(parentWidth)
+        } else {
+            0
         }
 
-        val paddingHorizontal = linesContainer.paddingLeft + linesContainer.paddingRight
         val paddingVertical = linesContainer.paddingTop + linesContainer.paddingBottom
         val lineHeight = measureLineHeightPx()
         val lineCount = (if (hasTop) 1 else 0) + (if (hasBottom) 1 else 0)
 
         val linesParams = linesContainer.layoutParams
-        linesParams.width = contentWidth + paddingHorizontal
+        linesParams.width = if (backgroundWidthPx > 0) {
+            backgroundWidthPx
+        } else {
+            val topWidth = if (hasTop) measureLineWidth(cachedTopLine) else 0
+            val bottomWidth = if (hasBottom) measureLineWidth(cachedBottomLine) else 0
+            val contentWidth = maxOf(topWidth, bottomWidth, 1)
+            contentWidth + linesContainer.paddingLeft + linesContainer.paddingRight
+        }
         linesParams.height = lineCount * lineHeight + paddingVertical
         linesContainer.layoutParams = linesParams
 
+        if (backgroundWidthPx > 0) {
+            (container.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
+                if (params.width != backgroundWidthPx) {
+                    params.width = backgroundWidthPx
+                    container.layoutParams = params
+                }
+            }
+        }
+
         syncLayoutNow()
+    }
+
+    private fun setBottomMargin(targetPx: Int, animate: Boolean) {
+        val params = container.layoutParams as? FrameLayout.LayoutParams ?: return
+        val currentPx = params.bottomMargin
+        if (currentPx == targetPx) {
+            return
+        }
+        bottomMarginAnimator?.cancel()
+        if (!animate) {
+            params.bottomMargin = targetPx
+            container.layoutParams = params
+            return
+        }
+        bottomMarginAnimator = ValueAnimator.ofInt(currentPx, targetPx).apply {
+            duration = BOTTOM_MARGIN_ANIM_MS
+            addUpdateListener { animation ->
+                val value = animation.animatedValue as Int
+                params.bottomMargin = value
+                container.layoutParams = params
+            }
+            start()
+        }
     }
 
     private fun syncLayoutNow() {
@@ -458,14 +386,6 @@ internal class ProgressiveSubtitleOverlay(
         return measurePaint
     }
 
-    private fun setLineViewWidth(view: TextView, widthPx: Int) {
-        val params = view.layoutParams as LinearLayout.LayoutParams
-        if (params.width != widthPx) {
-            params.width = widthPx
-            view.layoutParams = params
-        }
-    }
-
     private fun syncTextMetricsBeforeLayout() {
         topView.typeface = styledTypeface
         bottomView.typeface = styledTypeface
@@ -474,28 +394,30 @@ internal class ProgressiveSubtitleOverlay(
     }
 
     private fun updateTextMaxWidth() {
-        val resolved = resolveTextMaxWidth()
-        if (resolved <= 0) {
+        val parent = container.parent as? View ?: return
+        val parentWidth = parent.width
+        if (parentWidth <= 0) {
             return
         }
-        if (lockedTextMaxWidthPx <= 0) {
-            lockedTextMaxWidthPx = resolved
+        if (parentWidth != lastResolvedParentWidthPx) {
+            lastResolvedParentWidthPx = parentWidth
+            textMaxWidthPx = 0
         }
-        textMaxWidthPx = lockedTextMaxWidthPx
+        if (textMaxWidthPx <= 0) {
+            textMaxWidthPx = resolveTextMaxWidth(parentWidth)
+        }
     }
 
-    private fun resolveTextMaxWidth(): Int {
-        val parent = container.parent as? View ?: return 0
-        if (parent.width <= 0) {
-            return 0
-        }
-
+    private fun resolveBackgroundWidthPx(parentWidthPx: Int): Int {
         val layoutParams = container.layoutParams as? FrameLayout.LayoutParams
         val startMarginPx = layoutParams?.marginStart ?: layoutParams?.leftMargin ?: 0
         val endMarginPx = layoutParams?.marginEnd ?: layoutParams?.rightMargin ?: 0
-        val maxBlockWidth = parent.width - startMarginPx - endMarginPx
+        return (parentWidthPx - startMarginPx - endMarginPx).coerceAtLeast(1)
+    }
+
+    private fun resolveTextMaxWidth(parentWidthPx: Int): Int {
         val paddingHorizontal = linesContainer.paddingLeft + linesContainer.paddingRight
-        return (maxBlockWidth - paddingHorizontal).coerceAtLeast(1)
+        return (resolveBackgroundWidthPx(parentWidthPx) - paddingHorizontal).coerceAtLeast(1)
     }
 
     private fun isLayoutReady(): Boolean {
@@ -505,8 +427,7 @@ internal class ProgressiveSubtitleOverlay(
 
     private companion object {
         private const val CAPTION_LINE_HEIGHT_MULTIPLIER = 28f / 24f
-        private const val TOP_LINE_FADE_MS = 280L
-        private const val ROLL_UP_MS = 280L
         private const val TEXT_SIZE_CHANGE_EPSILON_PX = 0.5f
+        private const val BOTTOM_MARGIN_ANIM_MS = 200L
     }
 }

@@ -10,7 +10,8 @@ Android SDK for [Kinescope](https://kinescope.io/) video: player, vertical Short
 
 | Feature | Description |
 |--------|-------------|
-| **Player** | `KinescopeVideoPlayer`, `KinescopePlayerView` — HLS, DASH, Live, DRM, posters, player options, fullscreen, PiP, settings (quality, speed, subtitles), analytics |
+| **Player** | `KinescopeVideoPlayer`, `KinescopePlayerView` — HLS, DASH, Live, DRM, posters, player options, fullscreen, PiP, settings (quality, speed, subtitles), progressive line-by-line subtitles, analytics |
+| **Compose UI** | `kotlin-kinescope-player-ui` — `KinescopePlayerScreen`, `KinescopePlayerTheme`, headless player + custom Compose controls, Cast, double-tap seek |
 | **Chromecast** | `KinescopeCastSession` — cast to TV via Kinescope custom receiver, cast overlay, position sync on connect/disconnect |
 | **Dashboard API** | `KinescopeApiHelper` — list/create/update/delete player templates via `api.kinescope.io` |
 | **Shorts** | `io.kinescope.sdk.shorts` — TikTok-style vertical feed, `KinescopeVideoProvider` for your API |
@@ -30,6 +31,7 @@ Full docs are split by feature in [`docs/`](docs/README.md).
 | **Index** | [docs/README.md](docs/README.md) |
 | Installation | [docs/installation.md](docs/installation.md) |
 | Quick start | [docs/quick-start.md](docs/quick-start.md) |
+| Demo app | [docs/demo-app.md](docs/demo-app.md) |
 | Player options | [docs/player-options.md](docs/player-options.md) |
 | Customization | [docs/customization.md](docs/customization.md) |
 | Live | [docs/live.md](docs/live.md) |
@@ -37,6 +39,7 @@ Full docs are split by feature in [`docs/`](docs/README.md).
 | Picture-in-Picture | [docs/picture-in-picture.md](docs/picture-in-picture.md) |
 | Chromecast | [docs/chromecast.md](docs/chromecast.md) |
 | Subtitles & settings | [docs/subtitles-and-settings.md](docs/subtitles-and-settings.md) |
+| Compose UI | [docs/compose-ui.md](docs/compose-ui.md) |
 | Analytics | [docs/analytics.md](docs/analytics.md) |
 | Dashboard API | [docs/dashboard-api.md](docs/dashboard-api.md) |
 | Offline downloads | [docs/offline-downloads.md](docs/offline-downloads.md) |
@@ -63,37 +66,12 @@ playerView.applyTemplateOptions()
 kinescopePlayer.loadVideo(videoId, onSuccess = { kinescopePlayer.play() })
 ```
 
-See [docs/quick-start.md](docs/quick-start.md) for the full setup.
+See [docs/quick-start.md](docs/quick-start.md) for the full setup. For Jetpack Compose, see [docs/compose-ui.md](docs/compose-ui.md).
 
 ---
 
 ## Demo app
 
-A **stand/demo APK** is available to explore the SDK before integration:
+A stand-alone **`app`** module lets you try the SDK before integration: playlist, subtitles, DRM, custom UI, player templates, live, Shorts, offline downloads, and Compose player.
 
-| Screen | What it shows |
-|--------|----------------|
-| **Playlist test** | Player with a video list, Cast, PiP, fullscreen |
-| **Subtitles test** | Subtitles playback and appearance settings |
-| **DRM viewing** | Online Widevine-protected playback |
-| **Custom UI test** | Player without built-in controls |
-| **Custom Player test** | Player options, Dashboard API, player templates |
-| **Live test** | Live stream mode |
-| **Shorts** | Vertical feed |
-| **Offline viewing** | DRM offline downloads and playback |
-
-Set your API key in [`KinescopeDemoConfig`](app/src/main/java/io/kinescope/demo/KinescopeDemoConfig.kt):
-
-```kotlin
-object KinescopeDemoConfig {
-    const val API_KEY = "your-api-key"
-}
-```
-
-Build:
-
-```bash
-./gradlew :app:assembleDebug
-```
-
-APK: `app/build/outputs/apk/debug/app-debug.apk`
+See **[docs/demo-app.md](docs/demo-app.md)** for configuration, build commands, and a description of each screen.

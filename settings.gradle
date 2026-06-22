@@ -10,10 +10,12 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        maven { url 'https://jitpack.io' }
     }
 }
 rootProject.name = "Kinescope SDK Demo"
 include ':app'
 include ':kotlin-kinescope-player'
+include ':kotlin-kinescope-player-ui'
 include ':kotlin-kinescope-shorts'
 project(':kotlin-kinescope-shorts').projectDir = file('kotlin-kinescope-shorts/library')

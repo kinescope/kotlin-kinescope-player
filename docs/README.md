@@ -8,7 +8,7 @@ Android SDK for [Kinescope](https://kinescope.io/) video: player, vertical Short
 |-------|------|
 | Installation | [installation.md](installation.md) |
 | Quick start | [quick-start.md](quick-start.md) |
-| Demo app | [../README.md#demo-app](../README.md#demo-app) |
+| Demo app | [demo-app.md](demo-app.md) |
 
 ## Player
 
@@ -21,6 +21,7 @@ Android SDK for [Kinescope](https://kinescope.io/) video: player, vertical Short
 | Picture-in-Picture | [picture-in-picture.md](picture-in-picture.md) |
 | Chromecast | [chromecast.md](chromecast.md) |
 | Subtitles & settings | [subtitles-and-settings.md](subtitles-and-settings.md) |
+| Compose UI | [compose-ui.md](compose-ui.md) |
 | Analytics | [analytics.md](analytics.md) |
 
 ## Dashboard API

@@ -26,4 +26,7 @@ data class KinescopePlayerOptions(
     var showCastButton: Boolean = false,
     var showPlaybackSpeedInSettings: Boolean = true,
     var showAudioOnlyQualityInSettings: Boolean = true,
+    var showAudioTracksInSettings: Boolean = true,
+    var hdrToneMapping: Boolean = true,
+    var backgroundPlaybackAllowed: Boolean = false,
 )

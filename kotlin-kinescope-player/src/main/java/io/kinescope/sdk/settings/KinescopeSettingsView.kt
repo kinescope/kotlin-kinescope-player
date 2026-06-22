@@ -49,6 +49,8 @@ class KinescopeSettingsView(
     private var isScreenTransitionActive = false
     private var iconTintColor: Int = 0xFFFFFFFF.toInt()
     private var subtitleStyle = SubtitleStyle()
+    private var screenRefreshSuppressed = 0
+    private var pendingMainScreenRefresh = false
 
     private val binding =
         ViewSettingsBinding.inflate(LayoutInflater.from(context), this, true)
@@ -140,9 +142,7 @@ class KinescopeSettingsView(
     fun setParameterCurrentValue(parameter: Parameter, value: String) {
         checkParameterAddedOrException(parameter)
         parameterCurrentValues[parameter] = value
-        if (navigationStack.lastOrNull() == NavScreen.Main) {
-            refreshCurrentScreen(animated = false)
-        }
+        requestMainScreenRefresh()
     }
 
     fun setParameterOptions(parameter: Parameter, options: List<KinescopeSettingsOption>) {
@@ -155,9 +155,55 @@ class KinescopeSettingsView(
             return
         }
         parameterVisibility[parameter] = visible
-        if (navigationStack.lastOrNull() == NavScreen.Main) {
-            refreshCurrentScreen(animated = false)
+        requestMainScreenRefresh()
+    }
+
+    /**
+     * Applies multiple parameter mutations and rebuilds the main screen at most once.
+     */
+    fun runBatchUpdate(block: () -> Unit) {
+        screenRefreshSuppressed++
+        try {
+            block()
+        } finally {
+            screenRefreshSuppressed--
+            if (screenRefreshSuppressed == 0) {
+                flushPendingMainScreenRefresh()
+            }
         }
+    }
+
+    private fun requestMainScreenRefresh() {
+        if (navigationStack.lastOrNull() != NavScreen.Main) {
+            return
+        }
+        if (screenRefreshSuppressed > 0 || isScreenTransitionActive) {
+            pendingMainScreenRefresh = true
+            return
+        }
+        pendingMainScreenRefresh = false
+        refreshCurrentScreen(animated = false)
+    }
+
+    private fun flushPendingMainScreenRefresh() {
+        if (!pendingMainScreenRefresh) {
+            return
+        }
+        if (navigationStack.lastOrNull() != NavScreen.Main || isScreenTransitionActive) {
+            return
+        }
+        pendingMainScreenRefresh = false
+        refreshCurrentScreen(animated = false)
+    }
+
+    private fun cancelScreenTransition() {
+        screenTransitionAnimator?.cancel()
+        screenTransitionAnimator = null
+        popupHeightAnimator?.cancel()
+        popupHeightAnimator = null
+        isScreenTransitionActive = false
+        binding.settingsScreenContainer.animate().cancel()
+        currentScreenView?.animate()?.cancel()
     }
 
     fun applyIconTint(@ColorInt color: Int) {
@@ -340,12 +386,16 @@ class KinescopeSettingsView(
         screenLayoutParams: FrameLayout.LayoutParams,
         animateHeight: Boolean,
     ) {
+        cancelScreenTransition()
         container.removeAllViews()
         container.addView(incoming, screenLayoutParams)
         incoming.translationX = 0f
         incoming.alpha = 1f
         currentScreenView = incoming
         tintScreenView(incoming, iconTintColor)
+        val containerLayoutParams = container.layoutParams
+        containerLayoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
+        container.layoutParams = containerLayoutParams
         post { positionPopupWithinBounds(animateHeight = animateHeight) }
     }
 
@@ -483,6 +533,7 @@ class KinescopeSettingsView(
         isScreenTransitionActive = false
         screenTransitionAnimator = null
         positionPopupWithinBounds(animateHeight = false)
+        flushPendingMainScreenRefresh()
     }
 
     private fun showScreen(
@@ -1101,6 +1152,7 @@ class KinescopeSettingsView(
                 Parameter.PlaybackSpeed -> 1
                 Parameter.VideoQuality -> 2
                 Parameter.Subtitles -> 3
+                Parameter.AudioTracks -> 4
                 else -> 1
             }
             SubtitleAppearance -> 4
@@ -1124,12 +1176,14 @@ class KinescopeSettingsView(
         object VideoQuality : Parameter()
         object PictureInPicture : Parameter()
         object Subtitles : Parameter()
+        object AudioTracks : Parameter()
         object Attachments : Parameter()
     }
 
     private companion object {
         private val PARAMETER_DISPLAY_ORDER = listOf(
             Parameter.Subtitles,
+            Parameter.AudioTracks,
             Parameter.PlaybackSpeed,
             Parameter.VideoQuality,
             Parameter.Attachments,

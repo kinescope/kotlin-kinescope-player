@@ -21,6 +21,7 @@
     <dimen name="kinescope_caption_padding_horizontal">8dp</dimen>
     <dimen name="kinescope_caption_padding_vertical">4dp</dimen>
     <dimen name="kinescope_caption_margin_start">12dp</dimen>
+    <dimen name="kinescope_caption_margin_end">12dp</dimen>
     <dimen name="kinescope_caption_max_width">280dp</dimen>
     <dimen name="kinescope_caption_line_height">28sp</dimen>
 

@@ -48,8 +48,8 @@ class SubtitlesActivity : AppCompatActivity() {
         fullscreenPlayerView.onFullscreenButtonCallback = { toggleFullscreen() }
         pipSession.attach()
 
-        kinescopePlayer.loadVideo("56DsDuWRhJNkXPvUdCgtw9", onSuccess = {
-
+        kinescopePlayer.loadVideo("4CCHqgs4MkL33akyL7jJtS", onSuccess = {
+            "56DsDuWRhJNkXPvUdCgtw9"
             if (it != null) {
                 kinescopePlayer.play()
             }

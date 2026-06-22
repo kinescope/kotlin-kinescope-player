@@ -16,9 +16,10 @@
 
     <TextView
         android:id="@+id/title_tv"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="4dp"
+        android:layout_weight="1"
         android:ellipsize="end"
         android:includeFontPadding="false"
         android:maxLines="1"
@@ -27,13 +28,13 @@
 
     <TextView
         android:id="@+id/current_value_tv"
-        android:layout_width="0dp"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginEnd="4dp"
-        android:layout_weight="1"
         android:ellipsize="end"
         android:gravity="end|center_vertical"
         android:includeFontPadding="false"
+        android:maxWidth="120dp"
         android:maxLines="1"
         android:textAppearance="@style/Regular.12.WhiteSecondary"
         tools:text="Normal" />

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Standard Picture-in-Picture glyph (в Figma Player parts не изолирован). 28-viewport. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="28dp"
+    android:height="28dp"
+    android:viewportWidth="28"
+    android:viewportHeight="28">
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2"
+        android:fillColor="#00000000"
+        android:pathData="M6,7 L22,7 Q24,7 24,9 L24,19 Q24,21 22,21 L6,21 Q4,21 4,19 L4,9 Q4,7 6,7 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M14,13.5 L21,13.5 Q22,13.5 22,14.5 L22,18.5 Q22,19.5 21,19.5 L14,19.5 Q13,19.5 13,18.5 L13,14.5 Q13,13.5 14,13.5 Z" />
+</vector>

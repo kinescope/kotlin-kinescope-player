@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Replay (экран завершения), дизайн-система Kinescope: круговая стрелка. Тинт из темы. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M6.36 10.872A5.752 5.752 0 0 1 17.75 12a5.75 5.75 0 0 1-7.393 5.512 1.25 1.25 0 1 0-.714 2.396 8.25 8.25 0 1 0-5.838-8.87l-.921-.922a1.25 1.25 0 0 0-1.768 1.768l2.434 2.434.018.018c.083.083.19.19.294.279.123.104.32.252.597.342.352.114.73.114 1.082 0 .276-.09.474-.238.597-.342.104-.089.211-.196.294-.279l.018-.018 2.434-2.434a1.25 1.25 0 0 0-1.768-1.768z" />
+</vector>

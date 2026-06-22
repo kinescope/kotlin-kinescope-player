@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Figma Play button 543-7372 glyph (tight). Size set in Compose. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20.8795dp" android:height="22.7244dp"
+    android:viewportWidth="20.8795" android:viewportHeight="22.7244">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M16.6449 7.55594C19.0501 8.97385 20.2526 9.68281 20.6393 10.59C20.9764 11.381 20.958 12.2785 20.5886 13.055C20.165 13.9455 18.9344 14.6045 16.4731 15.9224L7.06583 20.9596C4.73583 22.2072 3.57083 22.8311 2.61969 22.7095C1.78958 22.6034 1.04152 22.1554 0.55614 21.4737C0 20.6926 0 19.3711 0 16.7281V6.14493C0 3.39162 0 2.01496 0.577769 1.22427C1.08164 0.534721 1.85551 0.0926035 2.70541 0.00874164C3.67997 -0.0874199 4.86588 0.611722 7.2377 2.01001L16.6449 7.55594Z" />
+</vector>

@@ -2,6 +2,7 @@ package io.kinescope.sdk.player.tracks
 
 import android.content.Context
 import androidx.media3.common.C
+import androidx.media3.common.Format
 import androidx.media3.common.Tracks
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.util.UnstableApi
@@ -11,6 +12,8 @@ import io.kinescope.sdk.player.quality.KinescopeQualityManager
 import io.kinescope.sdk.player.quality.KinescopeQualityVariant
 import io.kinescope.sdk.player.quality.KinescopeQualityVariantUi
 import io.kinescope.sdk.settings.KinescopeSettingsOption
+import io.kinescope.sdk.R
+import java.util.Locale
 
 @UnstableApi
 class TrackController(
@@ -34,7 +37,14 @@ class TrackController(
     var selectedSubtitleIndex: Int = SUBTITLES_OFF_ID
         private set
 
+    var selectedAudioIndex: Int = 0
+        private set
+
     private var subtitleTrackOverrides: List<Pair<Tracks.Group, Int>> = emptyList()
+    private var audioTrackOverrides: List<Pair<Tracks.Group, Int>> = emptyList()
+
+    val hasMultipleAudioTracks: Boolean
+        get() = audioTrackOverrides.size > 1
 
     fun updateQualityVariants(variants: List<KinescopeQualityVariant>) {
         qualityManager.updateVariants(variants)
@@ -53,6 +63,15 @@ class TrackController(
                     }
                 }
             }
+    }
+
+    fun updateAudioTracks(tracks: Tracks) {
+        audioTrackOverrides = tracks.groups
+            .filter { it.type == C.TRACK_TYPE_AUDIO }
+            .flatMap { group ->
+                (0 until group.length).map { index -> group to index }
+            }
+        syncSelectedAudioIndex()
     }
 
     fun setQualityVariant(id: Int) {
@@ -83,6 +102,16 @@ class TrackController(
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
                 .build()
         }
+    }
+
+    fun applyAudioSelection(optionId: Int) {
+        if (audioTrackOverrides.isEmpty()) return
+        selectedAudioIndex = optionId.coerceIn(0, audioTrackOverrides.lastIndex)
+        val (group, trackIndex) = audioTrackOverrides[selectedAudioIndex]
+        trackSelector.parameters = trackSelector.buildUponParameters()
+            .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+            .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, trackIndex))
+            .build()
     }
 
     fun ensureDefaultSubtitleEnabled(
@@ -127,6 +156,49 @@ class TrackController(
                 )
             )
         }
+    }
+
+    fun currentAudioLabel(): String {
+        val override = audioTrackOverrides.getOrNull(selectedAudioIndex) ?: return ""
+        val (_, trackIndex) = override
+        return audioTrackLabel(override.first.getTrackFormat(trackIndex), selectedAudioIndex)
+    }
+
+    fun buildAudioOptions(): List<KinescopeSettingsOption> =
+        audioTrackOverrides.mapIndexed { index, (group, trackIndex) ->
+            KinescopeSettingsOption(
+                id = index,
+                title = audioTrackLabel(group.getTrackFormat(trackIndex), index),
+                isSelected = index == selectedAudioIndex,
+            )
+        }
+
+    private fun syncSelectedAudioIndex() {
+        if (audioTrackOverrides.isEmpty()) {
+            selectedAudioIndex = 0
+            return
+        }
+        val activeIndex = audioTrackOverrides.indexOfFirst { (group, trackIndex) ->
+            group.isTrackSelected(trackIndex)
+        }
+        selectedAudioIndex = when {
+            activeIndex >= 0 -> activeIndex
+            selectedAudioIndex in audioTrackOverrides.indices -> selectedAudioIndex
+            else -> 0
+        }
+    }
+
+    private fun audioTrackLabel(format: Format, fallbackIndex: Int): String {
+        format.label?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+        format.language?.trim()
+            ?.takeIf { it.isNotEmpty() && !it.equals("und", ignoreCase = true) }
+            ?.let { code ->
+                Locale.forLanguageTag(code).displayName
+                    .takeIf { it.isNotEmpty() }
+                    ?.let { return it }
+                return code
+            }
+        return context.getString(R.string.settings_audio_track_default, fallbackIndex + 1)
     }
 
     companion object {

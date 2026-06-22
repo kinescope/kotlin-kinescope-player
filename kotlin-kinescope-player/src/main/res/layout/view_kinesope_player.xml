@@ -17,6 +17,7 @@
             app:animation_enabled="false"
             app:resize_mode="fit"
             app:show_buffering="never"
+            app:surface_type="surface_view"
             app:use_controller="false" />
 
         <androidx.media3.ui.SubtitleView

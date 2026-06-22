@@ -21,10 +21,14 @@
     <string name="live_time_offset">-%s</string>
     <string name="live_its_starting_soon">It\'s starting soon</string>
 
+    <string name="player_background_playback_channel">Background playback</string>
+    <string name="player_background_playback_title">Kinescope playback</string>
+
     <string name="settings_parameter_playback_speed">Speed</string>
     <string name="settings_parameter_video_quality">Quality</string>
     <string name="settings_parameter_picture_in_picture">Picture in picture</string>
     <string name="settings_parameter_subtitles">Subtitles</string>
+    <string name="settings_parameter_audio_tracks">Audio</string>
     <string name="settings_parameter_attachments">Attachments</string>
     <string name="settings_subtitles_off">Off</string>
     <string name="settings_subtitles_appearance">Settings</string>
@@ -43,6 +47,7 @@
     <string name="settings_subtitles_color_black">Black</string>
     <string name="settings_subtitles_color_custom">Custom</string>
     <string name="settings_video_quality_audio_only">Audio only</string>
+    <string name="settings_audio_track_default">Track %1$d</string>
 
     <string name="settings_playback_speed_0_25">0.25x</string>
     <string name="settings_playback_speed_0_5">0.5x</string>

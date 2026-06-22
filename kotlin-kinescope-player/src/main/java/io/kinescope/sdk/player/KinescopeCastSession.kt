@@ -145,18 +145,20 @@ class KinescopeCastSession(
     private fun onCastSessionStarted() {
         val videoPlayer = player()
         val controller = castController ?: return
-        val positionMs = videoPlayer.exoPlayer?.currentPosition?.coerceAtLeast(0L) ?: 0L
-        resumeLocalAfterCast = videoPlayer.exoPlayer?.playWhenReady == true
+        val host = videoPlayer.getOrCreatePlayerHost() ?: return
+        val positionMs = host.activePlayer.currentPosition.coerceAtLeast(0L)
+        resumeLocalAfterCast = host.activePlayer.playWhenReady
         videoPlayer.getVideo()?.toCastData()?.let { controller.load(it, positionMs) }
-        videoPlayer.pause()
+        videoPlayer.exoPlayer?.pause()
+        videoPlayer.switchToCastPlayer(controller.castPlayer)
         mainHandler.post(refreshRunnable)
     }
 
     private fun onCastSessionEnded() {
         mainHandler.removeCallbacks(refreshRunnable)
         val videoPlayer = player()
-        val controller = castController
-        val positionMs = controller?.castPlayer?.currentPosition?.coerceAtLeast(0L) ?: 0L
+        val positionMs = videoPlayer.playbackPlayer?.currentPosition?.coerceAtLeast(0L) ?: 0L
+        videoPlayer.switchToLocalPlayer()
         videoPlayer.exoPlayer?.seekTo(positionMs)
         if (resumeLocalAfterCast) {
             videoPlayer.play()

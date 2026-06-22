@@ -10,12 +10,38 @@ When `showOptionsButton` is enabled, the player shows a nested settings menu:
 
 For DASH videos, external tracks (VTT, TTML, SRT) are merged via `MergingMediaSource`. Tracks can be switched at runtime from the settings menu. When `showSubtitlesButton` is on, the first available track is auto-enabled.
 
+## Progressive subtitles overlay
+
+`KinescopePlayerView` renders subtitles through a custom **progressive overlay** (not the default ExoPlayer `SubtitleView`):
+
+| Behaviour | Description |
+|-----------|-------------|
+| **Line-by-line reveal** | Text appears per VTT line (`\n`) or per wrapped visual line — not word-by-word |
+| **Two lines** | Bottom line shows the current phrase; when it overflows, the previous line moves to the top |
+| **Two-line alignment** | When both lines are visible, text is centred inside the caption block |
+| **Single line** | Left-aligned |
+| **Caption box** | Dark rounded background (`bg_kinescope_caption`); width spans from the left margin to the right margin (12 dp each side) |
+| **Controls offset** | When the control overlay is visible, captions move up; they animate back down (200 ms) when controls hide |
+
+### Layout dimensions
+
+| Resource | Value | Purpose |
+|----------|-------|---------|
+| `kinescope_caption_margin_start` | 12 dp | Left inset from player edge |
+| `kinescope_caption_margin_end` | 12 dp | Right inset from player edge |
+| `kinescope_caption_padding_horizontal` | 8 dp | Padding inside the caption box |
+| `kinescope_caption_max_width` | 280 dp | Reference width (text uses available space between margins) |
+
+### Compose integration
+
+In `KinescopePlayerScreen`, progressive subtitles come from the embedded `KinescopePlayerView`. Subtitle vertical position follows Compose control visibility via `KinescopePlayerView.syncSubtitleChromeForControls(controlsVisible)`.
+
 ## Subtitle appearance
 
-Appearance is controlled via `SubtitleStyle` on `KinescopePlayerView`:
+Appearance is controlled via `SubtitleStyle` on `KinescopePlayerView` (or `KinescopeComposePlayerController.subtitleStyleState` in Compose):
 
-- Font colour and size
-- Background colour and opacity
+- Font colour and size (`fontSizePercent`)
+- Background colour and opacity (`bgColor`, `bgOpacityPercent`)
 
 The settings view exposes `onSubtitleStyleChanged` for custom integrations.
 
@@ -36,4 +62,4 @@ playerView.applyTemplateOptions()
 | `showPlaybackSpeedInSettings` | `true` | Speed submenu |
 | `showAudioOnlyQualityInSettings` | `true` | Audio-only quality option |
 
-See also [Player options](player-options.md).
+See also [Player options](player-options.md) and [Compose UI](compose-ui.md).

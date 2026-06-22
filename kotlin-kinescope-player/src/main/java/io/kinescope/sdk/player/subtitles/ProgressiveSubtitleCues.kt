@@ -18,6 +18,7 @@ internal object ProgressiveSubtitleCues {
             return null
         }
 
+        val lines = extractLines(cues)
         val words = extractWords(cues)
         if (words.isEmpty()) {
             return null
@@ -27,13 +28,17 @@ internal object ProgressiveSubtitleCues {
             return null
         }
 
-        val endUs = estimateCueEndUs(cueStartUs, words.size, cueEndUs)
-        val visibleCount = if (positionUs >= endUs) {
-            words.size
+        val lineCount = lines.size.coerceAtLeast(1)
+        val endUs = estimateCueEndUs(cueStartUs, lineCount, cueEndUs)
+        val visibleLineCount = if (positionUs >= endUs) {
+            lineCount
         } else {
-            val exactProgress = computeExactProgress(positionUs, cueStartUs, endUs, words.size)
-            countVisibleWords(exactProgress, words.size)
+            val exactProgress = computeExactProgress(positionUs, cueStartUs, endUs, lineCount)
+            countVisibleUnits(exactProgress, lineCount)
         }.coerceAtLeast(1)
+
+        val visibleCount = wordCountForVisibleLines(lines, visibleLineCount)
+            .coerceIn(1, words.size)
 
         return buildStateForVisibleCount(
             words = words,
@@ -42,16 +47,30 @@ internal object ProgressiveSubtitleCues {
         )
     }
 
+    fun extractLines(cues: List<Cue>): List<String> {
+        return cues
+            .mapNotNull { cue ->
+                cue.text?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+            }
+            .flatMap { text ->
+                text.split("\n")
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() }
+            }
+    }
+
     fun extractWords(cues: List<Cue>): List<String> {
-        val fullText = cues.mapNotNull { cue ->
-            cue.text?.toString()?.trim()?.takeIf { it.isNotEmpty() }
-        }.joinToString(" ")
-
-        if (fullText.isBlank()) {
-            return emptyList()
+        return extractLines(cues).flatMap { line ->
+            line.split(Regex("\\s+")).filter { it.isNotEmpty() }
         }
+    }
 
-        return fullText.split(Regex("\\s+")).filter { it.isNotEmpty() }
+    fun wordCountForVisibleLines(lines: List<String>, visibleLineCount: Int): Int {
+        if (visibleLineCount <= 0 || lines.isEmpty()) {
+            return 0
+        }
+        return lines.take(visibleLineCount.coerceAtMost(lines.size))
+            .sumOf { line -> line.split(Regex("\\s+")).filter { it.isNotEmpty() }.size }
     }
 
     fun estimateCueEndUs(
@@ -90,13 +109,13 @@ internal object ProgressiveSubtitleCues {
         )
     }
 
-    private fun countVisibleWords(exactProgress: Float, wordCount: Int): Int {
+    private fun countVisibleUnits(exactProgress: Float, unitCount: Int): Int {
         if (exactProgress <= 0f) {
             return 0
         }
         val whole = exactProgress.toInt()
         val count = if (exactProgress > whole) whole + 1 else whole
-        return count.coerceIn(0, wordCount)
+        return count.coerceIn(0, unitCount)
     }
 
     private fun resolveCueEndUs(cueStartUs: Long, cueEndUs: Long, wordCount: Int): Long {

@@ -41,6 +41,7 @@ import androidx.media3.common.VideoSize
 import androidx.media3.common.util.Assertions
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
+import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerControlView
@@ -205,6 +206,7 @@ class KinescopePlayerView(
     private var posterView: ImageView? = null
 
     private var kinescopePlayer: KinescopeVideoPlayer? = null
+    private var boundPlaybackPlayer: Player? = null
     private var exoPlayerView: PlayerView? = null
     private var subtitleView: SubtitleView? = null
     private var progressiveSubtitleOverlay: ProgressiveSubtitleOverlay? = null
@@ -365,64 +367,32 @@ class KinescopePlayerView(
         )
     }
 
-    private var componentListener = object :
-        Player.Listener,
-        OnClickListener,
-        TimeBar.OnScrubListener,
-        PopupWindow.OnDismissListener {
-        override fun onEvents(player: Player, events: Player.Events) {
-            super.onEvents(player, events)
-            if (events.containsAny(
-                    Player.EVENT_PLAYBACK_STATE_CHANGED,
-                    Player.EVENT_PLAY_WHEN_READY_CHANGED
-                )
-            ) {
-                updateAll()
-            }
-        }
+    private val localExoPlayer: ExoPlayer?
+        get() = kinescopePlayer?.exoPlayer
 
-        override fun onPlaybackStateChanged(playbackState: Int) {
-            super.onPlaybackStateChanged(playbackState)
-            getAnalyticsArguments().let { args ->
-                when (playbackState) {
-                    Player.STATE_IDLE -> {
-                        hasStartedPlayback = false
-                    }
+    private val activePlaybackPlayer: Player?
+        get() = kinescopePlayer?.playbackPlayer
 
-                    Player.STATE_BUFFERING -> {
-                        analyticsManager.buffering()
-                        if (!hasStartedPlayback && kinescopePlayer?.exoPlayer?.playWhenReady == true) {
-                            hidePoster()
-                        }
-                    }
+    private fun bindPlaybackPlayer(player: Player?) {
+        boundPlaybackPlayer?.removeListener(componentListener)
+        boundPlaybackPlayer = player
+        player?.addListener(componentListener)
+    }
 
-                    Player.STATE_READY -> {
-                        analyticsManager.ready(args = args)
-                        if (isLiveState) {
-                            hidePoster()
-                            hideLiveStartDate()
-                        } else {
-                            applyVideoPoster()
-                        }
-                    }
+    private fun bindLocalEnginePlayer(player: ExoPlayer?) {
+        player?.removeListener(localEngineListener)
+        player?.addListener(localEngineListener)
+    }
 
-                    Player.STATE_ENDED -> {
-                        analyticsManager.end(args = args)
-                        showControlOverlay(animated = true)
-                        cancelControlOverlayAutoHide()
-                    }
+    private fun detachPlayerBindings() {
+        bindPlaybackPlayer(null)
+        localExoPlayer?.removeListener(localEngineListener)
+        kinescopePlayer?.getOrCreatePlayerHost()?.onActivePlayerChanged = null
+    }
 
-                    else -> {}
-                }
-            }
-
-            updateBuffering()
-            updatePlayPauseButton()
-        }
-
+    private val localEngineListener = object : Player.Listener {
         override fun onTracksChanged(tracks: Tracks) {
-            super.onTracksChanged(tracks)
-            kinescopePlayer?.exoPlayer?.let { player ->
+            localExoPlayer?.let { player ->
                 with(player.trackSelector as DefaultTrackSelector) {
                     trackController?.updateQualityVariants(
                         variants = getQualityVariantsList()
@@ -430,6 +400,15 @@ class KinescopePlayerView(
                 }
             }
             trackController?.updateTextTracks(tracks)
+            trackController?.updateAudioTracks(tracks)
+            if (settingsMenuView?.isVisible == true) {
+                settingsMenuView?.runBatchUpdate {
+                    updateAudioTracksSettingsVisibility()
+                    applySettingsMenuCurrentValues()
+                }
+            } else {
+                updateAudioTracksSettingsVisibility()
+            }
             val video = getVideo()
             if (video != null && kinescopePlayer?.getShowSubtitles() == true) {
                 if (trackController?.selectedSubtitleIndex == TrackController.SUBTITLES_OFF_ID) {
@@ -457,7 +436,7 @@ class KinescopePlayerView(
                 }
                 pendingCueGroup = cueGroup
             } else {
-                val player = kinescopePlayer?.exoPlayer
+                val player = localExoPlayer
                 val activeGroup = pendingCueGroup
                 if (player != null && activeGroup != null) {
                     val positionUs = Util.msToUs(player.contentPosition)
@@ -473,7 +452,6 @@ class KinescopePlayerView(
         }
 
         override fun onVideoSizeChanged(videoSize: VideoSize) {
-            super.onVideoSizeChanged(videoSize)
             if (videoSize.height != 0) {
                 getAnalyticsArguments().let { args ->
                     when (trackController?.isAutoQuality) {
@@ -482,6 +460,70 @@ class KinescopePlayerView(
                     }
                 }
             }
+        }
+
+        override fun onPlayerError(error: PlaybackException) {
+            localExoPlayer?.let { player ->
+                if (player.playbackState == Player.STATE_IDLE && player.playWhenReady) {
+                    dispatchPlay(player)
+                }
+            }
+        }
+    }
+
+    private var componentListener = object :
+        Player.Listener,
+        OnClickListener,
+        TimeBar.OnScrubListener,
+        PopupWindow.OnDismissListener {
+        override fun onEvents(player: Player, events: Player.Events) {
+            super.onEvents(player, events)
+            if (events.containsAny(
+                    Player.EVENT_PLAYBACK_STATE_CHANGED,
+                    Player.EVENT_PLAY_WHEN_READY_CHANGED
+                )
+            ) {
+                updateAll()
+            }
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            super.onPlaybackStateChanged(playbackState)
+            getAnalyticsArguments().let { args ->
+                when (playbackState) {
+                    Player.STATE_IDLE -> {
+                        hasStartedPlayback = false
+                    }
+
+                    Player.STATE_BUFFERING -> {
+                        analyticsManager.buffering()
+                        if (!hasStartedPlayback && activePlaybackPlayer?.playWhenReady == true) {
+                            hidePoster()
+                        }
+                    }
+
+                    Player.STATE_READY -> {
+                        analyticsManager.ready(args = args)
+                        if (isLiveState) {
+                            hidePoster()
+                            hideLiveStartDate()
+                        } else {
+                            applyVideoPoster()
+                        }
+                    }
+
+                    Player.STATE_ENDED -> {
+                        analyticsManager.end(args = args)
+                        showControlOverlay(animated = true)
+                        cancelControlOverlayAutoHide()
+                    }
+
+                    else -> {}
+                }
+            }
+
+            updateBuffering()
+            updatePlayPauseButton()
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -523,23 +565,13 @@ class KinescopePlayerView(
             updatePlayPauseButton()
         }
 
-        override fun onPlayerError(error: PlaybackException) {
-            super.onPlayerError(error)
-
-            kinescopePlayer?.exoPlayer?.let { player ->
-                if (player.playbackState == Player.STATE_IDLE && player.playWhenReady) {
-                    dispatchPlay(player)
-                }
-            }
-        }
-
         override fun onScrubStart(timeBar: TimeBar, position: Long) {
             scrubbing = true
             enterScrubOverlayMode()
             seekView?.showScrubOverlay()
 
             if (isLiveState) {
-                scrubbingLiveDurationCached = kinescopePlayer?.exoPlayer?.duration ?: 0
+                scrubbingLiveDurationCached = activePlaybackPlayer?.duration ?: 0
                 showLiveTimeOffset(
                     isShown = true,
                     position = position
@@ -571,7 +603,8 @@ class KinescopePlayerView(
             scrubbing = false
             seekView?.hideScrubOverlay()
             if (!canceled && kinescopePlayer != null) {
-                seekToTimeBarPosition(kinescopePlayer!!.exoPlayer!!, position)
+                val player = activePlaybackPlayer ?: return
+                seekToTimeBarPosition(player, position)
             }
 
             exitScrubOverlayMode()
@@ -592,7 +625,7 @@ class KinescopePlayerView(
         }
 
         override fun onClick(view: View?) {
-            val player: Player = kinescopePlayer?.exoPlayer ?: return
+            val player: Player = activePlaybackPlayer ?: return
 
             if (playPauseButton === view) {
                 dispatchPlayPause(player)
@@ -694,6 +727,11 @@ class KinescopePlayerView(
                     icon = R.drawable.ic_menu_cc,
                 )
                 addParameter(
+                    parameter = KinescopeSettingsView.Parameter.AudioTracks,
+                    title = resources.getString(R.string.settings_parameter_audio_tracks),
+                    icon = R.drawable.ic_menu_audio,
+                )
+                addParameter(
                     parameter = KinescopeSettingsView.Parameter.PlaybackSpeed,
                     title = resources.getString(R.string.settings_parameter_playback_speed),
                     icon = R.drawable.ic_menu_speed,
@@ -746,7 +784,7 @@ class KinescopePlayerView(
     fun setPlayer(kinescopePlayer: KinescopeVideoPlayer?) {
         Assertions.checkState(Looper.myLooper() == Looper.getMainLooper())
         if (this.kinescopePlayer === kinescopePlayer) return
-        this.kinescopePlayer?.exoPlayer?.removeListener(componentListener)
+        detachPlayerBindings()
         hasStartedPlayback = false
         pendingCueGroup = null
         learnedCueDurationUs = C.TIME_UNSET
@@ -775,7 +813,14 @@ class KinescopePlayerView(
             postVideoLoadedChromeUpdate()
         }
         exoPlayerView?.player = kinescopePlayer?.exoPlayer
-        kinescopePlayer?.exoPlayer?.addListener(componentListener)
+        bindLocalEnginePlayer(kinescopePlayer?.exoPlayer)
+        kinescopePlayer?.getOrCreatePlayerHost()?.let { host ->
+            host.onActivePlayerChanged = { newPlayer ->
+                bindPlaybackPlayer(newPlayer)
+                updateAll()
+            }
+            bindPlaybackPlayer(host.activePlayer)
+        }
         applyProgressiveSubtitles()
         applyKinescopePlayerOptions()
         applyAccentColor()
@@ -850,7 +895,7 @@ class KinescopePlayerView(
         @DrawableRes errorPlaceholder: Int = R.drawable.default_poster,
         onLoadFinished: ((isSuccess: Boolean) -> Unit)? = null,
     ) {
-        with(kinescopePlayer?.exoPlayer?.playbackState) {
+        with(activePlaybackPlayer?.playbackState) {
             if ((!isLiveState && this == Player.STATE_BUFFERING) ||
                 (isLiveState && this == Player.STATE_READY)
             ) {
@@ -882,7 +927,7 @@ class KinescopePlayerView(
      * @param startDate ISO8601 date string
      */
     fun showLiveStartDate(startDate: String) {
-        with(kinescopePlayer?.exoPlayer?.playbackState) {
+        with(activePlaybackPlayer?.playbackState) {
             if ((!isLiveState && this == Player.STATE_BUFFERING) ||
                 (isLiveState && this == Player.STATE_READY)
             ) {
@@ -955,7 +1000,7 @@ class KinescopePlayerView(
     }
 
     private fun isBufferingSpinnerVisible(): Boolean {
-        val player = kinescopePlayer?.exoPlayer ?: return false
+        val player = localExoPlayer ?: return false
         if (!hasStartedPlayback && player.playbackState == Player.STATE_BUFFERING) {
             return true
         }
@@ -983,7 +1028,7 @@ class KinescopePlayerView(
         if (hasStartedPlayback || !isVideoLoaded()) {
             return
         }
-        val player = kinescopePlayer?.exoPlayer
+        val player = localExoPlayer
         if (!isLiveState &&
             player?.playbackState == Player.STATE_BUFFERING &&
             player.playWhenReady
@@ -1012,7 +1057,7 @@ class KinescopePlayerView(
     }
 
     private fun updateBuffering() {
-        val player = kinescopePlayer?.exoPlayer
+        val player = localExoPlayer
         val waitingForFirstPlayback = player != null && !hasStartedPlayback && player.playWhenReady
         val showBufferingSpinner = isBufferingSpinnerVisible()
 
@@ -1299,7 +1344,7 @@ class KinescopePlayerView(
     }
 
     private fun isPlaybackPaused(): Boolean {
-        val player = kinescopePlayer?.exoPlayer ?: return false
+        val player = activePlaybackPlayer ?: return false
         return !player.playWhenReady &&
             player.playbackState != Player.STATE_ENDED &&
             player.playbackState != Player.STATE_IDLE
@@ -1882,6 +1927,7 @@ class KinescopePlayerView(
                 KinescopeSettingsView.Parameter.Subtitles,
                 showControls && options.showSubtitlesButton && !video?.subtitles.isNullOrEmpty(),
             )
+            updateAudioTracksSettingsVisibility(showControls)
             settingsMenuView?.setParameterVisible(
                 KinescopeSettingsView.Parameter.Attachments,
                 showControls && options.showAttachments && !video?.attachments.isNullOrEmpty(),
@@ -2076,7 +2122,7 @@ class KinescopePlayerView(
         overlay.animate().cancel()
         overlay.isVisible = true
         updateMobileBackgroundGradients(animated = animated, controlsVisible = true)
-        applySubtitleStyle()
+        applySubtitleStyle(controlsVisibleOverride = true)
         updateAll()
         if (!animated) {
             overlay.alpha = 1f
@@ -2088,7 +2134,7 @@ class KinescopePlayerView(
             .alpha(1f)
             .setDuration(CONTROL_OVERLAY_FADE_DURATION_MS)
             .withEndAction {
-                applySubtitleStyle()
+                applySubtitleStyle(controlsVisibleOverride = true)
                 scheduleControlOverlayAutoHide()
             }
             .start()
@@ -2103,7 +2149,7 @@ class KinescopePlayerView(
         overlay.animate().cancel()
         updatePlayPauseButton()
         updateMobileBackgroundGradients(animated = animated, controlsVisible = false)
-        applySubtitleStyle()
+        applySubtitleStyle(controlsVisibleOverride = false)
         if (!animated) {
             overlay.isVisible = false
             overlay.alpha = 1f
@@ -2174,6 +2220,10 @@ class KinescopePlayerView(
                 options = getSettingsMenuSubtitlesOptions(),
             )
             setParameterOptions(
+                parameter = KinescopeSettingsView.Parameter.AudioTracks,
+                options = getSettingsMenuAudioTrackOptions(),
+            )
+            setParameterOptions(
                 parameter = KinescopeSettingsView.Parameter.Attachments,
                 options = getSettingsMenuAttachmentsOptions(),
             )
@@ -2196,7 +2246,7 @@ class KinescopePlayerView(
                     id = index,
                     title = variant.name,
                     isSelected = kotlin.math.abs(
-                        (kinescopePlayer?.exoPlayer?.playbackSpeed ?: 1f) - variant.speed,
+                        (localExoPlayer?.playbackSpeed ?: 1f) - variant.speed,
                     ) < 0.01f,
                 )
             }
@@ -2250,6 +2300,8 @@ class KinescopePlayerView(
 
             is KinescopeSettingsView.Parameter.Subtitles -> applySubtitlesSelection(optionId)
 
+            is KinescopeSettingsView.Parameter.AudioTracks -> applyAudioTrackSelection(optionId)
+
             is KinescopeSettingsView.Parameter.Attachments ->
                 getVideo()?.attachments?.getOrNull(optionId)?.let { attachment ->
                     onAttachmentSelected?.invoke(attachment)
@@ -2261,48 +2313,80 @@ class KinescopePlayerView(
     }
 
     private fun updateSettingsMenuCurrentValues() {
-        settingsMenuView?.setParameterCurrentValue(
-            parameter = KinescopeSettingsView.Parameter.PlaybackSpeed,
-            value = playbackSpeedVariants
-                .find { variant ->
-                    kotlin.math.abs(
-                        variant.speed - (kinescopePlayer?.exoPlayer?.playbackSpeed ?: 1f),
-                    ) < 0.01f
-                }
-                ?.name
-                .orEmpty(),
-        )
-        settingsMenuView?.setParameterCurrentValue(
-            parameter = KinescopeSettingsView.Parameter.VideoQuality,
-            value = when {
-                trackController?.isAudioOnlyQuality == true ->
-                    context.getString(R.string.settings_video_quality_audio_only)
+        settingsMenuView?.runBatchUpdate {
+            applySettingsMenuCurrentValues()
+        }
+    }
 
-                trackController?.isAutoQuality == true ->
-                    context.getString(
-                        R.string.settings_video_quality_variant_auto_caption,
-                        kinescopePlayer?.exoPlayer?.videoSize?.height.toString(),
-                    )
-
-                else -> trackController?.selectedQualityVariant?.name.orEmpty()
-            },
-        )
+    private fun applySettingsMenuCurrentValues() {
         settingsMenuView?.setParameterCurrentValue(
-            parameter = KinescopeSettingsView.Parameter.Subtitles,
-            value = getSubtitlesCurrentValueLabel(),
+                parameter = KinescopeSettingsView.Parameter.PlaybackSpeed,
+                value = playbackSpeedVariants
+                    .find { variant ->
+                        kotlin.math.abs(
+                            variant.speed - (localExoPlayer?.playbackSpeed ?: 1f),
+                        ) < 0.01f
+                    }
+                    ?.name
+                    .orEmpty(),
+            )
+            settingsMenuView?.setParameterCurrentValue(
+                parameter = KinescopeSettingsView.Parameter.VideoQuality,
+                value = when {
+                    trackController?.isAudioOnlyQuality == true ->
+                        context.getString(R.string.settings_video_quality_audio_only)
+
+                    trackController?.isAutoQuality == true ->
+                        context.getString(
+                            R.string.settings_video_quality_variant_auto_caption,
+                            localExoPlayer?.videoSize?.height.toString(),
+                        )
+
+                    else -> trackController?.selectedQualityVariant?.name.orEmpty()
+                },
+            )
+            settingsMenuView?.setParameterCurrentValue(
+                parameter = KinescopeSettingsView.Parameter.Subtitles,
+                value = getSubtitlesCurrentValueLabel(),
+            )
+            settingsMenuView?.setParameterCurrentValue(
+                parameter = KinescopeSettingsView.Parameter.AudioTracks,
+                value = trackController?.currentAudioLabel().orEmpty(),
+            )
+            settingsMenuView?.setParameterOptions(
+                parameter = KinescopeSettingsView.Parameter.PlaybackSpeed,
+                options = getSettingsMenuPlaybackSpeedOptions(),
+            )
+            settingsMenuView?.setParameterOptions(
+                parameter = KinescopeSettingsView.Parameter.VideoQuality,
+                options = getSettingsMenuVideoQualityOptions(),
+            )
+            settingsMenuView?.setParameterOptions(
+                parameter = KinescopeSettingsView.Parameter.Subtitles,
+                options = getSettingsMenuSubtitlesOptions(),
+            )
+            settingsMenuView?.setParameterOptions(
+                parameter = KinescopeSettingsView.Parameter.AudioTracks,
+                options = getSettingsMenuAudioTrackOptions(),
         )
-        settingsMenuView?.setParameterOptions(
-            parameter = KinescopeSettingsView.Parameter.PlaybackSpeed,
-            options = getSettingsMenuPlaybackSpeedOptions(),
+    }
+
+    private fun updateAudioTracksSettingsVisibility(showControls: Boolean? = null) {
+        val options = kinescopePlayer?.kinescopePlayerOptions
+        val controlsVisible = showControls ?: (options?.controls != false)
+        settingsMenuView?.setParameterVisible(
+            KinescopeSettingsView.Parameter.AudioTracks,
+            controlsVisible &&
+                options?.showAudioTracksInSettings != false &&
+                trackController?.hasMultipleAudioTracks == true,
         )
-        settingsMenuView?.setParameterOptions(
-            parameter = KinescopeSettingsView.Parameter.VideoQuality,
-            options = getSettingsMenuVideoQualityOptions(),
-        )
-        settingsMenuView?.setParameterOptions(
-            parameter = KinescopeSettingsView.Parameter.Subtitles,
-            options = getSettingsMenuSubtitlesOptions(),
-        )
+    }
+
+    private fun getSettingsMenuAudioTrackOptions(): List<KinescopeSettingsOption> =
+        trackController?.buildAudioOptions().orEmpty()
+
+    private fun applyAudioTrackSelection(optionId: Int) {
+        trackController?.applyAudioSelection(optionId)
     }
 
     private fun getSubtitlesCurrentValueLabel(): String {
@@ -2335,11 +2419,14 @@ class KinescopePlayerView(
     }
 
     private fun shouldShowPauseButton(): Boolean {
-        return kinescopePlayer?.exoPlayer != null && kinescopePlayer!!.exoPlayer!!.playbackState != Player.STATE_ENDED && kinescopePlayer!!.exoPlayer!!.playbackState != Player.STATE_IDLE && kinescopePlayer!!.exoPlayer!!.playWhenReady
+        val player = activePlaybackPlayer ?: return false
+        return player.playbackState != Player.STATE_ENDED &&
+            player.playbackState != Player.STATE_IDLE &&
+            player.playWhenReady
     }
 
     private fun shouldShowReplayButton(): Boolean {
-        return kinescopePlayer?.exoPlayer != null && kinescopePlayer!!.exoPlayer!!.playbackState == Player.STATE_ENDED
+        return activePlaybackPlayer?.playbackState == Player.STATE_ENDED
     }
 
     private fun setUIListeners() {
@@ -2373,7 +2460,7 @@ class KinescopePlayerView(
 
         liveDataView?.setOnClickListener {
             if (!isLiveSynced) {
-                kinescopePlayer?.exoPlayer?.let {
+                localExoPlayer?.let {
                     it.seekTo(it.duration)
                     isLiveSynced = true
                 }
@@ -2382,7 +2469,7 @@ class KinescopePlayerView(
     }
 
     private fun updateTimeline() {
-        val player: Player = kinescopePlayer?.exoPlayer ?: return
+        val player: Player = activePlaybackPlayer ?: return
 
         currentWindowOffset = 0
         var durationUs: Long = 0
@@ -2413,7 +2500,7 @@ class KinescopePlayerView(
         if (!isAttachedToWindow) {
             return
         }
-        val player: Player? = kinescopePlayer?.exoPlayer
+        val player: Player? = activePlaybackPlayer
 
         if (isLiveState) {
             timeBar?.let { bar ->
@@ -2596,10 +2683,12 @@ class KinescopePlayerView(
     }
 
 
-    private fun applySubtitleStyle() {
+    private fun applySubtitleStyle(controlsVisibleOverride: Boolean? = null) {
         val subtitleView = this.subtitleView ?: return
         subtitleView.visibility = View.VISIBLE
-        val controlsVisible = controlView?.isVisible == true && (controlView?.alpha ?: 0f) > 0f
+        val controlsVisible = controlsVisibleOverride ?: (
+            controlView?.isVisible == true && (controlView?.alpha ?: 0f) > 0f
+            )
         val bg = (subtitleStyle.bgColor and 0x00FFFFFF) or
             ((subtitleStyle.bgOpacityPercent * 255 / 100) shl 24)
         val roboto = ResourcesCompat.getFont(context, R.font.roboto_regular)
@@ -2691,7 +2780,7 @@ class KinescopePlayerView(
         if (!shouldApplyProgressiveSubtitles()) {
             return
         }
-        val player = kinescopePlayer?.exoPlayer ?: return
+        val player = localExoPlayer ?: return
         val intervalMs = if (player.isPlaying) {
             SUBTITLE_PROGRESS_UPDATE_INTERVAL_MS.toLong()
         } else {
@@ -2712,7 +2801,7 @@ class KinescopePlayerView(
     }
 
     private fun applyProgressiveSubtitles() {
-        val player = kinescopePlayer?.exoPlayer
+        val player = localExoPlayer
         if (player == null) {
             subtitleView?.setCues(emptyList())
             pendingCueGroup = null
@@ -2824,7 +2913,7 @@ class KinescopePlayerView(
     }
 
     private fun getAnalyticsArguments() =
-        kinescopePlayer?.exoPlayer.getAnalyticsArguments(
+        localExoPlayer.getAnalyticsArguments(
             volume = audioManager.currentVolumeInPercent,
             isFullscreen = isVideoFullscreen,
         )
@@ -2836,6 +2925,11 @@ class KinescopePlayerView(
     }
     fun hideAllControls(){
         controlView?.isVisible = false
+    }
+
+    /** Поднимает/опускает progressive-субтитры при показе Compose-контролов. */
+    fun syncSubtitleChromeForControls(controlsVisible: Boolean) {
+        applySubtitleStyle(controlsVisibleOverride = controlsVisible)
     }
 
     private fun hidePipOverlays() {

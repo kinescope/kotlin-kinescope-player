@@ -41,4 +41,5 @@ fun KinescopePlayerOptions.syncLegacyChromeFlags() {
     showDuration = controls
     showPlaybackSpeedInSettings = playbackRate && controls
     showAudioOnlyQualityInSettings = controls
+    showAudioTracksInSettings = controls
 }

@@ -49,7 +49,7 @@ class KinescopeQualityManager(
                 trackSelector.parameters =
                     trackSelector.parameters
                         .buildUpon()
-                        .clearOverrides()
+                        .clearOverridesOfType(C.TRACK_TYPE_VIDEO)
                         .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, false)
                         .build()
             }
@@ -60,7 +60,7 @@ class KinescopeQualityManager(
                 trackSelector.parameters =
                     trackSelector.parameters
                         .buildUpon()
-                        .clearOverrides()
+                        .clearOverridesOfType(C.TRACK_TYPE_VIDEO)
                         .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, true)
                         .build()
             }
@@ -74,7 +74,7 @@ class KinescopeQualityManager(
                             trackSelector.parameters =
                                 trackSelector.parameters
                                     .buildUpon()
-                                    .clearOverrides()
+                                    .clearOverridesOfType(C.TRACK_TYPE_VIDEO)
                                     .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, false)
                                     .addOverride(override)
                                     .build()
