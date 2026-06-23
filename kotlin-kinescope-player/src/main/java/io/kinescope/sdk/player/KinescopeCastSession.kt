@@ -9,7 +9,6 @@ import androidx.media3.common.util.UnstableApi
 import androidx.mediarouter.media.MediaRouter
 import com.google.android.gms.cast.framework.CastContext
 import io.kinescope.sdk.cast.KinescopeCastController
-import io.kinescope.sdk.cast.KinescopeCastState
 import io.kinescope.sdk.cast.toCastData
 import io.kinescope.sdk.view.KinescopeCastUiHelper
 import io.kinescope.sdk.view.KinescopePlayerView
@@ -42,9 +41,8 @@ class KinescopeCastSession(
 
     private val refreshRunnable = object : Runnable {
         override fun run() {
-            val controller = castController ?: return
-            if (!controller.currentState.isCasting) return
-            controller.refresh()
+            if (!player().isCasting) return
+            allPlayerViews().forEach { it.refreshCastOverlay() }
             mainHandler.postDelayed(this, CAST_REFRESH_MS)
         }
     }
@@ -59,7 +57,7 @@ class KinescopeCastSession(
         get() = castController != null
 
     val isCasting: Boolean
-        get() = castController?.currentState?.isCasting == true
+        get() = player().isCasting
 
     fun attach() {
         if (attached) return
@@ -77,7 +75,6 @@ class KinescopeCastSession(
         val controller = KinescopeCastController(context).also { castController = it }
         controller.onSessionAvailable = { onCastSessionStarted() }
         controller.onSessionUnavailable = { onCastSessionEnded() }
-        controller.setStateListener(::onCastStateChanged)
 
         allPlayerViews().forEach { view ->
             view.setCastSupported(true)
@@ -151,6 +148,7 @@ class KinescopeCastSession(
         videoPlayer.getVideo()?.toCastData()?.let { controller.load(it, positionMs) }
         videoPlayer.exoPlayer?.pause()
         videoPlayer.switchToCastPlayer(controller.castPlayer)
+        showCastOverlayOnAllViews()
         mainHandler.post(refreshRunnable)
     }
 
@@ -167,22 +165,11 @@ class KinescopeCastSession(
         allPlayerViews().forEach { it.hideCastOverlay() }
     }
 
-    private fun onCastStateChanged(state: KinescopeCastState) {
+    private fun showCastOverlayOnAllViews() {
+        val deviceName = castContext?.sessionManager?.currentCastSession?.castDevice?.friendlyName
         allPlayerViews().forEach { view ->
-            if (state.isCasting) {
-                view.showCastOverlay(
-                    state = state,
-                    onPlayPause = { castController?.playPause() },
-                    onSeek = { fraction ->
-                        val duration = state.durationMs
-                        if (duration > 0) {
-                            castController?.seekTo((fraction * duration).toLong())
-                        }
-                    },
-                    onStop = { castController?.stopCasting() },
-                )
-            } else {
-                view.hideCastOverlay()
+            view.showCastOverlay(deviceName) {
+                castController?.stopCasting()
             }
         }
     }

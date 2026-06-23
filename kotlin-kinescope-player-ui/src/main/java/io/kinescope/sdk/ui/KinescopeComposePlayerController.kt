@@ -16,6 +16,9 @@ class KinescopeComposePlayerController(
     private val stateController: KinescopePlayerStateController,
 ) {
     val uiState = stateController.uiState
+    val positionState = stateController.positionState
+
+    var onTrackSelectionChanged: ((qualityId: Int, subtitleId: String, audioTrackId: Int) -> Unit)? = null
 
     val subtitleStyleState = mutableStateOf(SubtitleStyle())
     val cuesState = mutableStateOf<List<Cue>>(emptyList())
@@ -38,13 +41,22 @@ class KinescopeComposePlayerController(
 
     fun setSpeed(speed: Float) = stateController.setSpeed(speed)
 
-    fun setQuality(id: Int) = stateController.setQuality(id)
+    fun setQuality(id: Int) {
+        stateController.setQuality(id)
+        notifyTrackSelectionChanged()
+    }
 
-    fun selectSubtitle(id: String) = stateController.selectSubtitle(id)
+    fun selectSubtitle(id: String) {
+        stateController.selectSubtitle(id)
+        notifyTrackSelectionChanged()
+    }
 
     fun toggleSubtitles() = stateController.toggleSubtitles()
 
-    fun selectAudioTrack(id: Int) = stateController.selectAudioTrack(id)
+    fun selectAudioTrack(id: Int) {
+        stateController.selectAudioTrack(id)
+        notifyTrackSelectionChanged()
+    }
 
     fun refreshPositions() = stateController.refreshPositions()
 
@@ -72,6 +84,15 @@ class KinescopeComposePlayerController(
 
     fun resetSubtitleStyle() {
         subtitleStyleState.value = SubtitleStyle()
+    }
+
+    private fun notifyTrackSelectionChanged() {
+        val state = stateController.uiState.value
+        onTrackSelectionChanged?.invoke(
+            state.selectedQualityId,
+            state.selectedSubtitleId,
+            state.selectedAudioTrackId,
+        )
     }
 }
 

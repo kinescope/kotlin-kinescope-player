@@ -48,3 +48,7 @@ playerView.applyTemplateOptions()
 ## View switching
 
 `KinescopePlayerHost` and `KinescopePlayerView.switchTargetView` let you swap the active `Player` between local ExoPlayer and the cast session without losing UI state.
+
+**Compose:** cast overlay reads `PlayerUiState` from the active `Player`.
+
+**View/XML:** `KinescopeCastSession` switches `KinescopePlayerHost` and `KinescopePlayerView.refreshCastOverlay()` reads position/duration/play state from the active `Player` (not a separate `KinescopeCastState`).

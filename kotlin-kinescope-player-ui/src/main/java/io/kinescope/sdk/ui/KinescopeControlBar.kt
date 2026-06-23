@@ -67,6 +67,7 @@ fun KinescopeControlBar(
     onScrubChange: (Boolean) -> Unit = {},
 ) {
     val state by controller.uiState.collectAsStateWithLifecycle()
+    val position by controller.positionState.collectAsStateWithLifecycle()
     val colors = playerColors()
     val slots = playerSlots()
     var scrub by remember { mutableStateOf<Float?>(null) }
@@ -92,7 +93,7 @@ fun KinescopeControlBar(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (expandAnim < 1f) {
-            val shownMs = scrub?.let { (it * state.durationMs).toLong() } ?: state.positionMs
+            val shownMs = scrub?.let { (it * position.durationMs).toLong() } ?: position.positionMs
             Row(
                 modifier = Modifier
                     .graphicsLayer { alpha = 1f - expandAnim }
@@ -125,7 +126,7 @@ fun KinescopeControlBar(
                         ),
                 ) {
                     Text(
-                        text = " / ${formatPlayerTime(state.durationMs)}",
+                        text = " / ${formatPlayerTime(position.durationMs)}",
                         color = colors.textSecondary,
                         fontSize = 14.sp,
                         lineHeight = 21.sp,
@@ -147,8 +148,8 @@ fun KinescopeControlBar(
             val regionW = constraints.maxWidth.toFloat()
             if (expandAnim < 1f) {
                 Timeline(
-                    progress = state.progress,
-                    buffered = state.bufferedProgress,
+                    progress = position.progress,
+                    buffered = position.bufferedProgress,
                     scrub = scrub,
                     accentColor = colors.timelinePlayed,
                     bufferedColor = colors.timelineBuffered,
@@ -157,7 +158,7 @@ fun KinescopeControlBar(
                         if ((scrub != null) != (f != null)) onScrubChange(f != null)
                         scrub = f
                     },
-                    onSeek = { frac -> controller.seekTo((frac * state.durationMs).toLong()) },
+                    onSeek = { frac -> controller.seekTo((frac * position.durationMs).toLong()) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.CenterStart)

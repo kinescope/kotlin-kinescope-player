@@ -25,7 +25,7 @@ setContent {
             videoId = "your-video-id",
             fullscreen = isFullscreen,
             onFullscreenToggle = { isFullscreen = !isFullscreen },
-            castController = castSession?.controller,
+            onStopCast = { castSession?.controller?.stopCasting() },
             onVideoLoaded = { /* restore position, autoplay, etc. */ },
         )
     }
@@ -38,9 +38,9 @@ setContent {
 
 | Type | Role |
 |------|------|
-| `KinescopePlayerStateController` | Bridges `KinescopeVideoPlayer` → `StateFlow<PlayerUiState>` |
+| `KinescopePlayerStateController` | Bridges `KinescopeVideoPlayer` → `StateFlow<PlayerUiState>` + hot `PlayerPositionState` |
 | `KinescopeComposePlayerController` | Compose-friendly wrapper (`uiState`, track/quality actions) |
-| `KinescopePlayerViewModel` | Optional: `SavedStateHandle` for video id, position, quality, subtitle track |
+| `KinescopePlayerViewModel` | Optional: `SavedStateHandle` for video id, position, quality, subtitle track, audio track |
 
 ```kotlin
 val viewModel: KinescopePlayerViewModel by viewModels { /* factory with playerFactory */ }
@@ -65,7 +65,11 @@ KinescopePlayerTheme(
 
 ## Chromecast
 
-Use `KinescopeComposeCastSession` (from the core module) and pass `castController` into `KinescopePlayerScreen`. Cast overlay and local/cast player switching are handled automatically.
+Use `KinescopeComposeCastSession` (from the core module) and pass `onStopCast` into `KinescopePlayerScreen`. Playback position, duration, play/pause and device name come from `PlayerUiState` via the active `Player` (`KinescopePlayerHost`); only stopping the session goes through the cast session controller.
+
+```kotlin
+onStopCast = { castSession?.controller?.stopCasting() }
+```
 
 ## Subtitles
 

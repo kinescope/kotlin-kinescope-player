@@ -112,7 +112,11 @@ class ComposePlayerActivity : ComponentActivity() {
                     videoId = videoId,
                     fullscreen = isVideoFullscreen,
                     modifier = Modifier.fillMaxSize(),
-                    castController = castSession?.controller,
+                    onStopCast = { castSession?.controller?.stopCasting() },
+                    restoreQualityId = viewModel.savedQualityId(),
+                    restoreSubtitleId = viewModel.savedSubtitleId(),
+                    restoreAudioTrackId = viewModel.savedAudioTrackId(),
+                    onTrackSelectionPersist = viewModel::persistTrackSelection,
                     onFullscreenToggle = { setFullscreen(!isVideoFullscreen) },
                     onVideoLoaded = { viewModel.restorePlaybackIfNeeded() },
                 )

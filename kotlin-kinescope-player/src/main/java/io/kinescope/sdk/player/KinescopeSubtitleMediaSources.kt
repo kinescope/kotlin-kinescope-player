@@ -1,7 +1,6 @@
 package io.kinescope.sdk.player
 
 import android.net.Uri
-import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -39,9 +38,6 @@ internal object KinescopeSubtitleMediaSources {
         .createMediaSource(
             MediaItem.Builder()
                 .setUri(Uri.parse(dashLink))
-                .setDrmConfiguration(
-                    MediaItem.DrmConfiguration.Builder(C.WIDEVINE_UUID).build(),
-                )
                 .setMimeType(MimeTypes.APPLICATION_MPD)
                 .build(),
         )

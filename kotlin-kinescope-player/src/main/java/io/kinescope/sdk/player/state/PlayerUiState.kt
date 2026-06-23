@@ -40,6 +40,7 @@ data class PlayerUiState(
     val hasStarted: Boolean = false,
     val hasEnded: Boolean = false,
     val isCasting: Boolean = false,
+    val castDeviceName: String? = null,
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
     val bufferedMs: Long = 0L,

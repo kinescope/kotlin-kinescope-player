@@ -25,6 +25,7 @@ import android.widget.LinearLayout
 import android.widget.PopupWindow
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.annotation.ColorInt
 import androidx.annotation.DrawableRes
 import androidx.appcompat.content.res.AppCompatResources
@@ -77,7 +78,7 @@ import io.kinescope.sdk.settings.KinescopeSettingsOption
 import io.kinescope.sdk.settings.KinescopeSettingsView
 import io.kinescope.sdk.settings.SubtitleStyle
 import io.kinescope.sdk.settings.qualityBadgeForVariant
-import io.kinescope.sdk.cast.KinescopeCastState
+import io.kinescope.sdk.player.state.PlaybackBufferingWatchdog
 import io.kinescope.sdk.utils.formatLiveStartDate
 import io.kinescope.sdk.utils.formatPlayerTime
 import kotlin.math.roundToInt
@@ -275,8 +276,22 @@ class KinescopePlayerView(
     private var castStopView: View? = null
     private var castSupported = false
     private var castRouteAvailable = false
-    private var castOverlaySeekListener: ((Float) -> Unit)? = null
+    private var isCastOverlayVisible = false
     private var isUpdatingCastSeekBar = false
+    private val playbackBufferingWatchdog = PlaybackBufferingWatchdog()
+    private var playbackStallDispatched = false
+
+    /** Optional callback when buffering exceeds [PlaybackBufferingWatchdog.TIMEOUT_MS]. */
+    var onPlaybackStallListener: ((String) -> Unit)? = null
+
+    private val bufferingWatchdogRunnable: Runnable = object : Runnable {
+        override fun run() {
+            evaluatePlaybackBufferingWatchdog()
+            if (activePlaybackPlayer?.playbackState == Player.STATE_BUFFERING) {
+                postDelayed(this, PlaybackBufferingWatchdog.POLL_MS)
+            }
+        }
+    }
 
     private var isVideoFullscreen = false
         set(value) {
@@ -532,6 +547,7 @@ class KinescopePlayerView(
 
             updateBuffering()
             updatePlayPauseButton()
+            syncPlaybackBufferingWatchdog(playbackState)
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -539,6 +555,9 @@ class KinescopePlayerView(
             if (isPlaying) {
                 hasStartedPlayback = true
                 hidePoster()
+            }
+            if (isCastOverlayVisible) {
+                refreshCastOverlay()
             }
             progressiveSubtitleOverlay?.setAdvancementEnabled(isPlaying)
             if (isPlaying) {
@@ -718,8 +737,10 @@ class KinescopePlayerView(
         castStopView = findViewById(R.id.kinescope_cast_stop_tv)
         castSeekBar?.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser && !isUpdatingCastSeekBar) {
-                    castOverlaySeekListener?.invoke(progress / 1000f)
+                if (!fromUser || isUpdatingCastSeekBar || !isCastOverlayVisible) return
+                val duration = activePlaybackPlayer?.duration ?: return
+                if (duration > 0) {
+                    kinescopePlayer?.seekToPosition((progress / 1000f * duration).toLong())
                 }
             }
 
@@ -793,12 +814,17 @@ class KinescopePlayerView(
         Assertions.checkState(Looper.myLooper() == Looper.getMainLooper())
         if (this.kinescopePlayer === kinescopePlayer) return
         detachPlayerBindings()
+        removeCallbacks(bufferingWatchdogRunnable)
+        playbackBufferingWatchdog.reset()
         hasStartedPlayback = false
         pendingCueGroup = null
         learnedCueDurationUs = C.TIME_UNSET
         stopSubtitleUpdates()
         subtitleView?.setCues(emptyList())
         progressiveSubtitleOverlay?.clear()
+        playbackBufferingWatchdog.reset()
+        playbackStallDispatched = false
+        removeCallbacks(bufferingWatchdogRunnable)
         this.kinescopePlayer = kinescopePlayer
 
         kinescopePlayer?.exoPlayer?.let { player ->
@@ -2759,6 +2785,12 @@ class KinescopePlayerView(
         }
         applyProgressiveSubtitles()
 
+        if (isCastOverlayVisible) {
+            refreshCastOverlay()
+        }
+
+        evaluatePlaybackBufferingWatchdog()
+
         // Cancel any pending updates and schedule a new one if necessary.
         removeCallbacks(updateProgressRunnable)
         val playbackState = player?.playbackState ?: Player.STATE_IDLE
@@ -3242,25 +3274,31 @@ class KinescopePlayerView(
     }
 
     fun showCastOverlay(
-        state: KinescopeCastState,
-        onPlayPause: () -> Unit,
-        onSeek: (Float) -> Unit,
-        onStop: () -> Unit,
+        deviceName: String?,
+        onStopCast: () -> Unit,
     ) {
+        isCastOverlayVisible = true
         castOverlayView?.isVisible = true
-        castOverlaySeekListener = onSeek
 
-        val deviceLabel = state.deviceName ?: context.getString(R.string.player_cast_device_unknown)
+        val deviceLabel = deviceName ?: context.getString(R.string.player_cast_device_unknown)
         castDeviceView?.text = context.getString(R.string.player_cast_device, deviceLabel)
 
-        castPlayPauseView?.setImageResource(
-            if (state.isPlaying) R.drawable.ic_pause else R.drawable.ic_play,
-        )
-        castPlayPauseView?.setOnClickListener { onPlayPause() }
-        castStopView?.setOnClickListener { onStop() }
+        castPlayPauseView?.setOnClickListener { toggleCastPlayback() }
+        castStopView?.setOnClickListener { onStopCast() }
 
-        val duration = state.durationMs
-        val position = state.positionMs
+        refreshCastOverlay()
+    }
+
+    fun refreshCastOverlay() {
+        if (!isCastOverlayVisible) return
+        val player = activePlaybackPlayer ?: return
+
+        castPlayPauseView?.setImageResource(
+            if (player.isPlaying) R.drawable.ic_pause else R.drawable.ic_play,
+        )
+
+        val duration = player.duration
+        val position = player.currentPosition
         val showSeek = duration > 0
         castSeekBar?.isVisible = showSeek
         castPositionView?.isVisible = showSeek
@@ -3276,10 +3314,59 @@ class KinescopePlayerView(
     }
 
     fun hideCastOverlay() {
+        isCastOverlayVisible = false
         castOverlayView?.isVisible = false
-        castOverlaySeekListener = null
         castPlayPauseView?.setOnClickListener(null)
         castStopView?.setOnClickListener(null)
+    }
+
+    private fun toggleCastPlayback() {
+        val videoPlayer = kinescopePlayer ?: return
+        if (activePlaybackPlayer?.isPlaying == true) {
+            videoPlayer.pause()
+        } else {
+            videoPlayer.play()
+        }
+        refreshCastOverlay()
+    }
+
+    private fun syncPlaybackBufferingWatchdog(playbackState: Int) {
+        when (playbackState) {
+            Player.STATE_BUFFERING -> {
+                playbackBufferingWatchdog.onBufferingStarted(
+                    activePlaybackPlayer?.currentPosition?.coerceAtLeast(0L) ?: 0L,
+                )
+                removeCallbacks(bufferingWatchdogRunnable)
+                postDelayed(bufferingWatchdogRunnable, PlaybackBufferingWatchdog.POLL_MS)
+            }
+            else -> {
+                playbackBufferingWatchdog.onBufferingStopped()
+                removeCallbacks(bufferingWatchdogRunnable)
+            }
+        }
+    }
+
+    private fun evaluatePlaybackBufferingWatchdog() {
+        val player = activePlaybackPlayer ?: return
+        if (player.playbackState != Player.STATE_BUFFERING || playbackStallDispatched) return
+        val positionMs = if (isLiveState) {
+            player.currentPosition
+        } else {
+            currentWindowOffset + player.contentPosition
+        }
+        val message = playbackBufferingWatchdog.evaluate(
+            isBuffering = true,
+            positionMs = positionMs,
+            hasActiveError = false,
+        ) ?: return
+        playbackStallDispatched = true
+        kinescopePlayer?.pause()
+        val listener = onPlaybackStallListener
+        if (listener != null) {
+            listener(message)
+        } else {
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        }
     }
 
 }

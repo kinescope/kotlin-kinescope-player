@@ -89,10 +89,6 @@ class KinescopeVideoPlayer(
             .setLoadErrorHandlingPolicy(KinescopeErrorHandlingPolicy())
             .createMediaSource(
                 videoBuilder
-                    .setDrmConfiguration(
-                        MediaItem.DrmConfiguration.Builder(C.WIDEVINE_UUID)
-                            .build()
-                    )
                     .setMimeType(MimeTypes.APPLICATION_MPD)
                     .setTag(null)
                     .build()
@@ -318,6 +314,10 @@ class KinescopeVideoPlayer(
         val player = playbackPlayer ?: return
         player.seekTo(player.contentPosition + toMilliSeconds)
         KinescopeLogger.log(KinescopeLoggerLevel.PLAYER, "seek to ${toMilliSeconds / 1000} seconds")
+    }
+
+    fun seekToPosition(positionMs: Long) {
+        playbackPlayer?.seekTo(positionMs.coerceAtLeast(0L))
     }
 
     fun moveForward() {

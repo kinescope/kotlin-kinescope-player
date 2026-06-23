@@ -56,6 +56,7 @@ class CustomPlayerActivity : AppCompatActivity() {
     private lateinit var pipSession: KinescopePictureInPictureSession
     private var suppressUiCallbacks = false
     private var selectedTemplate: KinescopePlayerTemplate? = null
+    private var hasRequestedVideo = false
 
     private lateinit var textSelectedTemplate: TextView
     private lateinit var buttonUpdateTemplate: MaterialButton
@@ -82,7 +83,7 @@ class CustomPlayerActivity : AppCompatActivity() {
         bindViews()
         setupSpinners()
 
-        player = KinescopeVideoPlayer(applicationContext)
+        player = KinescopeVideoPlayer(this)
         playerView = findViewById(R.id.kinescope_player)
         fullscreenPlayerView = findViewById(R.id.kinescope_player_fullscreen)
         settingsScrollView = findViewById(R.id.settings_scroll_view)
@@ -127,11 +128,21 @@ class CustomPlayerActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
-        player.loadVideo(KinescopeDemoConfig.DEFAULT_VIDEO_ID, onSuccess = { video ->
-            if (video != null && player.kinescopePlayerOptions.autoplay) {
-                player.play()
-            }
-        })
+        if (hasRequestedVideo) return
+        hasRequestedVideo = true
+        player.loadVideo(
+            KinescopeDemoConfig.DEFAULT_VIDEO_ID,
+            onSuccess = { video ->
+                if (video != null) {
+                    player.play()
+                }
+            },
+            onFailed = { error ->
+                val detail = error?.message?.takeIf { it.isNotBlank() }
+                val message = detail ?: getString(R.string.custom_player_video_load_error)
+                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+            },
+        )
     }
 
     override fun onStop() {

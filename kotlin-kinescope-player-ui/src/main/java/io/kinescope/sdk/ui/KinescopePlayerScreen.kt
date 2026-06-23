@@ -57,11 +57,10 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.util.UnstableApi
 import io.kinescope.sdk.ui.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import io.kinescope.sdk.cast.KinescopeCastState
-import io.kinescope.sdk.cast.KinescopeCastController
 import io.kinescope.sdk.player.KinescopeVideoPlayer
 import io.kinescope.sdk.view.KinescopePlayerView
 import io.kinescope.sdk.settings.SubtitleStyle
+import io.kinescope.sdk.utils.formatPlayerTime
 import kotlinx.coroutines.delay
 
 private const val DOUBLE_TAP_SEEK_STREAK_WINDOW_MS = 1500L
@@ -79,7 +78,11 @@ fun KinescopePlayerScreen(
     videoId: String,
     fullscreen: Boolean = false,
     modifier: Modifier = Modifier,
-    castController: KinescopeCastController? = null,
+    onStopCast: () -> Unit = {},
+    restoreQualityId: Int? = null,
+    restoreSubtitleId: String? = null,
+    restoreAudioTrackId: Int? = null,
+    onTrackSelectionPersist: (qualityId: Int, subtitleId: String, audioTrackId: Int) -> Unit = { _, _, _ -> },
     onFullscreenToggle: () -> Unit = {},
     onPipClick: () -> Unit = {},
     onVideoLoaded: () -> Unit = {},
@@ -88,11 +91,6 @@ fun KinescopePlayerScreen(
     val state by controller.uiState.collectAsStateWithLifecycle()
     val colors = playerColors()
     val slots = playerSlots()
-    var castState by remember { mutableStateOf(KinescopeCastState()) }
-    DisposableEffect(castController) {
-        castController?.setStateListener { castState = it }
-        onDispose { castController?.setStateListener(null) }
-    }
     var controlsVisible by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var loadAttempt by remember { mutableStateOf(0) }
@@ -108,12 +106,9 @@ fun KinescopePlayerScreen(
     val currentHasStarted by rememberUpdatedState(state.hasStarted)
     val currentControlsVisible by rememberUpdatedState(controlsVisible)
 
-
-    LaunchedEffect(castState.isCasting) {
-        while (castState.isCasting) {
-            castController?.refresh()
-            delay(1000)
-        }
+    DisposableEffect(controller, onTrackSelectionPersist) {
+        controller.onTrackSelectionChanged = onTrackSelectionPersist
+        onDispose { controller.onTrackSelectionChanged = null }
     }
 
     DisposableEffect(controller) {
@@ -121,11 +116,21 @@ fun KinescopePlayerScreen(
         onDispose { controller.detach() }
     }
 
-    LaunchedEffect(state.isPlaying) {
-        while (state.isPlaying) {
-            controller.refreshPositions()
-            delay(500)
+    var trackRestoreApplied by remember { mutableStateOf(false) }
+    LaunchedEffect(
+        state.isReady,
+        restoreQualityId,
+        restoreSubtitleId,
+        restoreAudioTrackId,
+    ) {
+        if (trackRestoreApplied || !state.isReady) return@LaunchedEffect
+        if (restoreQualityId == null && restoreSubtitleId == null && restoreAudioTrackId == null) {
+            return@LaunchedEffect
         }
+        restoreQualityId?.let(controller::setQuality)
+        restoreSubtitleId?.let(controller::selectSubtitle)
+        restoreAudioTrackId?.let(controller::selectAudioTrack)
+        trackRestoreApplied = true
     }
 
     LaunchedEffect(videoId, loadAttempt) {
@@ -463,15 +468,20 @@ fun KinescopePlayerScreen(
             }
         }
 
-        if (castState.isCasting) {
+        if (state.isCasting) {
             CastOverlay(
-                deviceName = castState.deviceName,
-                isPlaying = castState.isPlaying,
-                positionMs = castState.positionMs,
-                durationMs = castState.durationMs,
-                onPlayPause = { castController?.playPause() },
-                onSeek = { frac -> castController?.seekTo((frac * castState.durationMs).toLong()) },
-                onStop = { castController?.stopCasting() },
+                deviceName = state.castDeviceName,
+                isPlaying = state.isPlaying,
+                positionMs = state.positionMs,
+                durationMs = state.durationMs,
+                onPlayPause = { controller.playPause() },
+                onSeek = { fraction ->
+                    val duration = state.durationMs
+                    if (duration > 0) {
+                        controller.seekTo((fraction * duration).toLong())
+                    }
+                },
+                onStop = onStopCast,
             )
         }
     }
@@ -569,7 +579,7 @@ private fun CastSeekBar(positionMs: Long, durationMs: Long, onSeek: (Float) -> U
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
-            text = castFormatTime(positionMs),
+            text = formatPlayerTime(positionMs),
             color = colors.textPrimary,
             fontSize = 14.sp, lineHeight = 21.sp, fontFamily = RobotoFontFamily,
         )
@@ -600,18 +610,11 @@ private fun CastSeekBar(positionMs: Long, durationMs: Long, onSeek: (Float) -> U
             )
         }
         Text(
-            text = castFormatTime(durationMs),
+            text = formatPlayerTime(durationMs),
             color = colors.textPrimary,
             fontSize = 14.sp, lineHeight = 21.sp, fontFamily = RobotoFontFamily,
         )
     }
-}
-
-private fun castFormatTime(ms: Long): String {
-    if (ms <= 0) return "0:00"
-    val total = ms / 1000
-    val h = total / 3600; val m = (total % 3600) / 60; val s = total % 60
-    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
 }
 
 @Composable

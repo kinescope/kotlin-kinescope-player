@@ -26,6 +26,7 @@
     <string name="custom_player_save_error">Failed to save template</string>
     <string name="custom_player_pick_template_title">Select template</string>
     <string name="custom_player_load_error">Failed to load templates</string>
+    <string name="custom_player_video_load_error">Failed to load video</string>
     <string name="custom_player_template_applied">Template applied: %1$s</string>
     <string name="custom_player_invalid_color">Invalid HEX color</string>
     <string name="custom_player_no_template_selected">No template selected</string>

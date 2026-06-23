@@ -9,6 +9,7 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import com.google.android.gms.cast.framework.CastContext
 import io.kinescope.sdk.player.KinescopeVideoPlayer
 import io.kinescope.sdk.player.quality.KinescopeQualityVariant
 import io.kinescope.sdk.player.quality.getQualityVariantsList
@@ -27,7 +28,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.Locale
-import kotlin.math.abs
 
 @OptIn(UnstableApi::class)
 class KinescopePlayerStateController(
@@ -36,9 +36,13 @@ class KinescopePlayerStateController(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
+    private val _positionState = MutableStateFlow(PlayerPositionState())
+    val positionState: StateFlow<PlayerPositionState> = _positionState.asStateFlow()
 
     private var trackController: TrackController? = null
     private var positionTickerJob: Job? = null
+    private var bufferingWatchdogJob: Job? = null
+    private val bufferingWatchdog = PlaybackBufferingWatchdog()
     private var hostListener: ((Player) -> Unit)? = null
 
     private val localExoPlayer: ExoPlayer?
@@ -59,7 +63,7 @@ class KinescopePlayerStateController(
                     hasStarted = state.hasStarted || isPlaying,
                 )
             }
-            updatePositionTicker(isPlaying)
+            updatePositionTicker(isPlaying || player.isCasting)
         }
 
         override fun onTracksChanged(tracks: Tracks) {
@@ -100,6 +104,9 @@ class KinescopePlayerStateController(
     fun detach() {
         positionTickerJob?.cancel()
         positionTickerJob = null
+        bufferingWatchdogJob?.cancel()
+        bufferingWatchdogJob = null
+        bufferingWatchdog.reset()
         player.getOrCreatePlayerHost()?.let { host ->
             if (host.onActivePlayerChanged === hostListener) {
                 host.onActivePlayerChanged = null
@@ -118,6 +125,7 @@ class KinescopePlayerStateController(
 
     fun clearError() {
         _uiState.update { it.copy(error = null) }
+        bufferingWatchdog.reset()
     }
 
     fun playPause() {
@@ -178,15 +186,25 @@ class KinescopePlayerStateController(
 
     fun refreshPositions() {
         val playback = activePlayer ?: return
+        val positionMs = playback.currentPosition.coerceAtLeast(0L)
+        val bufferedMs = playback.bufferedPosition.coerceAtLeast(0L)
+        val durationMs = playback.duration.coerceAtLeast(0L)
+        _positionState.value = PlayerPositionState(
+            positionMs = positionMs,
+            durationMs = durationMs,
+            bufferedMs = bufferedMs,
+        )
         _uiState.update {
             it.copy(
-                positionMs = playback.currentPosition.coerceAtLeast(0L),
-                bufferedMs = playback.bufferedPosition.coerceAtLeast(0L),
-                durationMs = playback.duration.coerceAtLeast(0L),
+                positionMs = positionMs,
+                bufferedMs = bufferedMs,
+                durationMs = durationMs,
                 speed = playback.playbackParameters.speed,
                 isCasting = player.isCasting,
+                castDeviceName = if (player.isCasting) resolveCastDeviceName() else null,
             )
         }
+        evaluateBufferingWatchdog(positionMs)
     }
 
     fun refreshVideoMetadata() {
@@ -204,19 +222,67 @@ class KinescopePlayerStateController(
         playback.addListener(listener)
         syncPlaybackState(playback.playbackState)
         refreshPositions()
+        updatePositionTicker(_uiState.value.isPlaying || player.isCasting)
     }
 
     private fun syncPlaybackState(playbackState: Int) {
-        val ready = playbackState == Player.STATE_READY || playbackState == Player.STATE_BUFFERING
+        val isBuffering = playbackState == Player.STATE_BUFFERING
+        if (isBuffering && !_uiState.value.isBuffering) {
+            bufferingWatchdog.onBufferingStarted(
+                activePlayer?.currentPosition?.coerceAtLeast(0L) ?: 0L,
+            )
+            startBufferingWatchdog()
+        } else if (!isBuffering) {
+            bufferingWatchdog.onBufferingStopped()
+            bufferingWatchdogJob?.cancel()
+            bufferingWatchdogJob = null
+        }
+        val ready = playbackState == Player.STATE_READY || isBuffering
         _uiState.update { state ->
             state.copy(
                 isReady = ready,
-                isBuffering = playbackState == Player.STATE_BUFFERING,
+                isBuffering = isBuffering,
                 hasEnded = playbackState == Player.STATE_ENDED,
                 durationMs = activePlayer?.duration?.coerceAtLeast(0L) ?: state.durationMs,
                 error = if (playbackState == Player.STATE_READY) null else state.error,
             )
         }
+    }
+
+    private fun startBufferingWatchdog() {
+        bufferingWatchdogJob?.cancel()
+        bufferingWatchdogJob = scope.launch {
+            while (isActive && _uiState.value.isBuffering && _uiState.value.error == null) {
+                delay(PlaybackBufferingWatchdog.POLL_MS)
+                evaluateBufferingWatchdog(activePlayer?.currentPosition?.coerceAtLeast(0L) ?: 0L)
+            }
+        }
+    }
+
+    private fun evaluateBufferingWatchdog(positionMs: Long) {
+        val stallMessage = bufferingWatchdog.evaluate(
+            isBuffering = _uiState.value.isBuffering,
+            positionMs = positionMs,
+            hasActiveError = _uiState.value.error != null,
+        ) ?: return
+        _uiState.update {
+            it.copy(
+                error = PlayerError.Load(stallMessage),
+                isBuffering = false,
+            )
+        }
+        bufferingWatchdogJob?.cancel()
+        bufferingWatchdogJob = null
+    }
+
+    private fun resolveCastDeviceName(): String? {
+        return runCatching {
+            CastContext.getSharedInstance(player.context)
+                .sessionManager
+                .currentCastSession
+                ?.castDevice
+                ?.friendlyName
+        }.getOrNull()
     }
 
     private fun refreshTracks(tracks: Tracks) {
@@ -292,13 +358,23 @@ class KinescopePlayerStateController(
 
     private fun updatePositionTicker(isPlaying: Boolean) {
         positionTickerJob?.cancel()
-        if (!isPlaying) return
+        if (!isPlaying && !_uiState.value.isCasting) return
         positionTickerJob = scope.launch {
             while (isActive) {
                 refreshPositions()
+                if (!_uiState.value.isPlaying && !_uiState.value.isCasting) break
                 val speed = _uiState.value.speed.coerceAtLeast(0.25f)
-                delay((1000f / speed).toLong().coerceIn(200L, 1000L))
+                val delayMs = if (_uiState.value.isCasting) {
+                    CAST_POSITION_REFRESH_MS
+                } else {
+                    (1000f / speed).toLong().coerceIn(200L, 1000L)
+                }
+                delay(delayMs)
             }
         }
+    }
+
+    private companion object {
+        private const val CAST_POSITION_REFRESH_MS = 1_000L
     }
 }
