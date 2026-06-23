@@ -3,6 +3,7 @@ package io.kinescope.sdk.ui
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
@@ -82,7 +83,7 @@ fun KinescopeControlBar(
     var expanded by remember { mutableStateOf(false) }
     val expandAnim by animateFloatAsState(
         targetValue = if (expanded) 1f else 0f,
-        animationSpec = tween(durationMillis = 120, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 75, easing = LinearOutSlowInEasing),
         label = "bar-expand",
     )
 
@@ -175,7 +176,7 @@ fun KinescopeControlBar(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .graphicsLayer {
-                            translationX = 56.dp.toPx() * (1f - expandAnim)
+                            translationX = 40.dp.toPx() * (1f - expandAnim)
                             alpha = expandAnim
                         },
                 ) {
@@ -221,7 +222,11 @@ fun BarIcon(
     val colors = playerColors()
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val pressScale by animateFloatAsState(if (pressed) 1.15f else 1f, label = "bar-press")
+    val pressScale by animateFloatAsState(
+        targetValue = if (pressed) 1.08f else 1f,
+        animationSpec = tween(durationMillis = 90, easing = FastOutSlowInEasing),
+        label = "bar-press",
+    )
     Box(
         modifier = modifier
             .size(28.dp)
@@ -336,13 +341,24 @@ fun CcBarIcon(active: Boolean, onClick: () -> Unit) {
 @Composable
 fun PosterPlayButton(modifier: Modifier = Modifier, onClick: () -> Unit) {
     val colors = playerColors()
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (pressed) 1.08f else 1f,
+        animationSpec = tween(durationMillis = 90, easing = FastOutSlowInEasing),
+        label = "poster-press",
+    )
     Box(
         modifier = modifier
             .size(72.dp)
+            .graphicsLayer {
+                scaleX = pressScale
+                scaleY = pressScale
+            }
             .clip(CircleShape)
             .background(colors.playButtonFill)
             .clickable(
-                interactionSource = remember { MutableInteractionSource() },
+                interactionSource = interaction,
                 indication = null,
                 onClick = onClick,
             ),

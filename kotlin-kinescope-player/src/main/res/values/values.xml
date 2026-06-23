@@ -5,6 +5,10 @@
     <dimen name="kinescope_media_button_height">36dp</dimen>
     <dimen name="kinescope_media_button_width">36dp</dimen>
     <dimen name="kinescope_play_pause_size">56dp</dimen>
+    <!-- Inset so morph glyph matches visual weight of ic_play/ic_pause (70dp, viewport 32). -->
+    <dimen name="kinescope_play_pause_glyph_inset">11dp</dimen>
+    <!-- Rewind has more viewport margin than morph paths; use a smaller inset. -->
+    <dimen name="kinescope_play_pause_rewind_glyph_inset">5dp</dimen>
     <dimen name="kinescope_settings_row_height">36dp</dimen>
     <dimen name="kinescope_settings_popup_width">280dp</dimen>
     <dimen name="kinescope_settings_popup_max_height">368dp</dimen>

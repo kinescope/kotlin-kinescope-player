@@ -1,6 +1,8 @@
 package io.kinescope.sdk.ui
 
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.graphics.ExperimentalAnimationGraphicsApi
 import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
@@ -38,7 +40,11 @@ fun PlayPauseMorph(
 
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val pressScale by animateFloatAsState(if (pressed) 1.15f else 1f, label = "press-scale")
+    val pressScale by animateFloatAsState(
+        targetValue = if (pressed) 1.08f else 1f,
+        animationSpec = tween(durationMillis = 90, easing = FastOutSlowInEasing),
+        label = "press-scale",
+    )
 
     Box(
         modifier = modifier

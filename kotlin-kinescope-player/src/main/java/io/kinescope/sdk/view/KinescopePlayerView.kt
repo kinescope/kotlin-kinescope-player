@@ -148,7 +148,7 @@ class KinescopePlayerView(
         private const val MOBILE_TEXT_SHADOW_COLOR = 0xA3000000.toInt()
         private const val MOBILE_BACKGROUND_GRADIENT_HEIGHT_PX = 120f
         private const val MOBILE_BACKGROUND_REFERENCE_HEIGHT_PX = 432f
-        private const val OPTIONS_BAR_ANIMATION_DURATION_MS = 280L
+        private const val OPTIONS_BAR_ANIMATION_DURATION_MS = 150L
         private const val SUBTITLE_PROGRESS_UPDATE_INTERVAL_MS = 16
         private const val SUBTITLE_SIZE_FRACTION_OF_HEIGHT = 0.062f
         private val optionsBarAnimationInterpolator = DecelerateInterpolator()
@@ -227,7 +227,8 @@ class KinescopePlayerView(
     private var timeBar: KinescopeTimeBar? = null
 
     private var buttonsContainer: ViewGroup? = null
-    private var playPauseButton: ImageButton? = null
+    private var playPauseButton: KinescopePlayPauseMorphView? = null
+    private var lastCenterPauseShown: Boolean? = null
     private var optionsButton: View? = null
     private var optionsDotsButton: View? = null
     private var pictureInPictureButton: View? = null
@@ -2215,7 +2216,12 @@ class KinescopePlayerView(
     }
 
     private fun tintControlIcon(view: View?, @ColorInt color: Int) {
-        (view as? android.widget.ImageView)?.setColorFilter(color, PorterDuff.Mode.SRC_IN)
+        when (view) {
+            is KinescopePlayPauseMorphView -> view.applyIconTint(color)
+            is android.widget.ImageView -> {
+                view.imageTintList = android.content.res.ColorStateList.valueOf(color)
+            }
+        }
     }
 
     private fun updateTitles() {
@@ -2251,14 +2257,6 @@ class KinescopePlayerView(
         return doubleTapSeekStreakCount * DOUBLE_TAP_SEEK_SECONDS
     }
 
-    private fun centerPlayIconRes(): Int {
-        return when {
-            shouldShowReplayButton() -> R.drawable.ic_controls_rewind
-            shouldShowPauseButton() -> R.drawable.ic_pause
-            else -> R.drawable.ic_play
-        }
-    }
-
     private fun updatePlayPauseButton() {
         if (isPictureInPictureActive) {
             playPauseButton?.isVisible = false
@@ -2266,9 +2264,28 @@ class KinescopePlayerView(
         }
         val showControls = kinescopePlayer?.kinescopePlayerOptions?.controls ?: true
         val showCenterPlayControl = shouldShowCenterPlayControl(showControls)
-        playPauseButton?.isVisible = showCenterPlayControl
-        if (showCenterPlayControl) {
-            playPauseButton?.setImageResource(centerPlayIconRes())
+        val button = playPauseButton
+        button?.isVisible = showCenterPlayControl
+        if (!showCenterPlayControl || button == null) {
+            return
+        }
+        when {
+            shouldShowReplayButton() -> {
+                if (!button.isShowingReplay()) {
+                    button.showReplay()
+                }
+                lastCenterPauseShown = null
+            }
+
+            else -> {
+                val pause = shouldShowPauseButton()
+                val leavingReplay = button.isShowingReplay()
+                if (leavingReplay || lastCenterPauseShown != pause) {
+                    val animate = !leavingReplay && lastCenterPauseShown != null
+                    button.setPlaying(pause, animated = animate)
+                    lastCenterPauseShown = pause
+                }
+            }
         }
     }
 
