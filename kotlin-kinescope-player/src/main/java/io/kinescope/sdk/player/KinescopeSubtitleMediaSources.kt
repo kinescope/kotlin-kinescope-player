@@ -38,6 +38,7 @@ internal object KinescopeSubtitleMediaSources {
         .createMediaSource(
             MediaItem.Builder()
                 .setUri(Uri.parse(dashLink))
+                .applyKinescopeWidevineDrm()
                 .setMimeType(MimeTypes.APPLICATION_MPD)
                 .build(),
         )

@@ -13,7 +13,6 @@ import io.kinescope.demo.subtitles.SubtitlesActivity
 import io.kinescope.demo.drm.DrmViewingActivity
 import io.kinescope.demo.offlinedrm.OfflineDrmDemoActivity
 import io.kinescope.demo.shorts.ShortsActivity
-import io.kinescope.demo.compose.ComposePlayerActivity
 
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -31,7 +30,6 @@ class MainActivity : AppCompatActivity() {
         val btnLive = findViewById<MaterialButton>(R.id.btn_live)
         val btnShorts = findViewById<MaterialButton>(R.id.btn_shorts)
         val btnOfflineDrm = findViewById<MaterialButton>(R.id.btn_offline_drm)
-        val btnComposePlayer = findViewById<MaterialButton>(R.id.btn_compose_player)
 
         btnPlaylist.setOnClickListener {
             val intent =  Intent(this, PlaylistActivity::class.java)
@@ -67,10 +65,6 @@ class MainActivity : AppCompatActivity() {
 
         btnOfflineDrm.setOnClickListener {
             startActivity(Intent(this, OfflineDrmDemoActivity::class.java))
-        }
-
-        btnComposePlayer.setOnClickListener {
-            startActivity(Intent(this, ComposePlayerActivity::class.java))
         }
     }
 

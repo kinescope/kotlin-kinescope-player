@@ -51,17 +51,11 @@ android {
     }
     buildFeatures {
         viewBinding true
-        compose true
-    }
-
-    composeOptions {
-        kotlinCompilerExtensionVersion '1.5.14'
     }
 }
 
 dependencies {
     implementation project(path: ':kotlin-kinescope-player')
-    implementation project(path: ':kotlin-kinescope-player-ui')
     //implementation project (path: ':io.kinescope.sdk')
     implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -87,12 +81,4 @@ dependencies {
     implementation "com.google.guava:guava:31.1-android"
     implementation "androidx.viewpager2:viewpager2:1.0.0"
     implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2"
-
-    def composeBom = platform('androidx.compose:compose-bom:2024.06.00')
-    implementation composeBom
-    implementation 'androidx.activity:activity-compose:1.9.0'
-    implementation 'androidx.compose.ui:ui'
-    implementation 'androidx.compose.foundation:foundation'
-    implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7'
-    implementation 'androidx.lifecycle:lifecycle-viewmodel-savedstate:2.8.7'
 }

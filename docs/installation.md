@@ -20,17 +20,4 @@ dependencies {
 }
 ```
 
-One dependency includes the player, Shorts (`io.kinescope.sdk.shorts`), and the offline download pipeline. `VideoDownloadService` and required permissions are merged from the library manifest.
-
-### Compose UI (optional)
-
-For Jetpack Compose controls, add the UI module:
-
-```groovy
-dependencies {
-    implementation 'com.github.kinescope:kotlin-kinescope-player:<LATEST_VERSION>'
-    implementation 'com.github.kinescope:kotlin-kinescope-player-ui:<LATEST_VERSION>'
-}
-```
-
-See [compose-ui.md](compose-ui.md).
+See [features.md](features.md) for what is included in the dependency.

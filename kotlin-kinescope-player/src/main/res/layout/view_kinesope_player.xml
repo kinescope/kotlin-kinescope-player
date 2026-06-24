@@ -20,6 +20,15 @@
             app:surface_type="surface_view"
             app:use_controller="false" />
 
+        <ImageView
+            android:id="@+id/poster_iv"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@android:color/black"
+            android:clickable="false"
+            android:focusable="false"
+            android:visibility="gone" />
+
         <androidx.media3.ui.SubtitleView
             android:id="@+id/kinescope_subtitle_view"
             android:layout_width="match_parent"
@@ -57,15 +66,6 @@
             layout="@layout/view_kinescope_player_control"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
-
-        <ImageView
-            android:id="@+id/poster_iv"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:background="@android:color/black"
-            android:clickable="true"
-            android:focusable="true"
-            android:visibility="gone" />
 
         <include
             android:id="@+id/view_buffering"

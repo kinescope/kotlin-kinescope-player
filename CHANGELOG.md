@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.0.9] — 22.06.2026
+## [0.0.9] — 24.06.2026
 
 ### Playback & reliability
 - **Lifecycle** — `bindLifecycle()` pauses on `onStop`, resumes on `onStart`; skipped while PiP is active; `release()` on `onDestroy`
@@ -9,8 +9,7 @@
 - **View switching** — `KinescopePlayerHost` for swapping active `Player` (local ↔ cast); `switchTargetView` for fullscreen without losing state
 
 ### Added (UI & integration)
-- **Compose UI module** (`kotlin-kinescope-player-ui`) — `KinescopePlayerScreen`, `KinescopePlayerTheme`, `KinescopeComposePlayerController`, `KinescopePlayerViewModel`, double-tap seek overlay, mobile header/footer gradients
-- **State bridge** — `KinescopePlayerStateController`, `PlayerUiState` (`StateFlow`) for headless/Compose integrations
+- **State bridge** — `KinescopePlayerStateController`, `PlayerUiState` (`StateFlow`) for headless integrations
 - **Background audio** — `KinescopePlaybackService` (Media3 session)
 - **Settings menu** — nested UI: quality, playback speed, subtitle tracks, subtitle appearance (`SubtitleStyle`)
 - **Dependencies** — `media3-cast`, Play Services Cast Framework; `KinescopeCastOptionsProvider` merged from library manifest

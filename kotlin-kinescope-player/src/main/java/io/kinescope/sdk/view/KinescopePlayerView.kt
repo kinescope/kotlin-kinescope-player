@@ -521,9 +521,6 @@ class KinescopePlayerView(
 
                     Player.STATE_BUFFERING -> {
                         analyticsManager.buffering()
-                        if (!hasStartedPlayback && activePlaybackPlayer?.playWhenReady == true) {
-                            hidePoster()
-                        }
                     }
 
                     Player.STATE_READY -> {
@@ -917,8 +914,8 @@ class KinescopePlayerView(
 
     /**
      * Sets the poster image.
-     * Poster will be automatically hidden once the buffering started.
-     * For the live stream it will be hidden once the video is ready.
+     * Poster is hidden once playback actually starts.
+     * For live streams it is hidden once the video is ready.
      * @param url Image url
      * @param placeholder Will be shown while image is loading.
      * @param errorPlaceholder Will be shown if image loading failed.
@@ -931,9 +928,10 @@ class KinescopePlayerView(
         onLoadFinished: ((isSuccess: Boolean) -> Unit)? = null,
     ) {
         with(activePlaybackPlayer?.playbackState) {
-            if ((!isLiveState && this == Player.STATE_BUFFERING) ||
-                (isLiveState && this == Player.STATE_READY)
-            ) {
+            if (isLiveState && this == Player.STATE_READY) {
+                return
+            }
+            if (!isLiveState && this == Player.STATE_BUFFERING && hasStartedPlayback) {
                 return
             }
         }
@@ -947,12 +945,11 @@ class KinescopePlayerView(
                     onLoadFinished?.invoke(isSuccess)
                 })
                 .into(it)
+            updateBuffering()
         }
     }
 
-    /**
-     * Hides the poster image. If video buffering has started, calling this method will do nothing.
-     */
+    /** Hides the poster image. */
     fun hidePoster() {
         posterView?.isVisible = false
     }
@@ -1063,13 +1060,6 @@ class KinescopePlayerView(
         if (hasStartedPlayback || !isVideoLoaded()) {
             return
         }
-        val player = localExoPlayer
-        if (!isLiveState &&
-            player?.playbackState == Player.STATE_BUFFERING &&
-            player.playWhenReady
-        ) {
-            return
-        }
         getVideo()?.poster?.url?.let(::showPoster)
     }
 
@@ -1098,8 +1088,9 @@ class KinescopePlayerView(
 
         bufferingView?.let { overlay ->
             overlay.isVisible = showBufferingSpinner
+            val posterVisible = posterView?.isVisible == true
             overlay.setBackgroundColor(
-                if (waitingForFirstPlayback) {
+                if (waitingForFirstPlayback && !posterVisible) {
                     android.graphics.Color.BLACK
                 } else {
                     android.graphics.Color.TRANSPARENT

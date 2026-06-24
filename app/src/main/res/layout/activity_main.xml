@@ -70,12 +70,6 @@
             style="@style/DemoAccentButton"
             android:layout_marginTop="25dp"
             android:text="Offline viewing" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_compose_player"
-            style="@style/DemoAccentButton"
-            android:layout_marginTop="25dp"
-            android:text="Compose player" />
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

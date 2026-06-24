@@ -89,6 +89,7 @@ class KinescopeVideoPlayer(
             .setLoadErrorHandlingPolicy(KinescopeErrorHandlingPolicy())
             .createMediaSource(
                 videoBuilder
+                    .applyKinescopeWidevineDrm()
                     .setMimeType(MimeTypes.APPLICATION_MPD)
                     .setTag(null)
                     .build()
