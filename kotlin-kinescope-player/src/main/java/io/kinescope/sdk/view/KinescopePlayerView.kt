@@ -85,9 +85,20 @@ import kotlin.math.roundToInt
 
 
 @UnstableApi
-class KinescopePlayerView(
-    context: Context, attrs:
-    AttributeSet?
+class KinescopePlayerView @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null,
+    /**
+     * Render the video into a TextureView instead of the default SurfaceView.
+     *
+     * SurfaceView (default) is required for secure/Widevine L1 playback and is
+     * generally cheaper, but its pixels are NOT captured in the system
+     * Picture-in-Picture enter animation — the OS shows a placeholder (often the
+     * app icon) during the shrink. A TextureView lives in the normal view
+     * hierarchy, so the actual video frame animates smoothly into PiP. Use it
+     * only for non-DRM content where a clean PiP transition matters.
+     */
+    private val useTextureSurface: Boolean = false,
 ) : ConstraintLayout(context, attrs) {
     companion object {
         /**
@@ -669,7 +680,11 @@ class KinescopePlayerView(
     }
 
     init {
-        inflate(context, R.layout.view_kinesope_player, this)
+        inflate(
+            context,
+            if (useTextureSurface) R.layout.view_kinesope_player_texture else R.layout.view_kinesope_player,
+            this,
+        )
         bindRootLayoutConstraints()
         exoPlayerView = findViewById(R.id.view_exoplayer)
         subtitleView = findViewById(R.id.kinescope_subtitle_view)

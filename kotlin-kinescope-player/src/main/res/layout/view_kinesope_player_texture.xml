@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<merge xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="wrap_content"
+    android:layout_height="match_parent">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#000000"
+        android:clipChildren="false">
+
+        <androidx.media3.ui.PlayerView
+            android:id="@+id/view_exoplayer"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            app:animation_enabled="false"
+            app:resize_mode="fit"
+            app:show_buffering="never"
+            app:surface_type="texture_view"
+            app:use_controller="false" />
+
+        <ImageView
+            android:id="@+id/poster_iv"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@android:color/black"
+            android:clickable="false"
+            android:focusable="false"
+            android:visibility="gone" />
+
+        <androidx.media3.ui.SubtitleView
+            android:id="@+id/kinescope_subtitle_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:importantForAccessibility="no" />
+
+        <include
+            layout="@layout/view_progressive_subtitle_overlay" />
+
+        <View
+            android:id="@+id/kinescope_mobile_header_gradient"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/kinescope_mobile_background_gradient_height"
+            android:layout_gravity="top"
+            android:background="@drawable/bg_player_gradient_header_mobile"
+            android:importantForAccessibility="no"
+            android:visibility="gone" />
+
+        <View
+            android:id="@+id/kinescope_mobile_footer_gradient"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/kinescope_mobile_background_gradient_height"
+            android:layout_gravity="bottom"
+            android:background="@drawable/bg_player_gradient_footer_mobile"
+            android:importantForAccessibility="no"
+            android:visibility="gone" />
+
+        <io.kinescope.sdk.view.KinesopeSeekView
+            android:id="@+id/kinescope_seek_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <include
+            android:id="@+id/view_control"
+            layout="@layout/view_kinescope_player_control"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <include
+            android:id="@+id/view_buffering"
+            layout="@layout/view_kinescope_buffering"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:elevation="16dp" />
+
+        <include
+            android:id="@+id/kinescope_cast_overlay_container"
+            layout="@layout/view_kinescope_cast_overlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:elevation="20dp" />
+
+        <LinearLayout
+            android:id="@+id/live_start_date_ll"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:layout_marginStart="16dp"
+            android:layout_marginBottom="16dp"
+            android:background="@drawable/bg_live_stream_start"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="8dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@drawable/ic_live" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/live_its_starting_soon"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:textStyle="normal" />
+
+                <TextView
+                    android:id="@+id/live_start_date_tv"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <io.kinescope.sdk.settings.KinescopeSettingsView
+            android:id="@+id/settings_menu"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipChildren="true"
+            android:clipToPadding="true" />
+
+    </FrameLayout>
+
+</merge>
+
