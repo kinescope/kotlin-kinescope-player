@@ -136,6 +136,26 @@ class KinescopeVideoPlayer(
         exoPlayer?.prepare()
     }
 
+    /**
+     * Play a **local** (or any progressive) source by [uri] instead of a
+     * Kinescope media id — e.g. a `content://` file in the upload-confirmation
+     * preview. Mirrors [setVideo]: sets the media item, fires [onSourceChanged]
+     * so an attached `KinescopePlayerView` runs its post-load chrome update
+     * (hide poster, show play/pause), applies playback options and prepares.
+     *
+     * No DASH/HLS factory — local files are progressive, so a plain
+     * [MediaItem] is used. Quality / subtitle menus stay empty (a local file
+     * has no Kinescope renditions); hide them via the `setShow*` toggles.
+     */
+    fun setLocalSource(uri: Uri, autoplay: Boolean = false) {
+        currentKinescopeVideo = null
+        onSourceChanged?.invoke(uri.toString(), null)
+        exoPlayer?.setMediaItem(MediaItem.fromUri(uri))
+        applyPlaybackOptions()
+        exoPlayer?.playWhenReady = autoplay
+        exoPlayer?.prepare()
+    }
+
     fun applyPlaybackOptions() {
         exoPlayer?.let { player ->
             player.volume = if (kinescopePlayerOptions.muted) 0f else 1f
