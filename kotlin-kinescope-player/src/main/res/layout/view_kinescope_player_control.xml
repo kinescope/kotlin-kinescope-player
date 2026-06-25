@@ -8,6 +8,7 @@
     android:layout_gravity="bottom"
     android:background="@color/kinescope_control_overlay_scrim"
     android:clickable="false"
+    android:clipChildren="false"
     android:layoutDirection="ltr"
     android:orientation="vertical"
     tools:targetApi="28">
@@ -55,8 +56,8 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
         android:baselineAligned="false"
-        android:clipChildren="true"
-        android:clipToPadding="true"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
@@ -151,19 +152,49 @@
 
         </LinearLayout>
 
-        <io.kinescope.sdk.view.KinescopeTimeBar
-            android:id="@+id/kinescope_progress"
+        <FrameLayout
+            android:id="@+id/kinescope_progress_container"
             android:layout_width="0dp"
             android:layout_height="@dimen/kinescope_progress_control_height"
             android:layout_gravity="center_vertical"
             android:layout_weight="1"
-            app:bar_height="@dimen/kinescope_progress_bar_height"
-            app:played_color="@color/kinescope_primary_color"
-            app:scrubber_color="@color/kinescope_primary_color"
-            app:scrubber_disabled_size="0dp"
-            app:scrubber_dragged_size="0dp"
-            app:scrubber_enabled_size="0dp"
-            app:touch_target_height="@dimen/kinescope_progress_touch_target_height" />
+            android:clipChildren="false"
+            android:clipToPadding="false">
+
+            <io.kinescope.sdk.view.KinescopeTimeBar
+                android:id="@+id/kinescope_progress"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_gravity="center_vertical"
+                app:bar_height="@dimen/kinescope_progress_bar_height"
+                app:played_color="@color/kinescope_primary_color"
+                app:scrubber_color="@color/kinescope_primary_color"
+                app:scrubber_disabled_size="0dp"
+                app:scrubber_dragged_size="0dp"
+                app:scrubber_enabled_size="0dp"
+                app:touch_target_height="@dimen/kinescope_progress_touch_target_height" />
+
+            <TextView
+                android:id="@+id/scrub_chapter_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|start"
+                android:elevation="4dp"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:maxWidth="@dimen/kinescope_caption_max_width"
+                android:paddingLeft="@dimen/kinescope_caption_padding_horizontal"
+                android:paddingTop="@dimen/kinescope_caption_padding_vertical"
+                android:paddingRight="@dimen/kinescope_caption_padding_horizontal"
+                android:paddingBottom="@dimen/kinescope_caption_padding_vertical"
+                android:textColor="@color/white"
+                android:textSize="14sp"
+                android:visibility="gone"
+                tools:text="Chapter 1"
+                tools:visibility="visible" />
+
+        </FrameLayout>
 
         <Space
             android:id="@+id/kinescope_control_bar_end_spacer"
@@ -219,6 +250,14 @@
                             android:visibility="gone" />
 
                     </LinearLayout>
+
+                    <ImageButton
+                        android:id="@+id/kinescope_chapters"
+                        style="@style/KinescopeMediaButton"
+                        android:contentDescription="@string/player_chapters"
+                        android:layout_marginStart="@dimen/kinescope_control_section_gap"
+                        android:src="@drawable/ic_chapters"
+                        android:visibility="gone" />
 
                     <ImageButton
                         android:id="@+id/kinescope_cast"

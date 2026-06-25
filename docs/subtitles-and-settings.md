@@ -32,13 +32,13 @@ For DASH videos, external tracks (VTT, TTML, SRT) are merged via `MergingMediaSo
 | `kinescope_caption_padding_horizontal` | 8 dp | Padding inside the caption box |
 | `kinescope_caption_max_width` | 280 dp | Reference width (text uses available space between margins) |
 
-### Compose integration
+### Custom UI
 
-In `KinescopePlayerScreen`, progressive subtitles come from the embedded `KinescopePlayerView`. Subtitle vertical position follows Compose control visibility via `KinescopePlayerView.syncSubtitleChromeForControls(controlsVisible)`.
+For custom chrome (controls hidden via `KinescopePlayerOptions`), call `KinescopePlayerView.syncSubtitleChromeForControls(controlsVisible)` so captions follow your own overlay visibility.
 
 ## Subtitle appearance
 
-Appearance is controlled via `SubtitleStyle` on `KinescopePlayerView` (or `KinescopeComposePlayerController.subtitleStyleState` in Compose):
+Appearance is controlled via `SubtitleStyle` on `KinescopePlayerView`:
 
 - Font colour and size (`fontSizePercent`)
 - Background colour and opacity (`bgColor`, `bgOpacityPercent`)
@@ -62,4 +62,4 @@ playerView.applyTemplateOptions()
 | `showPlaybackSpeedInSettings` | `true` | Speed submenu |
 | `showAudioOnlyQualityInSettings` | `true` | Audio-only quality option |
 
-See also [Player options](player-options.md) and [Compose UI](compose-ui.md).
+See also [Player options](player-options.md).

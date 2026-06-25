@@ -18,7 +18,8 @@ object KinescopeDemoConfig {
     const val DRM_VIDEO_ID = "eNWM8F6wbVTVa8fBeR66y6"
 
     /** Video with subtitles — Subtitles test screen. */
-    const val SUBTITLES_VIDEO_ID = "4CCHqgs4MkL33akyL7jJtS"
+    const val SUBTITLES_VIDEO_ID = "mMLazQrkPgThuhB7kkzQ69"
+    //"4CCHqgs4MkL33akyL7jJtS"
 
     /** Default live stream ID when the Live test input is empty. */
     const val DEFAULT_LIVE_ID = "aLJgR9TJfe2EUBejpH5Fuo"

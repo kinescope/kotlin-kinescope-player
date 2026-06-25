@@ -24,6 +24,9 @@
     <string name="player_background_playback_channel">Background playback</string>
     <string name="player_background_playback_title">Kinescope playback</string>
 
+    <string name="player_chapters">Chapters</string>
+    <string name="player_chapters_title">Chapters</string>
+
     <string name="settings_parameter_playback_speed">Speed</string>
     <string name="settings_parameter_video_quality">Quality</string>
     <string name="settings_parameter_picture_in_picture">Picture in picture</string>

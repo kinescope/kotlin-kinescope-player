@@ -171,6 +171,8 @@ class KinescopeTimeBar @JvmOverloads constructor(
     private var bufferedPosition: Long = 0
     private var scrubVisualExpanded = false
     private val scrubBarCornerRadiusPx: Float
+    private var chapterStartTimesMs: LongArray = longArrayOf()
+    private val chapterGapPx: Float
 
     //private var adGroupCount = 0
     //private var adGroupTimesMs: LongArray? = null
@@ -203,6 +205,7 @@ class KinescopeTimeBar @JvmOverloads constructor(
         val displayMetrics = res.displayMetrics
         density = displayMetrics.density
         scrubBarCornerRadiusPx = dpToPx(density, SCRUB_BAR_CORNER_RADIUS_DP).toFloat()
+        chapterGapPx = res.getDimension(R.dimen.kinescope_progress_chapter_gap)
         fineScrubYThreshold = dpToPx(
             density,
             FINE_SCRUB_Y_THRESHOLD_DP
@@ -528,6 +531,15 @@ class KinescopeTimeBar @JvmOverloads constructor(
         update()
     }
 
+    fun setChapterStartTimesMs(timesMs: List<Long>) {
+        val sorted = timesMs.filter { it >= 0 }.distinct().sorted()
+        if (chapterStartTimesMs.contentEquals(sorted.toLongArray())) {
+            return
+        }
+        chapterStartTimesMs = sorted.toLongArray()
+        invalidate(seekBounds)
+    }
+
     override fun getPreferredUpdateDelay(): Long {
         val timeBarWidthDp: Int = pxToDp(density, progressBar.width())
         return if (timeBarWidthDp == 0 || duration == 0L || duration == C.TIME_UNSET) Long.MAX_VALUE else duration / timeBarWidthDp
@@ -844,21 +856,100 @@ class KinescopeTimeBar @JvmOverloads constructor(
         val right = progressBar.right.toFloat()
         val cornerRadius = currentBarCornerRadius(progressBarHeight)
 
-        drawBarSegment(canvas, left, right, barTop, barBottom, cornerRadius, unplayedPaint)
-
         if (duration <= 0) {
+            drawBarSegment(canvas, left, right, barTop, barBottom, cornerRadius, unplayedPaint)
             return
         }
 
         val playedEnd = scrubberBar.right.toFloat().coerceIn(left, right)
         val bufferedEnd = bufferedBar.right.toFloat().coerceIn(left, right)
 
-        if (bufferedEnd > playedEnd) {
-            drawBarSegment(canvas, playedEnd, bufferedEnd, barTop, barBottom, cornerRadius, bufferedPaint)
+        if (chapterStartTimesMs.isEmpty()) {
+            drawBarSegment(canvas, left, right, barTop, barBottom, cornerRadius, unplayedPaint)
+            if (bufferedEnd > playedEnd) {
+                drawBarSegment(canvas, playedEnd, bufferedEnd, barTop, barBottom, cornerRadius, bufferedPaint)
+            }
+            if (playedEnd > left) {
+                drawBarSegment(canvas, left, playedEnd, barTop, barBottom, cornerRadius, playedPaint)
+            }
+            return
         }
-        if (playedEnd > left) {
-            drawBarSegment(canvas, left, playedEnd, barTop, barBottom, cornerRadius, playedPaint)
+
+        val segments = chapterSegmentRanges()
+        segments.forEachIndexed { index, (startMs, endMs) ->
+            var segmentLeft = timeMsToPixel(startMs)
+            var segmentRight = timeMsToPixel(endMs)
+            if (index > 0) {
+                segmentLeft += chapterGapPx / 2f
+            }
+            if (index < segments.lastIndex) {
+                segmentRight -= chapterGapPx / 2f
+            }
+            segmentLeft = segmentLeft.coerceIn(left, right)
+            segmentRight = segmentRight.coerceIn(left, right)
+            if (segmentRight <= segmentLeft) {
+                return@forEachIndexed
+            }
+
+            val segmentCornerRadius = when {
+                segments.size == 1 -> cornerRadius
+                index == 0 || index == segments.lastIndex -> cornerRadius
+                else -> 0f
+            }
+
+            drawBarSegment(
+                canvas,
+                segmentLeft,
+                segmentRight,
+                barTop,
+                barBottom,
+                segmentCornerRadius,
+                unplayedPaint,
+            )
+
+            val playedSegmentEnd = playedEnd.coerceIn(segmentLeft, segmentRight)
+            if (playedSegmentEnd > segmentLeft) {
+                drawBarSegment(
+                    canvas,
+                    segmentLeft,
+                    playedSegmentEnd,
+                    barTop,
+                    barBottom,
+                    segmentCornerRadius,
+                    playedPaint,
+                )
+            }
+
+            val bufferedSegmentEnd = bufferedEnd.coerceIn(segmentLeft, segmentRight)
+            if (bufferedSegmentEnd > playedSegmentEnd) {
+                drawBarSegment(
+                    canvas,
+                    playedSegmentEnd,
+                    bufferedSegmentEnd,
+                    barTop,
+                    barBottom,
+                    0f,
+                    bufferedPaint,
+                )
+            }
         }
+    }
+
+    private fun chapterSegmentRanges(): List<Pair<Long, Long>> {
+        if (chapterStartTimesMs.isEmpty() || duration <= 0) {
+            return emptyList()
+        }
+        return chapterStartTimesMs.mapIndexed { index, startMs ->
+            val endMs = chapterStartTimesMs.getOrNull(index + 1) ?: duration
+            startMs.coerceAtMost(duration) to endMs.coerceAtMost(duration)
+        }.filter { (startMs, endMs) -> endMs > startMs }
+    }
+
+    private fun timeMsToPixel(timeMs: Long): Float {
+        if (progressBar.width() <= 0 || duration <= 0) {
+            return progressBar.left.toFloat()
+        }
+        return progressBar.left + (progressBar.width() * timeMs / duration).toFloat()
     }
 
     private fun currentBarCornerRadius(barHeightPx: Int): Float {

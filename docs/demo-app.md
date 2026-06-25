@@ -11,7 +11,7 @@ The demo is **not** published to JitPack; clone the repo and build locally.
 ```kotlin
 object KinescopeDemoConfig {
     const val API_KEY = "your-api-key"
-    const val DEFAULT_VIDEO_ID = "..."      // Custom UI, Custom Player, Compose
+    const val DEFAULT_VIDEO_ID = "..."      // Custom UI, Custom Player
     const val DRM_VIDEO_ID = "..."          // DRM viewing
     const val SUBTITLES_VIDEO_ID = "..."    // Subtitles test
     const val DEFAULT_LIVE_ID = "..."       // Live test (empty input fallback)
@@ -56,7 +56,6 @@ Install on a connected device:
 | **Live test** | `LiveActivity` | Live stream playback and live-specific UI | [live.md](live.md) |
 | **Shorts** | `ShortsActivity` | Vertical feed (`ViewPager2`), preloading, optional offline download from feed | [../kotlin-kinescope-shorts/LIBRARY_USAGE_GUIDE.md](../kotlin-kinescope-shorts/LIBRARY_USAGE_GUIDE.md) |
 | **Offline viewing** | `OfflineDrmDemoActivity` | HLS download with Widevine offline license, download list, offline playback | [offline-downloads.md](offline-downloads.md) |
-| **Compose player** | `ComposePlayerActivity` | Jetpack Compose UI (`KinescopePlayerScreen`), Cast, settings, double-tap seek, fullscreen | [compose-ui.md](compose-ui.md) |
 
 ## Module layout
 
@@ -72,14 +71,12 @@ app/src/main/java/io/kinescope/demo/
 ├── customplayer/                # player options + Dashboard API
 ├── live/
 ├── shorts/
-├── offlinedrm/                  # offline downloads
-└── compose/                     # Compose player screen
+└── offlinedrm/                  # offline downloads
 ```
 
-The demo depends on local project modules (`:kotlin-kinescope-player`, `:kotlin-kinescope-player-ui`, `:kotlin-kinescope-shorts`), not on JitPack artifacts.
+The demo depends on local project modules (`:kotlin-kinescope-player`, `:kotlin-kinescope-shorts`), not on JitPack artifacts.
 
 ## Related docs
 
 - [Installation](installation.md) — add the SDK to your own app
 - [Quick start](quick-start.md) — minimal player integration
-- [Compose UI](compose-ui.md) — Jetpack Compose controls

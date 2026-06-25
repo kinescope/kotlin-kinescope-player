@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Figma ic_arrow_forward (tight viewBox=размер глифа). Тинт из темы. -->
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="6.000dp" android:height="10.000dp"
-    android:viewportWidth="6.000" android:viewportHeight="10.000">
-    <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd" android:pathData="M1.70711 0.292893C1.31658 -0.097631 0.683418 -0.0976311 0.292893 0.292893C-0.097631 0.683417 -0.0976311 1.31658 0.292893 1.70711L3.58579 5L0.292893 8.29289C-0.097631 8.68342 -0.0976311 9.31658 0.292893 9.70711C0.683417 10.0976 1.31658 10.0976 1.70711 9.70711L5.70711 5.70711C5.75592 5.65829 5.79864 5.60569 5.83525 5.55023C6.09153 5.16208 6.04882 4.6346 5.70711 4.29289C5.70683 4.29262 5.70655 4.29234 5.70628 4.29206L1.70711 0.292893Z" />
-</vector>

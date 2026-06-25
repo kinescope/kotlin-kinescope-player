@@ -42,6 +42,7 @@ class DrmViewingActivity : AppCompatActivity() {
         playerView.setIsFullscreen(false)
         fullscreenPlayerView.setIsFullscreen(true)
         playerView.setPlayer(kinescopePlayer)
+        playerView.applyTemplateOptions()
         playerView.onFullscreenButtonCallback = { toggleFullscreen() }
         fullscreenPlayerView.onFullscreenButtonCallback = { toggleFullscreen() }
         pipSession.attach()

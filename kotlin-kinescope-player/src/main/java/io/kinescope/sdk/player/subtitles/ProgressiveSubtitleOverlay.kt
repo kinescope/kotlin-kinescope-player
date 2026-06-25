@@ -2,6 +2,7 @@ package io.kinescope.sdk.player.subtitles
 
 import android.animation.ValueAnimator
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.text.TextPaint
 import android.util.TypedValue
 import android.view.Gravity
@@ -31,6 +32,7 @@ internal class ProgressiveSubtitleOverlay(
     private var lastResolvedParentWidthPx = 0
     private var lastBottomPaddingPx = -1
     private var bottomMarginAnimator: ValueAnimator? = null
+    private var appliedStyle = SubtitleStyle()
 
     private val measurePaint = TextPaint(TextPaint.ANTI_ALIAS_FLAG)
 
@@ -44,12 +46,18 @@ internal class ProgressiveSubtitleOverlay(
     }
 
     fun applyStyle(style: SubtitleStyle, textSizePx: Float, bottomPaddingPx: Int) {
+        appliedStyle = style
         val roboto = ResourcesCompat.getFont(container.context, R.font.roboto_regular)
         val textSizeChanged = styledTextSizePx <= 0f ||
             kotlin.math.abs(textSizePx - styledTextSizePx) > TEXT_SIZE_CHANGE_EPSILON_PX
 
         styledTextSizePx = textSizePx
         styledTypeface = roboto ?: Typeface.DEFAULT
+
+        linesContainer.background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            setColor(captionBackgroundColor(style))
+        }
 
         applyTextStyle(topView, style, textSizePx)
         applyTextStyle(bottomView, style, textSizePx)
@@ -82,7 +90,14 @@ internal class ProgressiveSubtitleOverlay(
             updateTextMaxWidth()
             relayoutFromWordCount(lastVisibleWordCount)
             applyCachedLayout()
+        } else if (hasVisibleContent()) {
+            applyCachedLayout()
         }
+    }
+
+    private fun captionBackgroundColor(style: SubtitleStyle): Int {
+        return (style.bgColor and 0x00FFFFFF) or
+            ((style.bgOpacityPercent * 255 / 100) shl 24)
     }
 
     fun update(state: ProgressiveSubtitleState, cueStartUs: Long = 0L) {
@@ -237,6 +252,7 @@ internal class ProgressiveSubtitleOverlay(
             topView.maxWidth = textMaxWidthPx
             topView.ellipsize = null
             topView.text = cachedTopLine
+            applyTextStyle(topView, appliedStyle, styledTextSizePx)
             topView.visibility = View.VISIBLE
         } else {
             topView.text = ""
@@ -247,6 +263,7 @@ internal class ProgressiveSubtitleOverlay(
         bottomView.ellipsize = null
         if (hasBottom) {
             bottomView.text = cachedBottomLine
+            applyTextStyle(bottomView, appliedStyle, styledTextSizePx)
             bottomView.visibility = View.VISIBLE
         } else {
             bottomView.text = ""
