@@ -17,7 +17,7 @@
             app:animation_enabled="false"
             app:resize_mode="fit"
             app:show_buffering="never"
-            app:surface_type="surface_view"
+            app:surface_type="texture_view"
             app:use_controller="false" />
 
         <ImageView
@@ -25,6 +25,8 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:background="@android:color/black"
+            android:clickable="false"
+            android:focusable="false"
             android:visibility="gone" />
 
         <androidx.media3.ui.SubtitleView
@@ -129,11 +131,6 @@
             android:layout_height="match_parent"
             android:clipChildren="true"
             android:clipToPadding="true" />
-
-        <io.kinescope.sdk.chapters.KinescopeChaptersView
-            android:id="@+id/chapters_menu"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent" />
 
     </FrameLayout>
 

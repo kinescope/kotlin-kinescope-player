@@ -91,9 +91,20 @@ import kotlin.math.roundToInt
 
 
 @UnstableApi
-class KinescopePlayerView(
-    context: Context, attrs:
-    AttributeSet?
+class KinescopePlayerView @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null,
+    /**
+     * Render the video into a TextureView instead of the default SurfaceView.
+     *
+     * SurfaceView (default) is required for secure/Widevine L1 playback and is
+     * generally cheaper, but its pixels are NOT captured in the system
+     * Picture-in-Picture enter animation — the OS shows a placeholder (often the
+     * app icon) during the shrink. A TextureView lives in the normal view
+     * hierarchy, so the actual video frame animates smoothly into PiP. Use it
+     * only for non-DRM content where a clean PiP transition matters.
+     */
+    private val useTextureSurface: Boolean = false,
 ) : ConstraintLayout(context, attrs) {
     companion object {
         /**
@@ -532,9 +543,6 @@ class KinescopePlayerView(
 
                     Player.STATE_BUFFERING -> {
                         analyticsManager.buffering()
-                        if (!hasStartedPlayback && activePlaybackPlayer?.playWhenReady == true) {
-                            hidePoster()
-                        }
                     }
 
                     Player.STATE_READY -> {
@@ -688,7 +696,11 @@ class KinescopePlayerView(
     }
 
     init {
-        inflate(context, R.layout.view_kinesope_player, this)
+        inflate(
+            context,
+            if (useTextureSurface) R.layout.view_kinesope_player_texture else R.layout.view_kinesope_player,
+            this,
+        )
         bindRootLayoutConstraints()
         exoPlayerView = findViewById(R.id.view_exoplayer)
         subtitleView = findViewById(R.id.kinescope_subtitle_view)
@@ -948,7 +960,6 @@ class KinescopePlayerView(
 
     /**
      * Sets the poster image.
-     * Poster stays visible while the video is loading until playback starts.
      * For live streams it is hidden once the video is ready.
      * @param url Image url
      * @param placeholder Will be shown while image is loading.
@@ -961,8 +972,6 @@ class KinescopePlayerView(
         @DrawableRes errorPlaceholder: Int = R.drawable.default_poster,
         onLoadFinished: ((isSuccess: Boolean) -> Unit)? = null,
     ) {
-        if (shouldSuppressPosterDisplay()) {
-            return
         }
         posterView?.let {
             it.isVisible = true
@@ -976,25 +985,10 @@ class KinescopePlayerView(
                     onLoadFinished?.invoke(isSuccess)
                 })
                 .into(it)
+            updateBuffering()
         }
     }
 
-    private fun showDefaultPoster(
-        @DrawableRes drawableRes: Int = R.drawable.default_poster,
-    ) {
-        if (shouldSuppressPosterDisplay()) {
-            return
-        }
-        posterView?.let {
-            it.isVisible = true
-            Glide.with(context).clear(it)
-            it.setImageResource(drawableRes)
-        }
-    }
-
-    /**
-     * Hides the poster image. If video buffering has started, calling this method will do nothing.
-     */
     fun hidePoster() {
         posterView?.isVisible = false
     }
@@ -1120,12 +1114,6 @@ class KinescopePlayerView(
         if (hasStartedPlayback || shouldSuppressPosterDisplay()) {
             return
         }
-        val posterUrl = getVideo()?.poster?.url
-        if (posterUrl.isNullOrBlank()) {
-            showDefaultPoster()
-        } else {
-            showPoster(posterUrl)
-        }
     }
 
     private fun bindRootLayoutConstraints() {
@@ -1153,8 +1141,9 @@ class KinescopePlayerView(
 
         bufferingView?.let { overlay ->
             overlay.isVisible = showBufferingSpinner
+            val posterVisible = posterView?.isVisible == true
             overlay.setBackgroundColor(
-                if (waitingForFirstPlayback) {
+                if (waitingForFirstPlayback && !posterVisible) {
                     android.graphics.Color.BLACK
                 } else {
                     android.graphics.Color.TRANSPARENT

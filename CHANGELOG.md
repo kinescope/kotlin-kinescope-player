@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.0.9] — 22.06.2026
+## [0.0.9] — 24.06.2026
 
 ### Playback & reliability
 - **Lifecycle** — `bindLifecycle()` pauses on `onStop`, resumes on `onStart`; skipped while PiP is active; `release()` on `onDestroy`
