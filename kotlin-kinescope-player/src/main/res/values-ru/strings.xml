@@ -21,6 +21,9 @@
     <string name="live_time_offset">-%s</string>
     <string name="live_its_starting_soon">Скоро начнётся</string>
 
+    <string name="player_chapters">Главы</string>
+    <string name="player_chapters_title">Главы</string>
+
     <string name="settings_parameter_playback_speed">Скорость</string>
     <string name="settings_parameter_video_quality">Качество</string>
     <string name="settings_parameter_picture_in_picture">Картинка в картинке</string>

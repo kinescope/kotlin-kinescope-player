@@ -773,6 +773,7 @@ class KinescopeSettingsView(
 
         scrollView.addView(list)
         root.addView(scrollView)
+        scrollView.post { scrollView.scrollTo(0, 0) }
         return root
     }
 
@@ -835,8 +836,7 @@ class KinescopeSettingsView(
                 } else {
                     subtitleStyle.bgColor
                 }
-                val selectedIndex = SubtitleStyleDefaults.colors.indexOfFirst { it.color == selectedColor }
-                localizedColors().forEachIndexed { index, colorOption ->
+                localizedColors().forEach { colorOption ->
                     list.addView(
                         createCheckRow(
                             title = colorOption.label,
@@ -853,16 +853,9 @@ class KinescopeSettingsView(
                         ),
                     )
                 }
-                if (selectedIndex > 0) {
-                    scrollView.post {
-                        val rowHeight = resources.getDimensionPixelSize(R.dimen.kinescope_settings_row_height)
-                        scrollView.scrollTo(0, selectedIndex * rowHeight)
-                    }
-                }
             }
 
             SubtitleAppearanceType.FontSize -> {
-                val selectedIndex = SubtitleStyleDefaults.fontSizes.indexOf(subtitleStyle.fontSizePercent)
                 SubtitleStyleDefaults.fontSizes.forEach { size ->
                     list.addView(
                         createCheckRow(
@@ -876,16 +869,9 @@ class KinescopeSettingsView(
                         ),
                     )
                 }
-                if (selectedIndex > 0) {
-                    scrollView.post {
-                        val rowHeight = resources.getDimensionPixelSize(R.dimen.kinescope_settings_row_height)
-                        scrollView.scrollTo(0, selectedIndex * rowHeight)
-                    }
-                }
             }
 
             SubtitleAppearanceType.BgOpacity -> {
-                val selectedIndex = SubtitleStyleDefaults.bgOpacities.indexOf(subtitleStyle.bgOpacityPercent)
                 SubtitleStyleDefaults.bgOpacities.forEach { opacity ->
                     list.addView(
                         createCheckRow(
@@ -899,17 +885,32 @@ class KinescopeSettingsView(
                         ),
                     )
                 }
-                if (selectedIndex > 0) {
-                    scrollView.post {
-                        val rowHeight = resources.getDimensionPixelSize(R.dimen.kinescope_settings_row_height)
-                        scrollView.scrollTo(0, selectedIndex * rowHeight)
-                    }
-                }
             }
         }
 
         scrollView.addView(list)
         root.addView(scrollView)
+        scrollView.post {
+            val selectedIndex = when (type) {
+                SubtitleAppearanceType.FontColor,
+                SubtitleAppearanceType.BgColor,
+                -> SubtitleStyleDefaults.colors.indexOfFirst {
+                    it.color == if (type == SubtitleAppearanceType.FontColor) {
+                        subtitleStyle.fontColor
+                    } else {
+                        subtitleStyle.bgColor
+                    }
+                }
+
+                SubtitleAppearanceType.FontSize ->
+                    SubtitleStyleDefaults.fontSizes.indexOf(subtitleStyle.fontSizePercent)
+
+                SubtitleAppearanceType.BgOpacity ->
+                    SubtitleStyleDefaults.bgOpacities.indexOf(subtitleStyle.bgOpacityPercent)
+            }
+            val rowHeight = resources.getDimensionPixelSize(R.dimen.kinescope_settings_row_height)
+            scrollView.scrollTo(0, selectedIndex.coerceAtLeast(0) * rowHeight)
+        }
         return root
     }
 

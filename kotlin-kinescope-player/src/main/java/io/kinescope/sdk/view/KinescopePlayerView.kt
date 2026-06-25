@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.PorterDuff
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.Drawable
 import android.media.AudioManager
 import android.os.Looper
@@ -64,6 +65,10 @@ import io.kinescope.sdk.logger.KinescopeLogger
 import io.kinescope.sdk.logger.KinescopeLoggerLevel
 import io.kinescope.sdk.models.videos.KinescopeVideo
 import io.kinescope.sdk.models.videos.KinescopeVideoAttachments
+import io.kinescope.sdk.models.videos.KinescopeVideoChapterItem
+import io.kinescope.sdk.models.videos.availableChapters
+import io.kinescope.sdk.models.videos.chapterAt
+import io.kinescope.sdk.models.videos.startTimeMs
 import io.kinescope.sdk.models.players.syncLegacyChromeFlags
 import io.kinescope.sdk.player.KinescopeGlideListener
 import io.kinescope.sdk.player.KinescopePictureInPicture
@@ -75,6 +80,7 @@ import io.kinescope.sdk.player.subtitles.ProgressiveSubtitleCues
 import io.kinescope.sdk.player.subtitles.ProgressiveSubtitleOverlay
 import io.kinescope.sdk.player.tracks.TrackController
 import io.kinescope.sdk.settings.KinescopeSettingsOption
+import io.kinescope.sdk.chapters.KinescopeChaptersView
 import io.kinescope.sdk.settings.KinescopeSettingsView
 import io.kinescope.sdk.settings.SubtitleStyle
 import io.kinescope.sdk.settings.qualityBadgeForVariant
@@ -236,6 +242,8 @@ class KinescopePlayerView @JvmOverloads constructor(
     private var durationView: TextView? = null
     private var timeDurationSuffixClip: View? = null
     private var timeBar: KinescopeTimeBar? = null
+    private var progressContainer: View? = null
+    private var scrubChapterTitleView: TextView? = null
 
     private var buttonsContainer: ViewGroup? = null
     private var playPauseButton: KinescopePlayPauseMorphView? = null
@@ -244,10 +252,12 @@ class KinescopePlayerView @JvmOverloads constructor(
     private var optionsDotsButton: View? = null
     private var pictureInPictureButton: View? = null
     private var castButton: View? = null
+    private var chaptersButton: View? = null
     private var fullscreenButton: View? = null
     private var customButton: ImageButton? = null
     internal var trackController: TrackController? = null
     private var settingsMenuView: KinescopeSettingsView? = null
+    private var chaptersMenuView: KinescopeChaptersView? = null
     private var subtitleStyle = SubtitleStyle()
     private var pendingCueGroup: CueGroup? = null
     private var learnedCueDurationUs: Long = C.TIME_UNSET
@@ -317,6 +327,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
 
     private var hasStartedPlayback = false
+    private var initialSubtitlesConfigured = false
     private var scrubbing = false
     private var scrubbingLiveDurationCached = 0L
     private var controlElevationBeforeScrub = 0f
@@ -445,21 +456,21 @@ class KinescopePlayerView @JvmOverloads constructor(
                 updateAudioTracksSettingsVisibility()
             }
             val video = getVideo()
-            if (video != null && kinescopePlayer?.getShowSubtitles() == true) {
-                if (trackController?.selectedSubtitleIndex == TrackController.SUBTITLES_OFF_ID) {
-                    trackController?.ensureDefaultSubtitleEnabled(
-                        showSubtitles = true,
-                        subtitles = video.subtitles,
-                    )
-                } else {
-                    trackController?.applySubtitleSelection(
-                        trackController?.selectedSubtitleIndex ?: TrackController.SUBTITLES_OFF_ID,
-                    )
-                }
+            if (video != null) {
+                trackController?.applySubtitleSelection(
+                    trackController?.selectedSubtitleIndex ?: TrackController.SUBTITLES_OFF_ID,
+                )
             }
         }
 
         override fun onCues(cueGroup: CueGroup) {
+            if (trackController?.selectedSubtitleIndex == TrackController.SUBTITLES_OFF_ID) {
+                pendingCueGroup = null
+                subtitleView?.setCues(emptyList())
+                progressiveSubtitleOverlay?.clear()
+                stopSubtitleUpdates()
+                return
+            }
             if (cueGroup.cues.isNotEmpty()) {
                 val newStartUs = cueGroup.presentationTimeUs
                 val previousGroup = pendingCueGroup
@@ -616,6 +627,7 @@ class KinescopePlayerView @JvmOverloads constructor(
             }
 
             positionView?.text = formatPlayerTime(position)
+            updateScrubChapterTitle(position)
 
             getAnalyticsArguments().let { args ->
                 analyticsManager.seek(args = args)
@@ -633,10 +645,12 @@ class KinescopePlayerView @JvmOverloads constructor(
             }
 
             positionView?.text = formatPlayerTime(position)
+            updateScrubChapterTitle(position)
         }
 
         override fun onScrubStop(timeBar: TimeBar, position: Long, canceled: Boolean) {
             scrubbing = false
+            hideScrubChapterTitle()
             seekView?.hideScrubOverlay()
             if (!canceled && kinescopePlayer != null) {
                 val player = activePlaybackPlayer ?: return
@@ -671,6 +685,8 @@ class KinescopePlayerView @JvmOverloads constructor(
                 onPictureInPictureButtonCallback?.invoke()
             } else if (optionsButton === view) {
                 onOptionsButtonClick()
+            } else if (chaptersButton === view) {
+                onChaptersButtonClick()
             }
         }
 
@@ -710,7 +726,10 @@ class KinescopePlayerView @JvmOverloads constructor(
         controlView = findViewById(R.id.view_control)
         seekView = findViewById(R.id.kinescope_seek_view)
 
+        progressContainer = controlView?.findViewById(R.id.kinescope_progress_container)
         timeBar = controlView?.findViewById(R.id.kinescope_progress)
+        scrubChapterTitleView = controlView?.findViewById(R.id.scrub_chapter_title)
+        applyScrubChapterTitleStyle()
         positionView = controlView?.findViewById(R.id.kinescope_position)
         durationView = controlView?.findViewById(R.id.kinescope_duration)
         timeDurationSuffixClip = controlView?.findViewById(R.id.kinescope_time_duration_suffix_clip)
@@ -722,6 +741,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         playPauseButton = controlView?.findViewById(R.id.kinescope_play_pause)
         pictureInPictureButton = controlView?.findViewById(R.id.kinescope_picture_in_picture)
         castButton = controlView?.findViewById(R.id.kinescope_cast)
+        chaptersButton = controlView?.findViewById(R.id.kinescope_chapters)
         optionsButton = controlView?.findViewById(R.id.kinescope_settings)
         optionsDotsButton = controlView?.findViewById(R.id.kinescope_options_dots)
         fullscreenButton = controlView?.findViewById(R.id.kinescope_fullscreen)
@@ -797,6 +817,13 @@ class KinescopePlayerView @JvmOverloads constructor(
         settingsMenuView?.setAnchorView(optionsButton)
         settingsMenuView?.setFullscreenMode(isVideoFullscreen)
 
+        chaptersMenuView = findViewById(R.id.chapters_menu)
+        chaptersMenuView?.setAnchorView(chaptersButton)
+        chaptersMenuView?.setFullscreenMode(isVideoFullscreen)
+        chaptersMenuView?.onChapterSelected = { chapter ->
+            kinescopePlayer?.seekToPosition(chapter.startTimeMs())
+        }
+
         applyKinescopePlayerOptions()
         applyPlayerChromeLayout()
         applySubtitleStyle()
@@ -830,6 +857,8 @@ class KinescopePlayerView @JvmOverloads constructor(
         removeCallbacks(bufferingWatchdogRunnable)
         playbackBufferingWatchdog.reset()
         hasStartedPlayback = false
+        initialSubtitlesConfigured = false
+        hidePoster()
         pendingCueGroup = null
         learnedCueDurationUs = C.TIME_UNSET
         stopSubtitleUpdates()
@@ -847,6 +876,7 @@ class KinescopePlayerView @JvmOverloads constructor(
 
         kinescopePlayer?.onSourceChanged = { source, metricUrl ->
             hasStartedPlayback = false
+            initialSubtitlesConfigured = false
             pendingCueGroup = null
             learnedCueDurationUs = C.TIME_UNSET
             stopSubtitleUpdates()
@@ -893,6 +923,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         buttonColor?.let { color ->
             tintControlIcon(pictureInPictureButton, color)
             tintControlIcon(castButton, color)
+            tintControlIcon(chaptersButton, color)
             tintControlIcon(optionsButton, color)
             tintControlIcon(optionsDotsButton, color)
             tintControlIcon(fullscreenButton, color)
@@ -929,7 +960,6 @@ class KinescopePlayerView @JvmOverloads constructor(
 
     /**
      * Sets the poster image.
-     * Poster is hidden once playback actually starts.
      * For live streams it is hidden once the video is ready.
      * @param url Image url
      * @param placeholder Will be shown while image is loading.
@@ -942,18 +972,13 @@ class KinescopePlayerView @JvmOverloads constructor(
         @DrawableRes errorPlaceholder: Int = R.drawable.default_poster,
         onLoadFinished: ((isSuccess: Boolean) -> Unit)? = null,
     ) {
-        with(activePlaybackPlayer?.playbackState) {
-            if (isLiveState && this == Player.STATE_READY) {
-                return
-            }
-            if (!isLiveState && this == Player.STATE_BUFFERING && hasStartedPlayback) {
-                return
-            }
         }
         posterView?.let {
             it.isVisible = true
+            it.setImageResource(placeholder)
             Glide.with(context)
                 .load(url)
+                .centerCrop()
                 .placeholder(placeholder)
                 .error(errorPlaceholder)
                 .addListener(KinescopeGlideListener { isSuccess ->
@@ -964,7 +989,6 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
     }
 
-    /** Hides the poster image. */
     fun hidePoster() {
         posterView?.isVisible = false
     }
@@ -1042,6 +1066,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         isVideoFullscreen = value
         seekView?.setFullscreenMode(value)
         settingsMenuView?.setFullscreenMode(value)
+        chaptersMenuView?.setFullscreenMode(value)
         applyPlayerChromeLayout()
         updateFullscreenButton()
     }
@@ -1062,6 +1087,8 @@ class KinescopePlayerView @JvmOverloads constructor(
     private fun postVideoLoadedChromeUpdate() {
         val update = {
             applyVideoPoster()
+            ensureInitialSubtitlesIfNeeded()
+            updateChaptersMenuContent()
             updatePlayPauseButton()
         }
         if (Looper.myLooper() == Looper.getMainLooper()) {
@@ -1071,11 +1098,22 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
     }
 
+    private fun shouldSuppressPosterDisplay(): Boolean {
+        if (hasStartedPlayback) {
+            return true
+        }
+        val player = activePlaybackPlayer ?: return false
+        return if (!isLiveState) {
+            player.playbackState == Player.STATE_BUFFERING && player.playWhenReady
+        } else {
+            player.playbackState == Player.STATE_READY
+        }
+    }
+
     private fun applyVideoPoster() {
-        if (hasStartedPlayback || !isVideoLoaded()) {
+        if (hasStartedPlayback || shouldSuppressPosterDisplay()) {
             return
         }
-        getVideo()?.poster?.url?.let(::showPoster)
     }
 
     private fun bindRootLayoutConstraints() {
@@ -1127,6 +1165,12 @@ class KinescopePlayerView @JvmOverloads constructor(
             kinescopePlayer == null -> View.GONE
             !hasStartedPlayback -> View.INVISIBLE
             else -> View.VISIBLE
+        }
+
+        if (!hasStartedPlayback && player != null && !player.playWhenReady) {
+            applyVideoPoster()
+        } else if (kinescopePlayer == null) {
+            hidePoster()
         }
     }
 
@@ -1243,7 +1287,15 @@ class KinescopePlayerView @JvmOverloads constructor(
 
         applyControlBarLayout(mobile)
 
-        listOf(fullscreenButton, optionsButton, optionsDotsButton, pictureInPictureButton, castButton, customButton).forEach { button ->
+        listOf(
+            fullscreenButton,
+            optionsButton,
+            optionsDotsButton,
+            pictureInPictureButton,
+            chaptersButton,
+            castButton,
+            customButton,
+        ).forEach { button ->
             button?.layoutParams?.let { params ->
                 params.width = buttonSize
                 params.height = buttonSize
@@ -1324,7 +1376,7 @@ class KinescopePlayerView @JvmOverloads constructor(
             timeContainer?.layoutParams = params
         }
 
-        (timeBar?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
+        (progressContainer?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
             params.marginStart = progressLeadingGap
             params.marginEnd = 0
             params.width = 0
@@ -1333,7 +1385,7 @@ class KinescopePlayerView @JvmOverloads constructor(
                 params.weight = 1f
                 params.gravity = android.view.Gravity.CENTER_VERTICAL
             }
-            timeBar?.layoutParams = params
+            progressContainer?.layoutParams = params
         }
 
         (buttonsContainer?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
@@ -1350,6 +1402,12 @@ class KinescopePlayerView @JvmOverloads constructor(
             params.marginStart = 0
             params.marginEnd = 0
             pictureInPictureButton?.layoutParams = params
+        }
+
+        (chaptersButton?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
+            params.marginStart = sectionGap
+            params.marginEnd = 0
+            chaptersButton?.layoutParams = params
         }
 
         (castButton?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
@@ -1515,6 +1573,19 @@ class KinescopePlayerView @JvmOverloads constructor(
             KinescopePictureInPicture.isSupported(context) &&
             (!usesCompactOptionsChrome() || compactExpanded)
         updateCastButtonVisibility()
+        updateChaptersButtonVisibility()
+    }
+
+    private fun updateChaptersButtonVisibility() {
+        val options = kinescopePlayer?.kinescopePlayerOptions
+        val showControls = options?.controls != false
+        val compactExpanded = usesCompactOptionsChrome() && isOptionsBarExpanded
+        val hasChapters = getVideo()?.availableChapters().orEmpty().isNotEmpty()
+        chaptersButton?.isVisible = showControls &&
+            options?.showChaptersButton != false &&
+            hasChapters &&
+            !isLiveState &&
+            (!usesCompactOptionsChrome() || compactExpanded)
     }
 
     private fun updateCastButtonVisibility() {
@@ -1541,25 +1612,25 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     private fun lockTimeBarWidthForFade() {
-        val bar = timeBar ?: return
-        val lockedWidth = bar.width
+        val container = progressContainer ?: return
+        val lockedWidth = container.width
         if (lockedWidth <= 0) {
             return
         }
-        (bar.layoutParams as? LinearLayout.LayoutParams)?.let { params ->
+        (container.layoutParams as? LinearLayout.LayoutParams)?.let { params ->
             timeBarLayoutWeight = params.weight
             params.width = lockedWidth
             params.weight = 0f
-            bar.layoutParams = params
+            container.layoutParams = params
         }
     }
 
     private fun restoreTimeBarFlexibleWidth() {
-        val bar = timeBar ?: return
-        (bar.layoutParams as? LinearLayout.LayoutParams)?.let { params ->
+        val container = progressContainer ?: return
+        (container.layoutParams as? LinearLayout.LayoutParams)?.let { params ->
             params.width = 0
             params.weight = timeBarLayoutWeight
-            bar.layoutParams = params
+            container.layoutParams = params
         }
     }
 
@@ -1617,14 +1688,14 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     private fun animateCompactOptionsProgressOut(onEnd: (() -> Unit)? = null) {
-        val showProgress = timeBar?.isVisible == true
+        val showProgress = progressContainer?.isVisible == true
         val showTimeContainer = timeContainer?.isVisible == true
         if (!showProgress && !showTimeContainer) {
             onEnd?.invoke()
             return
         }
 
-        if (showProgress && (timeBar?.width ?: 0) <= 0) {
+        if (showProgress && (progressContainer?.width ?: 0) <= 0) {
             controlBar?.post { animateCompactOptionsProgressOut(onEnd) }
             return
         }
@@ -1637,8 +1708,8 @@ class KinescopePlayerView @JvmOverloads constructor(
         fun maybeEnd() {
             pending--
             if (pending <= 0) {
-                timeBar?.isVisible = false
-                timeBar?.alpha = 1f
+                progressContainer?.isVisible = false
+                progressContainer?.alpha = 1f
                 restoreTimeBarFlexibleWidth()
                 onEnd?.invoke()
             }
@@ -1646,9 +1717,9 @@ class KinescopePlayerView @JvmOverloads constructor(
 
         if (showProgress) {
             pending++
-            timeBar?.let { bar ->
-                bar.animate().cancel()
-                bar.animate()
+            progressContainer?.let { container ->
+                container.animate().cancel()
+                container.animate()
                     .alpha(0f)
                     .setDuration(OPTIONS_BAR_ANIMATION_DURATION_MS)
                     .setInterpolator(optionsBarAnimationInterpolator)
@@ -1668,7 +1739,7 @@ class KinescopePlayerView @JvmOverloads constructor(
     private fun animateCompactOptionsProgressIn() {
         controlBarEndSpacer?.isVisible = false
         restoreTimeBarFlexibleWidth()
-        animateControlBarSubviewVisibility(timeBar, shouldShowProgressControlsInBar())
+        animateControlBarSubviewVisibility(progressContainer, shouldShowProgressControlsInBar())
         animateControlBarSubviewVisibility(timeContainer, shouldShowTimeContainerInBar())
     }
 
@@ -1964,11 +2035,11 @@ class KinescopePlayerView @JvmOverloads constructor(
         val pinButtonsToEnd = usesCompactOptionsChrome() && isOptionsBarExpanded
 
         if (!animated) {
-            timeBar?.animate()?.cancel()
+            progressContainer?.animate()?.cancel()
             timeContainer?.animate()?.cancel()
-            timeBar?.alpha = 1f
+            progressContainer?.alpha = 1f
             timeContainer?.alpha = 1f
-            timeBar?.isVisible = showProgress
+            progressContainer?.isVisible = showProgress
             timeContainer?.isVisible = showTimeContainer
             controlBarEndSpacer?.isVisible = pinButtonsToEnd && !showProgress
             updateTotalDurationVisibility(animated = false)
@@ -1977,15 +2048,15 @@ class KinescopePlayerView @JvmOverloads constructor(
 
         if (pinButtonsToEnd && !showProgress) {
             controlBarEndSpacer?.isVisible = false
-            animateControlBarSubviewVisibility(timeBar, show = false) {
+            animateControlBarSubviewVisibility(progressContainer, show = false) {
                 controlBarEndSpacer?.isVisible = true
             }
         } else if (!pinButtonsToEnd && showProgress) {
             controlBarEndSpacer?.isVisible = false
-            animateControlBarSubviewVisibility(timeBar, show = true)
+            animateControlBarSubviewVisibility(progressContainer, show = true)
         } else {
             controlBarEndSpacer?.isVisible = pinButtonsToEnd && !showProgress
-            animateControlBarSubviewVisibility(timeBar, showProgress)
+            animateControlBarSubviewVisibility(progressContainer, showProgress)
         }
         animateControlBarSubviewVisibility(timeContainer, showTimeContainer)
         if (!animated) {
@@ -2041,6 +2112,17 @@ class KinescopePlayerView @JvmOverloads constructor(
         updateProgressControlsVisibility()
     }
 
+    private fun onChaptersButtonClick() {
+        if (!usesCompactOptionsChrome()) {
+            toggleChaptersMenu()
+            return
+        }
+        if (!isOptionsBarExpanded) {
+            return
+        }
+        toggleChaptersMenu()
+    }
+
     private fun onOptionsButtonClick() {
         if (!usesCompactOptionsChrome()) {
             toggleSettingsMenu()
@@ -2058,6 +2140,9 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
         if (settingsMenuView?.isVisible == true) {
             settingsMenuView?.dismiss()
+        }
+        if (chaptersMenuView?.isShowing() == true) {
+            chaptersMenuView?.dismiss()
         }
         cancelControlOverlayAutoHide()
         if (isOptionsBarExpanded) {
@@ -2139,7 +2224,7 @@ class KinescopePlayerView @JvmOverloads constructor(
                 (isMobilePlayerChrome || options.showDuration) &&
                 shouldShowTimeContainerInBar()
             updateTotalDurationVisibility(animated = false)
-            timeBar?.isVisible = showControls && options.showSeekBar && shouldShowProgressControlsInBar()
+            progressContainer?.isVisible = showControls && options.showSeekBar && shouldShowProgressControlsInBar()
             timeContainer?.isVisible = showControls && shouldShowTimeContainerInBar()
             settingsMenuView?.setParameterVisible(
                 KinescopeSettingsView.Parameter.PlaybackSpeed,
@@ -2240,11 +2325,8 @@ class KinescopePlayerView @JvmOverloads constructor(
             text = video.subtitle
             isVisible = !video.subtitle.isNullOrEmpty()
         }
-        trackController?.ensureDefaultSubtitleEnabled(
-            showSubtitles = kinescopePlayer?.getShowSubtitles() == true,
-            subtitles = video.subtitles,
-        )
         applyVideoPoster()
+        updateChaptersMenuContent()
         applyKinescopePlayerOptions()
     }
 
@@ -2328,6 +2410,7 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     private fun exitScrubOverlayMode() {
+        hideScrubChapterTitle()
         controlView?.elevation = controlElevationBeforeScrub
         controlView?.setBackgroundColor(getControlOverlayBackgroundColor())
         updateMobileBackgroundGradients()
@@ -2447,6 +2530,93 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
     }
 
+    private fun toggleChaptersMenu() {
+        if (chaptersMenuView?.isShowing() == true) {
+            chaptersMenuView?.dismiss()
+            if (controlView?.isVisible == true) {
+                scheduleControlOverlayAutoHide()
+            }
+            return
+        }
+        showChaptersMenu()
+    }
+
+    private fun showChaptersMenu() {
+        val chapters = getVideo()?.availableChapters().orEmpty()
+        if (chapters.isEmpty()) {
+            return
+        }
+        cancelControlOverlayAutoHide()
+        settingsMenuView?.dismiss()
+        chaptersMenuView?.apply {
+            setFullscreenMode(isVideoFullscreen)
+            setChapters(chapters)
+            show()
+        }
+        bringChaptersAboveOverlay()
+    }
+
+    private fun bringChaptersAboveOverlay() {
+        chaptersMenuView?.let { chapters ->
+            (chapters.parent as? android.view.ViewGroup)?.bringChildToFront(chapters)
+        }
+    }
+
+    private fun updateChaptersMenuContent() {
+        val chapters = getVideo()?.availableChapters().orEmpty()
+        chaptersMenuView?.setChapters(chapters)
+        updateTimeBarChapters(chapters)
+        if (chapters.isEmpty()) {
+            chaptersMenuView?.dismiss()
+        }
+        updateChaptersButtonVisibility()
+    }
+
+    private fun updateTimeBarChapters(chapters: List<KinescopeVideoChapterItem>) {
+        timeBar?.setChapterStartTimesMs(chapters.map { it.startTimeMs() })
+    }
+
+    private fun updateScrubChapterTitle(positionMs: Long) {
+        val titleView = scrubChapterTitleView ?: return
+        val bar = timeBar ?: return
+        val chapter = getVideo()?.availableChapters().orEmpty().chapterAt(positionMs)
+        if (chapter == null) {
+            titleView.isVisible = false
+            return
+        }
+
+        titleView.text = chapter.title
+        titleView.isVisible = true
+        titleView.post {
+            val barWidth = bar.width
+            val durationMs = activePlaybackPlayer?.duration?.takeIf { it > 0 } ?: return@post
+            val fraction = (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
+            val anchorX = barWidth * fraction
+            val maxTranslation = (barWidth - titleView.width).coerceAtLeast(0).toFloat()
+            titleView.translationX = (anchorX - titleView.width / 2f).coerceIn(0f, maxTranslation)
+            val gap = resources.getDimensionPixelSize(R.dimen.kinescope_scrub_chapter_title_gap)
+            titleView.translationY = -(titleView.height.toFloat() + gap)
+        }
+    }
+
+    private fun hideScrubChapterTitle() {
+        scrubChapterTitleView?.isVisible = false
+        scrubChapterTitleView?.translationX = 0f
+        scrubChapterTitleView?.translationY = 0f
+    }
+
+    private fun ensureInitialSubtitlesIfNeeded() {
+        if (initialSubtitlesConfigured) {
+            return
+        }
+        val video = getVideo() ?: return
+        trackController?.ensureDefaultSubtitleEnabled(
+            showSubtitles = kinescopePlayer?.getShowSubtitles() == true,
+            subtitles = video.subtitles,
+        )
+        initialSubtitlesConfigured = true
+    }
+
     private fun toggleSettingsMenu() {
         if (settingsMenuView?.isVisible == true) {
             settingsMenuView?.dismiss()
@@ -2460,6 +2630,7 @@ class KinescopePlayerView @JvmOverloads constructor(
 
     private fun showSettingsMenu() {
         cancelControlOverlayAutoHide()
+        chaptersMenuView?.dismiss()
         settingsMenuView?.apply {
             setFullscreenMode(isVideoFullscreen)
             setSubtitleStyle(subtitleStyle)
@@ -2672,6 +2843,10 @@ class KinescopePlayerView @JvmOverloads constructor(
 
     private fun applySubtitlesSelection(optionId: Int) {
         trackController?.applySubtitleSelection(optionId)
+        pendingCueGroup = null
+        subtitleView?.setCues(emptyList())
+        progressiveSubtitleOverlay?.clear()
+        stopSubtitleUpdates()
     }
 
     private fun shouldShowPauseButton(): Boolean {
@@ -2711,6 +2886,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         playPauseButton?.setOnClickListener(componentListener)
         pictureInPictureButton?.setOnClickListener(componentListener)
         optionsButton?.setOnClickListener(componentListener)
+        chaptersButton?.setOnClickListener(componentListener)
         optionsDotsButton?.setOnClickListener { onOptionsDotsButtonClick() }
         fullscreenButton?.setOnClickListener(componentListener)
         timeContainer?.setOnClickListener { toggleTotalDurationVisibility() }
@@ -3013,12 +3189,26 @@ class KinescopePlayerView @JvmOverloads constructor(
             textSizePx = textSizePx,
             bottomPaddingPx = bottomPx,
         )
+
+        pendingCueGroup?.let { cueGroup ->
+            subtitleView.setCues(cueGroup.cues)
+        }
+        applyScrubChapterTitleStyle()
+    }
+
+    private fun applyScrubChapterTitleStyle() {
+        val titleView = scrubChapterTitleView ?: return
+        val backgroundColor = (subtitleStyle.bgColor and 0x00FFFFFF) or
+            ((subtitleStyle.bgOpacityPercent * 255 / 100) shl 24)
+        titleView.background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            setColor(backgroundColor)
+        }
+        titleView.setTextColor(subtitleStyle.fontColor)
+        ResourcesCompat.getFont(context, R.font.roboto_regular)?.let { titleView.typeface = it }
     }
 
     private fun shouldApplyProgressiveSubtitles(): Boolean {
-        if (kinescopePlayer?.getShowSubtitles() != true) {
-            return false
-        }
         if (trackController?.selectedSubtitleIndex == TrackController.SUBTITLES_OFF_ID) {
             return false
         }
@@ -3095,9 +3285,8 @@ class KinescopePlayerView @JvmOverloads constructor(
         val words = ProgressiveSubtitleCues.extractWords(cueGroup.cues)
 
         if (words.isEmpty()) {
-            if (progressiveSubtitleOverlay?.hasVisibleContent() == true) {
-                progressiveSubtitleOverlay?.clear()
-            }
+            progressiveSubtitleOverlay?.clear()
+            subtitleView?.setCues(cueGroup.cues)
             return
         }
 
@@ -3205,6 +3394,7 @@ class KinescopePlayerView @JvmOverloads constructor(
 
     private fun hidePipOverlays() {
         settingsMenuView?.isVisible = false
+        chaptersMenuView?.dismiss()
         seekView?.isVisible = false
         seekView?.isEnabled = false
         posterView?.isVisible = false

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:id="@+id/chapters_popup_container"
+        android:layout_width="@dimen/kinescope_settings_popup_width"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_options_rect"
+        android:clipChildren="true"
+        android:clipToPadding="true"
+        android:orientation="vertical"
+        android:paddingStart="@dimen/kinescope_settings_popup_padding_horizontal"
+        android:paddingTop="@dimen/kinescope_settings_popup_padding_vertical"
+        android:paddingEnd="@dimen/kinescope_settings_popup_padding_horizontal"
+        android:paddingBottom="@dimen/kinescope_settings_popup_padding_vertical"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <TextView
+            android:id="@+id/chapters_title_tv"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/kinescope_settings_row_height"
+            android:ellipsize="end"
+            android:gravity="center_vertical"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:text="@string/player_chapters_title"
+            android:textAppearance="@style/Medium.14.White" />
+
+        <ScrollView
+            android:id="@+id/chapters_scroll_view"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:overScrollMode="never"
+            android:scrollbars="vertical">
+
+            <LinearLayout
+                android:id="@+id/chapters_list"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+        </ScrollView>
+
+    </LinearLayout>
+
+</FrameLayout>
