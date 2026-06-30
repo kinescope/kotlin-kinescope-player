@@ -10,4 +10,12 @@ task clean(type: Delete) {
     delete rootProject.buildDir
 }
 
+subprojects { sub ->
+    sub.configurations.configureEach {
+        resolutionStrategy.dependencySubstitution {
+            substitute module('com.github.kinescope:kotlin-kinescope-player') using project(':kotlin-kinescope-player')
+        }
+    }
+}
+
 

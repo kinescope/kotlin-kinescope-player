@@ -1,6 +1,7 @@
 package io.kinescope.demo.live
 
 import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
@@ -12,7 +13,9 @@ import android.widget.LinearLayout
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.media3.common.util.UnstableApi
+import io.kinescope.demo.KinescopeDemoConfig
 import io.kinescope.demo.R
+import io.kinescope.sdk.player.KinescopePictureInPictureSession
 import io.kinescope.sdk.player.KinescopeVideoPlayer
 import io.kinescope.sdk.view.KinescopePlayerView
 
@@ -28,6 +31,7 @@ class LiveActivity : AppCompatActivity() {
     private lateinit var watchLiveBtnView: Button
 
     private var isFullscreen = false
+    private lateinit var pipSession: KinescopePictureInPictureSession
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,6 +52,13 @@ class LiveActivity : AppCompatActivity() {
 
         kinescopePlayer = KinescopeVideoPlayer(this)
         kinescopePlayerView.setPlayer(kinescopePlayer)
+        pipSession = KinescopePictureInPictureSession(
+            activity = this,
+            playerView = { kinescopePlayerView },
+            player = { kinescopePlayer },
+            additionalPlayerViews = { listOf(kinescopePlayerFullscreenView) },
+        )
+        pipSession.attach()
 
         watchLiveBtnView.setOnClickListener {
             tryLoadVideo(watchLiveIdInputView.text.toString())
@@ -95,12 +106,17 @@ class LiveActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
+        pipSession.onStop()
         super.onStop()
-        kinescopePlayer.stop()
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        pipSession.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
     }
 
     private fun tryLoadVideo(id: String) {
-        val liveId = id.takeIf { id.isNotEmpty() } ?: DEFAULT_LIVE_ID
+        val liveId = id.takeIf { it.isNotEmpty() } ?: KinescopeDemoConfig.DEFAULT_LIVE_ID
 
         watchLiveContainerView.isVisible = false
         kinescopePlayer.loadVideo(liveId, { video ->
@@ -174,13 +190,5 @@ class LiveActivity : AppCompatActivity() {
                 kinescopePlayer
             )
         }
-    }
-
-
-    companion object {
-        /**
-         * Used if the live ID field value is empty
-         */
-        private const val DEFAULT_LIVE_ID = "aLJgR9TJfe2EUBejpH5Fuo"
     }
 }

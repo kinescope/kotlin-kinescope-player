@@ -36,10 +36,16 @@
             android:text="Subtitles test" />
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_custom_ui"
+            android:id="@+id/btn_chapters"
             style="@style/DemoAccentButton"
             android:layout_marginTop="25dp"
-            android:text="Custom UI test" />
+            android:text="Chapters test" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_drm_viewing"
+            style="@style/DemoAccentButton"
+            android:layout_marginTop="25dp"
+            android:text="DRM viewing" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_custom_player"

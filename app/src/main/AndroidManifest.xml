@@ -40,19 +40,29 @@
 
         <activity
             android:name=".playlist.PlaylistActivity"
-            android:configChanges="orientation|screenSize|screenLayout|layoutDirection"
+            android:configChanges="orientation|screenSize|screenLayout|layoutDirection|smallestScreenSize"
             android:exported="true"
-            android:label="@string/app_name" />
+            android:label="@string/app_name"
+            android:supportsPictureInPicture="true" />
 
         <activity
             android:name=".subtitles.SubtitlesActivity"
-            android:configChanges="orientation|screenSize|screenLayout|layoutDirection"
-            android:exported="true" />
+            android:configChanges="orientation|screenSize|screenLayout|layoutDirection|smallestScreenSize"
+            android:exported="true"
+            android:supportsPictureInPicture="true" />
 
         <activity
-            android:name=".customui.CustomUIActivity"
-            android:configChanges="orientation|screenSize|screenLayout|layoutDirection"
-            android:exported="true" />
+            android:name=".chapters.ChaptersActivity"
+            android:configChanges="orientation|screenSize|screenLayout|layoutDirection|smallestScreenSize"
+            android:exported="true"
+            android:label="Chapters test"
+            android:supportsPictureInPicture="true" />
+
+        <activity
+            android:name=".drm.DrmViewingActivity"
+            android:configChanges="orientation|screenSize|screenLayout|layoutDirection|smallestScreenSize"
+            android:exported="true"
+            android:supportsPictureInPicture="true" />
 
         <activity
             android:name=".customplayer.CustomPlayerActivity"
@@ -63,8 +73,9 @@
 
         <activity
             android:name=".live.LiveActivity"
-            android:configChanges="orientation|screenSize|screenLayout|layoutDirection"
-            android:exported="true" />
+            android:configChanges="orientation|screenSize|screenLayout|layoutDirection|smallestScreenSize"
+            android:exported="true"
+            android:supportsPictureInPicture="true" />
 
         <activity
             android:name=".shorts.ShortsActivity"

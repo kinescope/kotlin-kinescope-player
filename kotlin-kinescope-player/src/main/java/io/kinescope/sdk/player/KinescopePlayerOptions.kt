@@ -23,6 +23,13 @@ data class KinescopePlayerOptions(
     var showDuration: Boolean = true,
     var showAttachments: Boolean = false,
     var showPlayPauseButton: Boolean = true,
+    var showCastButton: Boolean = false,
+    var showChaptersButton: Boolean = true,
+    var showPlaylistButton: Boolean = false,
     var showPlaybackSpeedInSettings: Boolean = true,
     var showAudioOnlyQualityInSettings: Boolean = true,
+    var showAudioTracksInSettings: Boolean = true,
+    var videoScale: Boolean = true,
+    var hdrToneMapping: Boolean = true,
+    var backgroundPlaybackAllowed: Boolean = false,
 )

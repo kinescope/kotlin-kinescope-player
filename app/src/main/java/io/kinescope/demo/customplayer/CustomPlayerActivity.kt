@@ -1,5 +1,7 @@
 package io.kinescope.demo.customplayer
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.graphics.Color
@@ -13,6 +15,7 @@ import android.widget.ImageView
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.constraintlayout.widget.ConstraintLayout
@@ -32,7 +35,10 @@ import io.kinescope.sdk.models.players.KinescopeUpdatePlayerRequest
 import io.kinescope.sdk.models.players.applyTo
 import io.kinescope.sdk.models.players.syncLegacyChromeFlags
 import io.kinescope.sdk.models.players.toPlayerSettings
-import io.kinescope.sdk.player.KinescopePictureInPicture
+import io.kinescope.demo.KinescopeDemoConfig
+import io.kinescope.demo.KinescopeViewModel
+import io.kinescope.sdk.playlist.KinescopePlaylistItem
+import io.kinescope.sdk.player.KinescopePictureInPictureSession
 import io.kinescope.sdk.player.KinescopePlayerOptions
 import io.kinescope.sdk.player.KinescopeVideoPlayer
 import io.kinescope.sdk.R as SdkR
@@ -46,15 +52,21 @@ import kotlinx.coroutines.withContext
 @UnstableApi
 class CustomPlayerActivity : AppCompatActivity() {
 
+    private val viewModel: KinescopeViewModel by viewModels {
+        KinescopeViewModel.Factory((application as KinescopeSDKDemoApplication).apiHelper)
+    }
+
     private lateinit var playerView: KinescopePlayerView
     private lateinit var fullscreenPlayerView: KinescopePlayerView
     private lateinit var player: KinescopeVideoPlayer
     private var isVideoFullscreen = false
     private var settingsScrollView: View? = null
     private var playerLayoutParamsBackup: ConstraintLayout.LayoutParams? = null
-    private var stopPlaybackAfterPipExit = false
+    private lateinit var pipSession: KinescopePictureInPictureSession
     private var suppressUiCallbacks = false
     private var selectedTemplate: KinescopePlayerTemplate? = null
+    private var hasRequestedVideo = false
+    private var currentVideoId: String? = null
 
     private lateinit var textSelectedTemplate: TextView
     private lateinit var buttonUpdateTemplate: MaterialButton
@@ -81,18 +93,98 @@ class CustomPlayerActivity : AppCompatActivity() {
         bindViews()
         setupSpinners()
 
-        player = KinescopeVideoPlayer(applicationContext)
+        player = KinescopeVideoPlayer(this)
         playerView = findViewById(R.id.kinescope_player)
         fullscreenPlayerView = findViewById(R.id.kinescope_player_fullscreen)
         settingsScrollView = findViewById(R.id.settings_scroll_view)
         playerLayoutParamsBackup = playerView.layoutParams as ConstraintLayout.LayoutParams
+        pipSession = KinescopePictureInPictureSession(
+            activity = this,
+            playerView = { playerView },
+            player = { player },
+            additionalPlayerViews = { listOf(fullscreenPlayerView) },
+        ).apply {
+            onEnteringPip = { applyPictureInPictureLayout() }
+            onExitingPip = { restorePictureInPictureLayout() }
+        }
         playerView.setIsFullscreen(false)
         fullscreenPlayerView.setIsFullscreen(true)
         playerView.setPlayer(player)
         playerView.onFullscreenButtonCallback = { toggleFullscreen() }
         fullscreenPlayerView.onFullscreenButtonCallback = { toggleFullscreen() }
-        playerView.onPictureInPictureButtonCallback = { enterPictureInPicture() }
-        fullscreenPlayerView.onPictureInPictureButtonCallback = { enterPictureInPicture() }
+        player.kinescopePlayerOptions.showPlaylistButton = true
+        playerView.onPlaylistItemSelected = { item ->
+            playPlaylistVideo(item.id)
+        }
+        playerView.onPlaylistCopyLinkClick = { item ->
+            copyPlaylistLink(item.shareUrl)
+        }
+        fullscreenPlayerView.onPlaylistItemSelected = { item ->
+            playPlaylistVideo(item.id)
+        }
+        fullscreenPlayerView.onPlaylistCopyLinkClick = { item ->
+            copyPlaylistLink(item.shareUrl)
+        }
+        viewModel.allVideos.observe(this) { videos ->
+            playerView.setPlaylistItems(
+                items = videos.map { video ->
+                    KinescopePlaylistItem(
+                        id = video.id,
+                        title = video.title,
+                        durationSeconds = video.duration,
+                        posterUrl = video.poster?.thumbnailUrl(),
+                        shareUrl = "https://kinescope.io/${video.id}",
+                    )
+                },
+                selectedId = currentVideoId,
+            )
+            fullscreenPlayerView.setPlaylistItems(
+                items = videos.map { video ->
+                    KinescopePlaylistItem(
+                        id = video.id,
+                        title = video.title,
+                        durationSeconds = video.duration,
+                        posterUrl = video.poster?.thumbnailUrl(),
+                        shareUrl = "https://kinescope.io/${video.id}",
+                    )
+                },
+                selectedId = currentVideoId,
+            )
+        }
+        viewModel.getAllVideos()
+        playerView.configureChrome {
+            addButton(
+                id = "demo_share",
+                iconRes = SdkR.drawable.ic_attachments,
+                contentDescription = getString(R.string.custom_player_demo_action),
+            ) {
+                Toast.makeText(
+                    this@CustomPlayerActivity,
+                    R.string.custom_player_demo_action_toast,
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+            configureSettingsMenu {
+                addCustomParameter(
+                    id = "demo_share",
+                    title = getString(R.string.custom_player_demo_action),
+                    icon = SdkR.drawable.ic_attachments,
+                    isAction = true,
+                )
+                onParameterAction = { parameter ->
+                    if (parameter is io.kinescope.sdk.settings.KinescopeSettingsView.Parameter.Custom &&
+                        parameter.id == "demo_share"
+                    ) {
+                        Toast.makeText(
+                            this@CustomPlayerActivity,
+                            R.string.custom_player_demo_action_toast,
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                }
+            }
+        }
+        pipSession.attach()
 
         bindUiFromOptions(player.kinescopePlayerOptions)
         setupListeners()
@@ -118,21 +210,28 @@ class CustomPlayerActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
-        player.loadVideo(DEMO_VIDEO_ID, onSuccess = { video ->
-            if (video != null && player.kinescopePlayerOptions.autoplay) {
-                player.play()
-            }
-        })
+        if (hasRequestedVideo) return
+        hasRequestedVideo = true
+        player.loadVideo(
+            KinescopeDemoConfig.DEFAULT_VIDEO_ID,
+            onSuccess = { video ->
+                if (video != null) {
+                    currentVideoId = video.id
+                    playerView.setSelectedPlaylistItemId(video.id)
+                    fullscreenPlayerView.setSelectedPlaylistItemId(video.id)
+                    player.play()
+                }
+            },
+            onFailed = { error ->
+                val detail = error?.message?.takeIf { it.isNotBlank() }
+                val message = detail ?: getString(R.string.custom_player_video_load_error)
+                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+            },
+        )
     }
 
     override fun onStop() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode) {
-            stopPlaybackAfterPipExit = true
-            super.onStop()
-            return
-        }
-        stopPlaybackAfterPipExit = false
-        player.stop()
+        pipSession.onStop()
         super.onStop()
     }
 
@@ -288,6 +387,7 @@ class CustomPlayerActivity : AppCompatActivity() {
         options.syncLegacyChromeFlags()
         player.applyPlaybackOptions()
         playerView.applyTemplateOptions()
+        fullscreenPlayerView.applyTemplateOptions()
     }
 
     private fun bindUiFromOptions(options: KinescopePlayerOptions) {
@@ -602,26 +702,7 @@ class CustomPlayerActivity : AppCompatActivity() {
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        if (isInPictureInPictureMode) {
-            applyPictureInPictureLayout()
-            playerView.prepareForPictureInPicture(true)
-            player.exoPlayer?.playWhenReady = true
-            player.play()
-        } else {
-            restorePictureInPictureLayout()
-            playerView.prepareForPictureInPicture(false)
-            playerView.refreshPlayerChrome()
-            if (stopPlaybackAfterPipExit) {
-                stopPlaybackAfterPipExit = false
-                player.stop()
-            } else {
-                KinescopePictureInPicture.onExitedPictureInPictureMode(
-                    activity = this,
-                    anchorView = playerView,
-                    onDismissed = { player.stop() },
-                )
-            }
-        }
+        pipSession.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
     }
 
     private fun applyPictureInPictureLayout() {
@@ -640,29 +721,6 @@ class CustomPlayerActivity : AppCompatActivity() {
         playerLayoutParamsBackup?.let { playerView.layoutParams = it }
     }
 
-    private fun enterPictureInPicture() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            return
-        }
-        if (player.exoPlayer?.isPlaying != true) {
-            player.play()
-        }
-        applyPictureInPictureLayout()
-        playerView.prepareForPictureInPicture(true)
-        val aspectRatio = KinescopePictureInPicture.getAspectRatio(player.exoPlayer)
-        val entered = KinescopePictureInPicture.enter(
-            activity = this,
-            playerView = playerView,
-            aspectRatio = aspectRatio,
-        )
-        if (!entered) {
-            restorePictureInPictureLayout()
-            playerView.prepareForPictureInPicture(false)
-            playerView.refreshPlayerChrome()
-            Toast.makeText(this, R.string.custom_player_pip_unavailable, Toast.LENGTH_SHORT).show()
-        }
-    }
-
     private fun resolveDeleteErrorMessage(error: Throwable): String {
         if (error.isDashboardPlayerDeleteRestriction()) {
             return getString(R.string.custom_player_delete_dashboard_blocked)
@@ -674,7 +732,19 @@ class CustomPlayerActivity : AppCompatActivity() {
         return getString(R.string.custom_player_delete_error)
     }
 
-    private companion object {
-        const val DEMO_VIDEO_ID = "b138bf19-72fc-474b-901b-00f323899598"
+    private fun playPlaylistVideo(videoId: String) {
+        currentVideoId = videoId
+        playerView.setSelectedPlaylistItemId(videoId)
+        fullscreenPlayerView.setSelectedPlaylistItemId(videoId)
+        player.loadVideo(videoId, onSuccess = {
+            player.play()
+        })
+    }
+
+    private fun copyPlaylistLink(link: String?) {
+        val url = link?.takeIf { it.isNotBlank() } ?: return
+        val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("video_link", url))
+        Toast.makeText(this, R.string.playlist_link_copied, Toast.LENGTH_SHORT).show()
     }
 }

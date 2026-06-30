@@ -1,10 +1,14 @@
 package io.kinescope.sdk.player
 
 import android.app.Activity
+import android.app.PendingIntent
 import android.app.PictureInPictureParams
+import android.app.RemoteAction
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Rect
+import android.graphics.drawable.Icon
 import android.os.Build
 import android.util.Rational
 import android.view.View
@@ -13,9 +17,14 @@ import androidx.annotation.RequiresApi
 import androidx.lifecycle.Lifecycle
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import io.kinescope.sdk.R
 
 @UnstableApi
 object KinescopePictureInPicture {
+
+    const val ACTION_PLAY_PAUSE = "io.kinescope.sdk.action.PIP_PLAY_PAUSE"
+
+    private const val REQUEST_PLAY_PAUSE = 1001
 
     fun isSupported(context: Context): Boolean {
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
@@ -40,23 +49,114 @@ object KinescopePictureInPicture {
     @RequiresApi(Build.VERSION_CODES.O)
     fun enter(
         activity: Activity,
-        playerView: View,
+        anchorView: View,
         aspectRatio: Rational? = null,
+        exoPlayer: ExoPlayer? = null,
     ): Boolean {
         if (!isSupported(activity)) {
             return false
         }
-
-        val paramsBuilder = PictureInPictureParams.Builder()
-        val ratio = aspectRatio ?: Rational(16, 9)
-        paramsBuilder.setAspectRatio(ratio)
-
-        val sourceRect = Rect()
-        if (playerView.getGlobalVisibleRect(sourceRect) && !sourceRect.isEmpty) {
-            paramsBuilder.setSourceRectHint(sourceRect)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && activity.isInPictureInPictureMode) {
+            updateActions(activity, exoPlayer)
+            return true
         }
 
-        return activity.enterPictureInPictureMode(paramsBuilder.build())
+        val params = buildParams(
+            activity = activity,
+            exoPlayer = exoPlayer,
+            aspectRatio = aspectRatio,
+            includeSourceRectHint = true,
+            anchorView = anchorView,
+        )
+        return activity.enterPictureInPictureMode(params)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    fun updateActions(activity: Activity, exoPlayer: ExoPlayer?) {
+        if (!activity.isInPictureInPictureMode) {
+            return
+        }
+        activity.setPictureInPictureParams(
+            buildParams(
+                activity = activity,
+                exoPlayer = exoPlayer,
+                aspectRatio = getAspectRatio(exoPlayer),
+                includeSourceRectHint = false,
+                anchorView = null,
+            )
+        )
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun buildParams(
+        activity: Activity,
+        exoPlayer: ExoPlayer?,
+        aspectRatio: Rational?,
+        includeSourceRectHint: Boolean,
+        anchorView: View?,
+    ): PictureInPictureParams {
+        val builder = PictureInPictureParams.Builder()
+            .setAspectRatio(aspectRatio ?: getAspectRatio(exoPlayer))
+            .setActions(buildActions(activity, exoPlayer?.isPlaying == true))
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setSeamlessResizeEnabled(true)
+        }
+
+        if (includeSourceRectHint && anchorView != null) {
+            val sourceRect = Rect()
+            if (anchorView.getGlobalVisibleRect(sourceRect) && !sourceRect.isEmpty) {
+                builder.setSourceRectHint(sourceRect)
+            }
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            builder.setTitle("")
+            builder.setSubtitle("")
+        }
+
+        return builder.build()
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun buildActions(activity: Activity, isPlaying: Boolean): List<RemoteAction> {
+        val playPauseTitle = activity.getString(
+            if (isPlaying) R.string.player_pip_pause else R.string.player_pip_play
+        )
+        val playPauseIcon = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
+
+        return listOf(
+            createBroadcastAction(
+                context = activity,
+                iconRes = playPauseIcon,
+                title = playPauseTitle,
+                action = ACTION_PLAY_PAUSE,
+                requestCode = REQUEST_PLAY_PAUSE,
+            ),
+        )
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun createBroadcastAction(
+        context: Context,
+        iconRes: Int,
+        title: String,
+        action: String,
+        requestCode: Int,
+    ): RemoteAction {
+        val intent = Intent(action).setPackage(context.packageName)
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            requestCode,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        return RemoteAction(
+            Icon.createWithResource(context, iconRes),
+            title,
+            title,
+            pendingIntent,
+        )
     }
 
     /**

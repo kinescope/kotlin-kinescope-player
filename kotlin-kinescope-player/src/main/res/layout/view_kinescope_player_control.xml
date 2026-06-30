@@ -8,6 +8,7 @@
     android:layout_gravity="bottom"
     android:background="@color/kinescope_control_overlay_scrim"
     android:clickable="false"
+    android:clipChildren="false"
     android:layoutDirection="ltr"
     android:orientation="vertical"
     tools:targetApi="28">
@@ -39,11 +40,21 @@
             tools:text="Author text" />
     </LinearLayout>
 
+    <include
+        layout="@layout/view_scrub_top_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top" />
+
     <io.kinescope.sdk.view.KinescopePlayPauseMorphView
         android:id="@+id/kinescope_play_pause"
         android:layout_width="@dimen/kinescope_play_pause_size"
         android:layout_height="@dimen/kinescope_play_pause_size"
-        android:layout_gravity="center" />
+        android:layout_gravity="center"
+        android:background="@null"
+        android:contentDescription="@string/player_play"
+        android:scaleType="fitCenter"
+        android:visibility="gone" />
 
     <LinearLayout
         android:id="@+id/kinescope_control_bar"
@@ -52,6 +63,7 @@
         android:layout_gravity="bottom"
         android:baselineAligned="false"
         android:clipChildren="false"
+        android:clipToPadding="false"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
@@ -60,6 +72,10 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_vertical"
+            android:clickable="true"
+            android:clipChildren="true"
+            android:clipToPadding="true"
+            android:focusable="true"
             android:gravity="center_vertical"
             android:minHeight="@dimen/kinescope_mobile_control_time_height"
             android:orientation="horizontal">
@@ -106,7 +122,8 @@
             <TextView
                 android:id="@+id/kinescope_position"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_height="@dimen/kinescope_mobile_control_time_height"
+                android:gravity="center_vertical"
                 android:includeFontPadding="false"
                 android:minEms="2"
                 android:textColor="#FFFFFF"
@@ -114,44 +131,56 @@
                 android:textStyle="normal"
                 tools:text="12:49" />
 
-            <TextView
-                android:id="@+id/time_separator_view"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginHorizontal="4dp"
-                android:includeFontPadding="false"
-                android:text="@string/player_time_divider"
-                android:textColor="#FFFFFF"
-                android:textSize="14sp"
-                android:textStyle="normal"
-                android:visibility="gone" />
+            <FrameLayout
+                android:id="@+id/kinescope_time_duration_suffix_clip"
+                android:layout_width="0dp"
+                android:layout_height="@dimen/kinescope_mobile_control_time_height"
+                android:clipChildren="true"
+                android:clipToPadding="true"
+                android:visibility="gone">
 
-            <TextView
-                android:id="@+id/kinescope_duration"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:includeFontPadding="false"
-                android:textColor="#FFFFFF"
-                android:textSize="14sp"
-                android:textStyle="normal"
-                android:visibility="gone"
-                tools:text="0:00" />
+                <TextView
+                    android:id="@+id/kinescope_duration"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:layout_gravity="start|center_vertical"
+                    android:ellipsize="none"
+                    android:gravity="center_vertical"
+                    android:includeFontPadding="false"
+                    android:maxLines="1"
+                    android:singleLine="true"
+                    android:textColor="@color/white_secondary"
+                    android:textSize="14sp"
+                    android:textStyle="normal"
+                    tools:text=" / 0:00" />
+
+            </FrameLayout>
 
         </LinearLayout>
 
-        <io.kinescope.sdk.view.KinescopeTimeBar
-            android:id="@+id/kinescope_progress"
+        <FrameLayout
+            android:id="@+id/kinescope_progress_container"
             android:layout_width="0dp"
             android:layout_height="@dimen/kinescope_progress_control_height"
             android:layout_gravity="center_vertical"
             android:layout_weight="1"
-            app:bar_height="@dimen/kinescope_progress_bar_height"
-            app:played_color="@color/kinescope_primary_color"
-            app:scrubber_color="@color/kinescope_primary_color"
-            app:scrubber_disabled_size="0dp"
-            app:scrubber_dragged_size="0dp"
-            app:scrubber_enabled_size="0dp"
-            app:touch_target_height="@dimen/kinescope_progress_touch_target_height" />
+            android:clipChildren="false"
+            android:clipToPadding="false">
+
+            <io.kinescope.sdk.view.KinescopeTimeBar
+                android:id="@+id/kinescope_progress"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_gravity="center_vertical"
+                app:bar_height="@dimen/kinescope_progress_bar_height"
+                app:played_color="@color/kinescope_primary_color"
+                app:scrubber_color="@color/kinescope_primary_color"
+                app:scrubber_disabled_size="0dp"
+                app:scrubber_dragged_size="0dp"
+                app:scrubber_enabled_size="0dp"
+                app:touch_target_height="@dimen/kinescope_progress_touch_target_height" />
+
+        </FrameLayout>
 
         <Space
             android:id="@+id/kinescope_control_bar_end_spacer"
@@ -169,51 +198,136 @@
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <LinearLayout
-                android:id="@+id/kinescope_options_expanded_group"
-                android:layout_width="wrap_content"
+            <FrameLayout
+                android:id="@+id/kinescope_options_expandable_strip"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:clipChildren="false"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
+                android:clipToPadding="false"
                 android:visibility="gone">
 
-                <ImageButton
-                    android:id="@+id/custom_btn"
-                    style="@style/KinescopeMediaButton"
-                    android:importantForAccessibility="no"
-                    android:visibility="gone" />
+                <LinearLayout
+                    android:id="@+id/kinescope_options_expandable_content"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="end"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:id="@+id/kinescope_options_expanded_group"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:visibility="gone">
+
+                        <LinearLayout
+                            android:id="@+id/kinescope_custom_buttons_container"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal"
+                            android:visibility="gone" />
+
+                    </LinearLayout>
+
+                    <ImageButton
+                        android:id="@+id/kinescope_picture_in_picture"
+                        style="@style/KinescopeMediaButton"
+                        android:contentDescription="@string/player_picture_in_picture"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/ic_mini_player"
+                        android:visibility="gone" />
+
+                    <ImageButton
+                        android:id="@+id/kinescope_subtitles"
+                        style="@style/KinescopeMediaButton"
+                        android:contentDescription="@string/settings_subtitles_cc"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/ic_cc_off"
+                        android:visibility="gone" />
+
+                    <ImageButton
+                        android:id="@+id/kinescope_playlist"
+                        style="@style/KinescopeMediaButton"
+                        android:contentDescription="@string/player_playlist"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/ic_playlist_player"
+                        android:visibility="gone" />
+
+                    <ImageButton
+                        android:id="@+id/kinescope_chapters"
+                        style="@style/KinescopeMediaButton"
+                        android:contentDescription="@string/player_chapters"
+                        android:layout_marginStart="@dimen/kinescope_control_section_gap"
+                        android:src="@drawable/ic_chapters"
+                        android:visibility="gone" />
+
+                    <ImageButton
+                        android:id="@+id/kinescope_cast"
+                        style="@style/KinescopeMediaButton"
+                        android:contentDescription="@string/player_cast"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/ic_cast"
+                        android:visibility="gone" />
+
+                    <ImageButton
+                        android:id="@+id/kinescope_settings"
+                        style="@style/KinescopeMediaButton"
+                        android:importantForAccessibility="no"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/ic_settings" />
+
+                </LinearLayout>
+
+            </FrameLayout>
+
+            <LinearLayout
+                android:id="@+id/kinescope_trailing_buttons_fixed"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                    <ImageButton
+                        android:id="@+id/kinescope_fullscreen"
+                        style="@style/KinescopeMediaButton"
+                        android:importantForAccessibility="no"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/ic_fullscreen" />
 
                 <ImageButton
-                    android:id="@+id/kinescope_picture_in_picture"
-                    style="@style/KinescopeMediaButton"
-                    android:contentDescription="@string/player_picture_in_picture"
-                    android:src="@drawable/ic_mini_player"
-                    android:visibility="gone" />
-
-                <ImageButton
-                    android:id="@+id/kinescope_settings"
+                    android:id="@+id/kinescope_options_dots"
                     style="@style/KinescopeMediaButton"
                     android:importantForAccessibility="no"
-                    android:src="@drawable/ic_settings" />
+                    android:src="@drawable/ic_dots_horizontal"
+                    android:visibility="gone" />
 
             </LinearLayout>
-
-            <ImageButton
-                android:id="@+id/kinescope_fullscreen"
-                style="@style/KinescopeMediaButton"
-                android:importantForAccessibility="no"
-                android:src="@drawable/ic_fullscreen" />
-
-            <ImageButton
-                android:id="@+id/kinescope_options_dots"
-                style="@style/KinescopeMediaButton"
-                android:importantForAccessibility="no"
-                android:src="@drawable/ic_dots_horizontal"
-                android:visibility="gone" />
 
         </LinearLayout>
 
     </LinearLayout>
+
+    <TextView
+        android:id="@+id/scrub_chapter_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|start"
+        android:elevation="12dp"
+        android:ellipsize="end"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:maxWidth="@dimen/kinescope_caption_max_width"
+        android:paddingLeft="@dimen/kinescope_caption_padding_horizontal"
+        android:paddingTop="@dimen/kinescope_caption_padding_vertical"
+        android:paddingRight="@dimen/kinescope_caption_padding_horizontal"
+        android:paddingBottom="@dimen/kinescope_caption_padding_vertical"
+        android:textColor="@color/white"
+        android:textSize="14sp"
+        android:visibility="gone"
+        tools:text="Chapter 1"
+        tools:visibility="visible" />
 
 </FrameLayout>

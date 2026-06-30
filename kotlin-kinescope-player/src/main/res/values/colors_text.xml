@@ -1,10 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="white">#FFFFFF</color>
+    <color name="white_secondary">#A3FFFFFF</color>
     <color name="gray">#A9A9A9</color>
 
     <color name="black">#FF000000</color>
     <color name="player_custom_color_remaining">#6C2EB9</color>
     <color name="seekbar_background">#40FFFFFF</color>
     <color name="seekbar_progress">#6161FC</color>
+    <color name="kinescope_caption_background">#111111</color>
+
+    <color name="kinescope_playlist_menu_background">#111111</color>
+    <color name="kinescope_playlist_menu_row_selected">#0AFFFFFF</color>
+    <color name="kinescope_playlist_menu_duration_background">#CC111111</color>
 </resources>

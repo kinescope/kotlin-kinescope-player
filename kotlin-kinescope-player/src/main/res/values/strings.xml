@@ -1,23 +1,75 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="player_time_divider">/</string>
+    <string name="player_time_divider"><![CDATA[ / ]]></string>
     <string name="player_picture_in_picture">Picture in picture</string>
+    <string name="player_pip_unavailable">Picture in picture is not available on this device</string>
+    <string name="player_pip_play">Play</string>
+    <string name="player_pip_pause">Pause</string>
+    <string name="player_pip_close">Close</string>
+    <string name="player_pip_expand">Expand to full screen</string>
     <string name="player_scrub_double_tap_hint">Double tap ± 10 sec</string>
     <string name="player_seek_back">Seek back 10 seconds</string>
     <string name="player_seek_forward">Seek forward 10 seconds</string>
     <string name="player_seek_seconds">%d sec</string>
+    <string name="player_play">Play</string>
+    <string name="player_cast">Cast</string>
+    <string name="player_cast_device">Casting to %1$s</string>
+    <string name="player_cast_device_unknown">device</string>
+    <string name="player_cast_stop">Stop casting</string>
 
     <string name="live">Live</string>
     <string name="live_time_offset">-%s</string>
     <string name="live_its_starting_soon">It\'s starting soon</string>
 
+    <string name="player_background_playback_channel">Background playback</string>
+    <string name="player_background_playback_title">Kinescope playback</string>
+
+    <string name="player_chapters">Chapters</string>
+    <string name="player_chapters_title">Chapters</string>
+    <string name="player_playlist">Playlist</string>
+    <string name="player_playlist_title">Playlist</string>
+    <string name="player_playlist_count">%1$d videos</string>
+    <string name="player_playlist_copy_link">Copy link</string>
+
     <string name="settings_parameter_playback_speed">Speed</string>
     <string name="settings_parameter_video_quality">Quality</string>
+    <string name="settings_parameter_scale">Scale</string>
+    <string name="settings_video_scale_decrease">− 3%</string>
+    <string name="settings_video_scale_increase">+ 3%</string>
+    <string name="settings_video_scale_reset">100%</string>
+    <string name="player_video_scale_reset">Reset video scale</string>
     <string name="settings_parameter_picture_in_picture">Picture in picture</string>
     <string name="settings_parameter_subtitles">Subtitles</string>
+    <string name="settings_subtitles_cc">Subtitles/CC</string>
+    <string name="settings_captions_search">Captions search</string>
+    <string name="settings_subtitles_options">Options</string>
+    <string name="settings_captions_search_close">Close captions search</string>
+    <string name="settings_captions_search_clear">Clear search</string>
+    <string name="settings_captions_search_prev">Previous match</string>
+    <string name="settings_captions_search_next">Next match</string>
+    <string name="settings_captions_search_counter">%1$d/%2$d</string>
+    <string name="settings_parameter_audio_tracks">Audio</string>
+    <string name="settings_audio_tracks_title">Audio track</string>
     <string name="settings_parameter_attachments">Attachments</string>
     <string name="settings_subtitles_off">Off</string>
+    <string name="settings_subtitles_appearance">Settings</string>
+    <string name="settings_subtitles_appearance_title">Settings</string>
+    <string name="settings_subtitles_reset">Reset</string>
+    <string name="settings_subtitles_font_color">Font color</string>
+    <string name="settings_subtitles_font_size">Font size</string>
+    <string name="settings_subtitles_bg_color">Background color</string>
+    <string name="settings_subtitles_bg_opacity">Background opacity</string>
+    <string name="settings_subtitles_color_white">White</string>
+    <string name="settings_subtitles_color_green">Green</string>
+    <string name="settings_subtitles_color_cyan">Cyan</string>
+    <string name="settings_subtitles_color_blue">Blue</string>
+    <string name="settings_subtitles_color_magenta">Magenta</string>
+    <string name="settings_subtitles_color_red">Red</string>
+    <string name="settings_subtitles_color_black">Black</string>
+    <string name="settings_subtitles_color_custom">Custom</string>
     <string name="settings_video_quality_audio_only">Audio only</string>
+    <string name="settings_audio_track_default">Track %1$d</string>
+    <string name="settings_audio_track_numbered">%1$s · %2$d</string>
 
     <string name="settings_playback_speed_0_25">0.25x</string>
     <string name="settings_playback_speed_0_5">0.5x</string>

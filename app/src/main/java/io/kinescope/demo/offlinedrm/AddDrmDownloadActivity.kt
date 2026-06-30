@@ -23,6 +23,7 @@ import androidx.media3.exoplayer.offline.DownloadManager
 import androidx.media3.exoplayer.offline.DownloadRequest
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import io.kinescope.demo.KinescopeDemoConfig
 import io.kinescope.demo.R
 import io.kinescope.demo.application.KinescopeSDKDemoApplication
 import io.kinescope.sdk.api.KinescopeApiHelper
@@ -225,7 +226,7 @@ class AddDrmDownloadActivity : AppCompatActivity() {
         adapter?.notifyDataSetChanged()
 
         val videoId = generateVideoIdFromUrl(videoData.hlsLink)
-        val standardLicenseUrl = "https://license.kinescope.io/v1/vod/$videoId/acquire/widevine?token="
+        val standardLicenseUrl = KinescopeDemoConfig.widevineLicenseUrl(videoId)
         
         Toast.makeText(this, "Скачиваем... Не покидайте страницу, пока видео не скачается", Toast.LENGTH_LONG).show()
 

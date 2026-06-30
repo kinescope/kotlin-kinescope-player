@@ -4,35 +4,33 @@ package io.kinescope.demo.offlinedrm
 
 import android.content.pm.ActivityInfo
 import android.os.Bundle
+import android.util.Base64
 import android.view.View
 import android.view.WindowManager
 import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.isVisible
 import androidx.core.net.toUri
+import androidx.core.view.isVisible
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
-import androidx.media3.common.util.Log
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.FileDataSource
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.offline.Download
+import io.kinescope.demo.KinescopeDemoConfig
 import io.kinescope.demo.R
 import io.kinescope.demo.databinding.ActivityOfflineMainPlayerBinding
 import io.kinescope.sdk.player.KinescopeVideoPlayer
+import io.kinescope.sdk.shorts.AppJson
 import io.kinescope.sdk.shorts.download.VideoDownloadManager
 import io.kinescope.sdk.shorts.drm.DrmConfigurator
 import io.kinescope.sdk.shorts.models.VideoData
-import io.kinescope.sdk.shorts.AppJson
 import io.kinescope.sdk.view.KinescopePlayerView
-import io.kinescope.sdk.shorts.managers.PlayerFactory
-import androidx.media3.exoplayer.ExoPlayer
-import android.util.Base64
 import java.security.MessageDigest
 import java.util.UUID
 
@@ -41,7 +39,6 @@ class OfflineMainPlayerActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityOfflineMainPlayerBinding
     private lateinit var kinescopeVideoPlayer: KinescopeVideoPlayer
-    private var exoPlayer: ExoPlayer? = null
     private val drmConfigurator = DrmConfigurator(this)
     private var isVideoFullscreen = false
 
@@ -65,12 +62,8 @@ class OfflineMainPlayerActivity : AppCompatActivity() {
         }
 
         val videoData = try {
-            AppJson.decodeFromString(
-                VideoData.serializer(),
-                videoDataJson
-            )
+            AppJson.decodeFromString(VideoData.serializer(), videoDataJson)
         } catch (e: Exception) {
-
             Toast.makeText(this, "Ошибка загрузки данных видео", Toast.LENGTH_LONG).show()
             finish()
             return
@@ -82,17 +75,13 @@ class OfflineMainPlayerActivity : AppCompatActivity() {
             finish()
             return
         }
-        
+
         binding.toolbar.findViewById<TextView>(R.id.TitleVideo).text = videoData.title
         binding.toolbar.findViewById<ImageButton>(R.id.btnBack).setOnClickListener {
             onBackPressedDispatcher.onBackPressed()
         }
 
-        exoPlayer = PlayerFactory(this).createPlayer()
-        kinescopeVideoPlayer = KinescopeVideoPlayer(this.applicationContext)
-        kinescopeVideoPlayer.exoPlayer?.release()
-        kinescopeVideoPlayer.exoPlayer = exoPlayer
-
+        kinescopeVideoPlayer = KinescopeVideoPlayer(applicationContext)
         binding.playerView.setPlayer(kinescopeVideoPlayer)
         binding.playerView.setIsFullscreen(false)
         binding.playerView.onFullscreenButtonCallback = { toggleFullscreen() }
@@ -101,29 +90,30 @@ class OfflineMainPlayerActivity : AppCompatActivity() {
         binding.playerViewFullscreen.onFullscreenButtonCallback = { toggleFullscreen() }
 
         binding.playerView.post {
-
-            binding.playerView.postDelayed({
-                try {
-                    setupOfflinePlayer(videoData, download)
-                } catch (e: Exception) {
-                    Toast.makeText(this, "Ошибка инициализации плеера", Toast.LENGTH_LONG).show()
-                    finish()
-                }
-            }, 100)
+            try {
+                setupOfflinePlayer(videoData, download)
+            } catch (e: Exception) {
+                Toast.makeText(this, "Ошибка инициализации плеера", Toast.LENGTH_LONG).show()
+                finish()
+            }
         }
     }
 
     private fun setupOfflinePlayer(videoData: VideoData, download: Download) {
+        val player = kinescopeVideoPlayer.exoPlayer
+            ?: throw IllegalStateException("ExoPlayer is not initialized")
+
         val contentId = generateContentId(videoData.hlsLink)
         val keySetId = download.request.keySetId ?: drmConfigurator.loadOfflineLicenseFromStorage(contentId)
 
         val hasDrm = keySetId != null
         val licenseUrl = if (hasDrm) {
-            videoData.drm?.widevine?.licenseUrl ?: run {
-                val videoId = generateVideoIdFromUrl(videoData.hlsLink)
-                "https://license.kinescope.io/v1/vod/$videoId/acquire/widevine?token="
-            }
-        } else null
+            videoData.drm?.widevine?.licenseUrl ?: KinescopeDemoConfig.widevineLicenseUrl(
+                generateVideoIdFromUrl(videoData.hlsLink),
+            )
+        } else {
+            null
+        }
 
         val cacheDataSourceFactory = CacheDataSource.Factory()
             .setCache(VideoDownloadManager.getDownloadCache(this))
@@ -142,28 +132,23 @@ class OfflineMainPlayerActivity : AppCompatActivity() {
                 .setDrmKeySetId(keySetId)
         }
 
-
         val mediaItem = mediaItemBuilder.build()
-        
-        exoPlayer?.addListener(object : Player.Listener {
+
+        player.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
-                Toast.makeText(this@OfflineMainPlayerActivity, "Ошибка воспроизведения: ${error.message}", Toast.LENGTH_SHORT).show()
-            }
-            
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_READY) {
-                    binding.playerView.setPlayer(kinescopeVideoPlayer)
-                    exoPlayer?.playWhenReady = true
-                }
+                Toast.makeText(
+                    this@OfflineMainPlayerActivity,
+                    "Ошибка воспроизведения: ${error.message}",
+                    Toast.LENGTH_SHORT,
+                ).show()
             }
         })
 
-        exoPlayer?.setMediaSource(HlsMediaSource.Factory(cacheDataSourceFactory).createMediaSource(mediaItem))
-        exoPlayer?.prepare()
-
-        binding.playerView.invalidate()
-        binding.playerView.requestLayout()
-
+        player.setMediaSource(
+            HlsMediaSource.Factory(cacheDataSourceFactory).createMediaSource(mediaItem),
+        )
+        player.prepare()
+        player.playWhenReady = true
     }
 
     private fun generateContentId(url: String): String {
@@ -175,9 +160,8 @@ class OfflineMainPlayerActivity : AppCompatActivity() {
             UUID.randomUUID().toString()
         }
     }
-    
-    private fun generateVideoIdFromUrl(url: String): String {
 
+    private fun generateVideoIdFromUrl(url: String): String {
         return try {
             val parts = url.substringBefore("?").split("/")
             parts.getOrNull(parts.size - 2) ?: UUID.randomUUID().toString()
@@ -197,57 +181,63 @@ class OfflineMainPlayerActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        kinescopeVideoPlayer.release()
         super.onDestroy()
-        exoPlayer?.release()
-        exoPlayer = null
-        kinescopeVideoPlayer.stop()
     }
-    
+
     private fun toggleFullscreen() {
         if (isVideoFullscreen) {
             setFullscreen(false)
-            if (supportActionBar != null) {
-                supportActionBar?.show()
-            }
+            supportActionBar?.show()
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             isVideoFullscreen = false
         } else {
             setFullscreen(true)
-            if (supportActionBar != null) {
-                supportActionBar?.hide()
-            }
+            supportActionBar?.hide()
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
             isVideoFullscreen = true
         }
         binding.playerViewFullscreen.isVisible = isVideoFullscreen
     }
-    
+
     private fun setFullscreen(fullscreen: Boolean) {
         if (fullscreen) {
             window.setFlags(
                 WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                WindowManager.LayoutParams.FLAG_FULLSCREEN
+                WindowManager.LayoutParams.FLAG_FULLSCREEN,
             )
             window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
             binding.toolbar.visibility = View.GONE
             binding.playerViewFullscreen.setPlayer(kinescopeVideoPlayer)
-            KinescopePlayerView.switchTargetView(binding.playerView, binding.playerViewFullscreen, kinescopeVideoPlayer)
+            KinescopePlayerView.switchTargetView(
+                binding.playerView,
+                binding.playerViewFullscreen,
+                kinescopeVideoPlayer,
+            )
         } else {
             window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
-                window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_FULLSCREEN
+                window.decorView.systemUiVisibility = (
+                    View.SYSTEM_UI_FLAG_FULLSCREEN
                         and View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                        and View.SYSTEM_UI_FLAG_HIDE_NAVIGATION)
+                        and View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    )
             } else {
-                window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_FULLSCREEN
-                        and View.SYSTEM_UI_FLAG_HIDE_NAVIGATION)
+                window.decorView.systemUiVisibility = (
+                    View.SYSTEM_UI_FLAG_FULLSCREEN
+                        and View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    )
             }
             binding.toolbar.visibility = View.VISIBLE
             binding.playerView.setPlayer(kinescopeVideoPlayer)
-            KinescopePlayerView.switchTargetView(binding.playerViewFullscreen, binding.playerView, kinescopeVideoPlayer)
+            KinescopePlayerView.switchTargetView(
+                binding.playerViewFullscreen,
+                binding.playerView,
+                kinescopeVideoPlayer,
+            )
         }
     }
-    
+
     override fun onBackPressed() {
         if (isVideoFullscreen) {
             toggleFullscreen()
@@ -256,3 +246,4 @@ class OfflineMainPlayerActivity : AppCompatActivity() {
         super.onBackPressed()
     }
 }
+

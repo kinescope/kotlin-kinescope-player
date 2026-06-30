@@ -1,7 +1,11 @@
 package io.kinescope.sdk.player
 
+import android.app.Activity
 import android.content.Context
 import android.net.Uri
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -16,7 +20,6 @@ import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.trackselection.AdaptiveTrackSelection
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
-import com.google.common.collect.ImmutableList
 import io.kinescope.sdk.api.KinescopeFetch
 import io.kinescope.sdk.logger.KinescopeLogger
 import io.kinescope.sdk.logger.KinescopeLoggerLevel
@@ -39,15 +42,27 @@ class KinescopeVideoPlayer(
     private val USER_AGENT = "KinescopeAndroidVideoKotlin"
     private var currentKinescopeVideo: KinescopeVideo? = null
     private var fetch: KinescopeFetch
+    private var boundLifecycle: Lifecycle? = null
+    private var lifecycleObserver: DefaultLifecycleObserver? = null
+    private var resumeOnStart = false
+    private var playerHost: KinescopePlayerHost? = null
 
     init {
-        exoPlayer = ExoPlayer.Builder(context)
+        val toneMapToSdr = KinescopeHdrHelper.shouldToneMapToSdr(context, kinescopePlayerOptions.hdrToneMapping)
+        val playerBuilder = ExoPlayer.Builder(context)
             .setTrackSelector(DefaultTrackSelector(context, AdaptiveTrackSelection.Factory()))
             .setSeekBackIncrementMs(10000)
             .setSeekForwardIncrementMs(10000)
-            .build()
+        if (toneMapToSdr) {
+            playerBuilder.setRenderersFactory(
+                KinescopeToneMappingRenderersFactory(context, requestOpenGlToneMapping = true),
+            )
+        }
+        exoPlayer = playerBuilder.build()
+        playerHost = exoPlayer?.let { KinescopePlayerHost(it) }
 
         fetch = FetchBuilder.getKinescopeFetch(kinescopePlayerOptions.referer)
+        exoPlayer?.let { KinescopeHdrHelper.configure(it, context, kinescopePlayerOptions.hdrToneMapping) }
     }
 
     private fun getDashMediaSource(videoBuilder: MediaItem.Builder): DashMediaSource {
@@ -74,10 +89,7 @@ class KinescopeVideoPlayer(
             .setLoadErrorHandlingPolicy(KinescopeErrorHandlingPolicy())
             .createMediaSource(
                 videoBuilder
-                    .setDrmConfiguration(
-                        MediaItem.DrmConfiguration.Builder(C.WIDEVINE_UUID)
-                            .build()
-                    )
+                    .applyKinescopeWidevineDrm()
                     .setMimeType(MimeTypes.APPLICATION_MPD)
                     .setTag(null)
                     .build()
@@ -89,21 +101,17 @@ class KinescopeVideoPlayer(
 
         val mediaSource = when {
             kinescopeVideo.dashLink.isNullOrEmpty().not() -> {
-                val videoBuilder: MediaItem.Builder = MediaItem.Builder()
-                    .setUri(Uri.parse(kinescopeVideo.dashLink))
-
-                if (getShowSubtitles() && kinescopeVideo.subtitles.isNotEmpty()) {
-                    val subtitle: MediaItem.SubtitleConfiguration =
-                        MediaItem.SubtitleConfiguration.Builder(Uri.parse(kinescopeVideo.subtitles.first().url))
-                            .setMimeType(MimeTypes.TEXT_VTT)
-                            .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
-                            .build()
-
-                    videoBuilder.setSubtitleConfigurations(ImmutableList.of(subtitle))
-                }
-
                 source = kinescopeVideo.dashLink.orEmpty()
-                getDashMediaSource(videoBuilder)
+                if (getShowSubtitles() && kinescopeVideo.subtitles.isNotEmpty()) {
+                    KinescopeSubtitleMediaSources.createDashWithSideloadedSubtitles(
+                        video = kinescopeVideo,
+                        referer = kinescopePlayerOptions.referer,
+                    )
+                } else {
+                    getDashMediaSource(
+                        MediaItem.Builder().setUri(Uri.parse(kinescopeVideo.dashLink)),
+                    )
+                }
             }
 
             kinescopeVideo.hlsLink.isNullOrEmpty().not() -> {
@@ -145,6 +153,89 @@ class KinescopeVideoPlayer(
 
     fun getVideo(): KinescopeVideo? = currentKinescopeVideo
 
+    /** Active media3 player for UI binding (local ExoPlayer by default, CastPlayer when casting). */
+    val playbackPlayer: Player?
+        get() = playerHost?.activePlayer
+
+    val isCasting: Boolean
+        get() = playerHost?.isCasting == true
+
+    /**
+     * Facade for swapping the active player (e.g. local ExoPlayer ↔ CastPlayer).
+     */
+    fun getOrCreatePlayerHost(): KinescopePlayerHost? {
+        val player = exoPlayer ?: return null
+        return playerHost ?: KinescopePlayerHost(player).also { playerHost = it }
+    }
+
+    fun switchToCastPlayer(castPlayer: Player) {
+        playerHost?.switchTo(castPlayer)
+    }
+
+    fun switchToLocalPlayer() {
+        playerHost?.switchToLocal()
+    }
+
+    /**
+     * Binds pause/resume/release to the Android lifecycle.
+     *
+     * @param isPipActive Skip pause on [Lifecycle.Event.ON_STOP] while PiP is active.
+     * @param backgroundPlaybackAllowed Keep playback running across stop/start.
+     */
+    fun bindLifecycle(
+        lifecycle: Lifecycle,
+        isPipActive: () -> Boolean = { false },
+        backgroundPlaybackAllowed: Boolean = kinescopePlayerOptions.backgroundPlaybackAllowed,
+        releaseOnDestroy: Boolean = true,
+    ) {
+        unbindLifecycle()
+        val observer = object : DefaultLifecycleObserver {
+            override fun onStop(owner: LifecycleOwner) {
+                if (backgroundPlaybackAllowed) {
+                    val finishing = (owner as? Activity)?.isFinishing == true
+                    if (finishing) {
+                        KinescopePlaybackService.disconnect(context)
+                        pause()
+                        return
+                    }
+                    KinescopePlaybackService.connect(context, this@KinescopeVideoPlayer)
+                    return
+                }
+                if (isPipActive()) return
+                resumeOnStart = playbackPlayer?.playWhenReady == true
+                pause()
+            }
+
+            override fun onStart(owner: LifecycleOwner) {
+                if (backgroundPlaybackAllowed) {
+                    KinescopePlaybackService.disconnect(context)
+                }
+                if (backgroundPlaybackAllowed || !resumeOnStart) return
+                resumeOnStart = false
+                play()
+            }
+
+            override fun onDestroy(owner: LifecycleOwner) {
+                KinescopePlaybackService.disconnect(context)
+                unbindLifecycle()
+                if (releaseOnDestroy) {
+                    releasePlayerEngine()
+                }
+            }
+        }
+        boundLifecycle = lifecycle
+        lifecycleObserver = observer
+        lifecycle.addObserver(observer)
+    }
+
+    fun unbindLifecycle() {
+        val lifecycle = boundLifecycle ?: return
+        lifecycleObserver?.let { lifecycle.removeObserver(it) }
+        boundLifecycle = null
+        lifecycleObserver = null
+        resumeOnStart = false
+    }
+
     fun loadVideo(
         videoId: String,
         onSuccess: ((KinescopeVideo?) -> Unit)? = null,
@@ -184,43 +275,65 @@ class KinescopeVideoPlayer(
     }
 
     fun play() {
-        exoPlayer?.play()
+        playbackPlayer?.play()
         KinescopeLogger.log(KinescopeLoggerLevel.PLAYER, "Start playing")
     }
 
     fun pause() {
-        exoPlayer?.pause()
+        playbackPlayer?.pause()
         KinescopeLogger.log(KinescopeLoggerLevel.PLAYER, "Pause playing")
     }
 
     fun stop() {
-        exoPlayer?.stop()
+        playbackPlayer?.stop()
         KinescopeLogger.log(KinescopeLoggerLevel.PLAYER, "Stop playing")
     }
 
     fun release() {
+        KinescopePlaybackService.disconnect(context)
+        unbindLifecycle()
+        releasePlayerEngine()
+    }
+
+    private fun releasePlayerEngine() {
         exoPlayer?.release()
         exoPlayer = null
+        playerHost = null
+    }
+
+    /**
+     * Swaps the local ExoPlayer instance (e.g. custom offline DRM engine).
+     * Re-attach [io.kinescope.sdk.view.KinescopePlayerView] via [setPlayer] after calling this.
+     */
+    fun replaceExoPlayer(player: ExoPlayer) {
+        exoPlayer?.release()
+        exoPlayer = player
+        playerHost = KinescopePlayerHost(player)
     }
 
     fun seekTo(toMilliSeconds: Long) {
-        exoPlayer?.seekTo(exoPlayer!!.contentPosition + toMilliSeconds)
+        val player = playbackPlayer ?: return
+        player.seekTo(player.contentPosition + toMilliSeconds)
         KinescopeLogger.log(KinescopeLoggerLevel.PLAYER, "seek to ${toMilliSeconds / 1000} seconds")
     }
 
+    fun seekToPosition(positionMs: Long) {
+        playbackPlayer?.seekTo(positionMs.coerceAtLeast(0L))
+    }
+
     fun moveForward() {
-        exoPlayer?.seekForward()
+        playbackPlayer?.seekForward()
         KinescopeLogger.log(
             KinescopeLoggerLevel.PLAYER,
-            "Moved forward to ${exoPlayer!!.seekParameters.toleranceAfterUs}"
+            "Moved forward to ${exoPlayer?.seekParameters?.toleranceAfterUs}"
         )
     }
 
     fun moveBack() {
-        exoPlayer?.seekBack()
+        playbackPlayer?.seekBack()
         KinescopeLogger.log(
             KinescopeLoggerLevel.PLAYER,
-            "Moved back to ${exoPlayer!!.seekParameters.toleranceBeforeUs}"
+            "Moved back to ${exoPlayer?.seekParameters?.toleranceBeforeUs}"
         )
     }
 
@@ -232,12 +345,21 @@ class KinescopeVideoPlayer(
 
     fun setPlaybackSpeed(speed: Float) {
         exoPlayer?.setPlaybackSpeed(speed)
+        if (isCasting) {
+            playbackPlayer?.setPlaybackSpeed(speed)
+        }
         KinescopeLogger.log(KinescopeLoggerLevel.PLAYER, "Playback speed changed to $speed")
     }
 
     fun setShowSubtitles(value: Boolean) {
         kinescopePlayerOptions.showSubtitlesButton = value
     }
+
+    fun setShowCast(value: Boolean) {
+        kinescopePlayerOptions.showCastButton = value
+    }
+
+    fun getShowCast(): Boolean = kinescopePlayerOptions.showCastButton
 
     fun setShowOptions(value: Boolean) {
         kinescopePlayerOptions.showOptionsButton = value
@@ -261,5 +383,9 @@ class KinescopeVideoPlayer(
 
     fun setShowAudioOnlyQualityInSettings(value: Boolean) {
         kinescopePlayerOptions.showAudioOnlyQualityInSettings = value
+    }
+
+    fun setShowAudioTracksInSettings(value: Boolean) {
+        kinescopePlayerOptions.showAudioTracksInSettings = value
     }
 }

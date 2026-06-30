@@ -2,6 +2,7 @@ package io.kinescope.sdk.player.quality
 
 import androidx.media3.common.TrackSelectionOverride
 
+/** Video quality variant with optional [TrackSelectionOverride] from DefaultTrackSelector. */
 data class KinescopeQualityVariant(
     val id: Int,
     val override: TrackSelectionOverride?,

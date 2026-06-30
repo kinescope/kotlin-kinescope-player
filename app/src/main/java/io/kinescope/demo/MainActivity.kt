@@ -5,11 +5,12 @@ import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.view.WindowManager
 import com.google.android.material.button.MaterialButton
+import io.kinescope.demo.chapters.ChaptersActivity
 import io.kinescope.demo.customplayer.CustomPlayerActivity
-import io.kinescope.demo.customui.CustomUIActivity
 import io.kinescope.demo.live.LiveActivity
 import io.kinescope.demo.playlist.PlaylistActivity
 import io.kinescope.demo.subtitles.SubtitlesActivity
+import io.kinescope.demo.drm.DrmViewingActivity
 import io.kinescope.demo.offlinedrm.OfflineDrmDemoActivity
 import io.kinescope.demo.shorts.ShortsActivity
 
@@ -23,7 +24,8 @@ class MainActivity : AppCompatActivity() {
 
         val btnPlaylist = findViewById<MaterialButton>(R.id.btn_playlist)
         val btnSubtitles = findViewById<MaterialButton>(R.id.btn_subtitles)
-        val btnCustomUI = findViewById<MaterialButton>(R.id.btn_custom_ui)
+        val btnChapters = findViewById<MaterialButton>(R.id.btn_chapters)
+        val btnDrmViewing = findViewById<MaterialButton>(R.id.btn_drm_viewing)
         val btnCustomPlayer = findViewById<MaterialButton>(R.id.btn_custom_player)
         val btnLive = findViewById<MaterialButton>(R.id.btn_live)
         val btnShorts = findViewById<MaterialButton>(R.id.btn_shorts)
@@ -35,13 +37,15 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnSubtitles.setOnClickListener {
-            val intent =  Intent(this, SubtitlesActivity::class.java)
-            startActivity(intent);
+            startActivity(Intent(this, SubtitlesActivity::class.java))
         }
 
-        btnCustomUI.setOnClickListener {
-            val intent =  Intent(this, CustomUIActivity::class.java)
-            startActivity(intent);
+        btnChapters.setOnClickListener {
+            startActivity(Intent(this, ChaptersActivity::class.java))
+        }
+
+        btnDrmViewing.setOnClickListener {
+            startActivity(Intent(this, DrmViewingActivity::class.java))
         }
 
         btnCustomPlayer.setOnClickListener {

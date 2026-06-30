@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<merge xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layout_gravity="bottom"
+    tools:parentTag="android.widget.FrameLayout">
+
+    <LinearLayout
+        android:id="@+id/captions_search_panel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="@color/kinescope_caption_search_overlay_bg"
+        android:orientation="vertical"
+        android:paddingStart="@dimen/kinescope_mobile_control_margin_horizontal"
+        android:paddingTop="16dp"
+        android:paddingEnd="@dimen/kinescope_mobile_control_margin_horizontal"
+        android:paddingBottom="12dp">
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="40dp">
+
+            <LinearLayout
+                android:id="@+id/captions_search_input_container"
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:layout_marginEnd="32dp"
+                android:background="@drawable/bg_captions_search_input"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp">
+
+                <ImageView
+                    android:id="@+id/captions_search_icon_iv"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:importantForAccessibility="no"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_search" />
+
+                <EditText
+                    android:id="@+id/captions_search_query_et"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginStart="4dp"
+                    android:layout_weight="1"
+                    android:background="@android:color/transparent"
+                    android:hint="@string/settings_captions_search"
+                    android:imeOptions="actionSearch"
+                    android:importantForAutofill="no"
+                    android:inputType="text"
+                    android:maxLines="1"
+                    android:paddingStart="4dp"
+                    android:paddingEnd="4dp"
+                    android:textAppearance="@style/Regular.14.White"
+                    android:textColor="@color/white"
+                    android:textColorHint="@color/white_secondary" />
+
+                <TextView
+                    android:id="@+id/captions_search_counter_tv"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="4dp"
+                    android:includeFontPadding="false"
+                    android:textAppearance="@style/Regular.14.WhiteSecondary"
+                    android:visibility="gone"
+                    tools:text="1/1"
+                    tools:visibility="visible" />
+
+                <ImageButton
+                    android:id="@+id/captions_search_prev_btn"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/settings_captions_search_prev"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_arrow_up"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
+
+                <ImageButton
+                    android:id="@+id/captions_search_next_btn"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/settings_captions_search_next"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_arrow_down"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
+
+            </LinearLayout>
+
+            <ImageButton
+                android:id="@+id/captions_search_close_btn"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="end|center_vertical"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/settings_captions_search_close"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_close" />
+
+        </FrameLayout>
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/captions_search_list"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:clipToPadding="false"
+            android:overScrollMode="never"
+            android:scrollbars="none" />
+
+        <View
+            android:id="@+id/captions_search_bottom_divider"
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="12dp"
+            android:background="@color/kinescope_caption_search_input_border"
+            android:importantForAccessibility="no" />
+
+    </LinearLayout>
+
+</merge>

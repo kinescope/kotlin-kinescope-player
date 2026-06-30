@@ -1,5 +1,6 @@
 package io.kinescope.sdk.player.quality
 
+import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.util.UnstableApi
@@ -13,7 +14,8 @@ private val TRACK_SUPPORTED_FORMATS =
         C.TRACK_TYPE_TEXT,
     )
 
-@UnstableApi
+// Uses DefaultTrackSelector mapped tracks and TrackSelectionOverride for video quality variants.
+@OptIn(UnstableApi::class)
 fun DefaultTrackSelector.getQualityVariantsList(): List<KinescopeQualityVariant> {
     val trackOverrideList = mutableListOf<KinescopeQualityVariant>()
 

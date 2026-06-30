@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_playlist_menu_row"
+    android:gravity="top"
+    android:minHeight="80dp"
+    android:orientation="horizontal"
+    android:paddingStart="24dp"
+    android:paddingTop="12dp"
+    android:paddingEnd="16dp"
+    android:paddingBottom="12dp">
+
+    <FrameLayout
+        android:layout_width="24dp"
+        android:layout_height="24dp">
+
+        <TextView
+            android:id="@+id/playlist_row_index"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:includeFontPadding="false"
+            android:textAppearance="@style/Regular.14.WhiteSecondary"
+            tools:text="2" />
+
+        <ImageView
+            android:id="@+id/playlist_row_playing"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:contentDescription="@null"
+            android:importantForAccessibility="no"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_playlist_play_indicator"
+            android:visibility="gone" />
+    </FrameLayout>
+
+    <FrameLayout
+        android:layout_width="100dp"
+        android:layout_height="56dp"
+        android:layout_marginStart="12dp">
+
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/playlist_row_thumbnail"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/bg_playlist_menu_thumbnail"
+            android:contentDescription="@null"
+            android:importantForAccessibility="no"
+            android:scaleType="centerCrop"
+            app:shapeAppearanceOverlay="@style/KinescopePlaylistThumbnailShape" />
+
+        <TextView
+            android:id="@+id/playlist_row_duration"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:layout_marginEnd="4dp"
+            android:layout_marginBottom="4dp"
+            android:background="@drawable/bg_playlist_menu_duration_badge"
+            android:includeFontPadding="false"
+            android:paddingStart="4dp"
+            android:paddingTop="2dp"
+            android:paddingEnd="4dp"
+            android:paddingBottom="2dp"
+            android:textAppearance="@style/Regular.12.WhiteSecondary"
+            android:textColor="@color/white"
+            android:visibility="gone"
+            tools:text="48:23"
+            tools:visibility="visible" />
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/playlist_row_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_weight="1"
+        android:ellipsize="end"
+        android:includeFontPadding="false"
+        android:maxHeight="56dp"
+        android:maxLines="2"
+        android:textAppearance="@style/Regular.14.White"
+        tools:text="Never lose your video again" />
+
+    <ImageButton
+        android:id="@+id/playlist_row_copy_link"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_marginStart="12dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/player_playlist_copy_link"
+        android:scaleType="centerInside"
+        android:src="@drawable/ic_copy_link"
+        android:visibility="gone"
+        tools:visibility="visible" />
+
+</LinearLayout>

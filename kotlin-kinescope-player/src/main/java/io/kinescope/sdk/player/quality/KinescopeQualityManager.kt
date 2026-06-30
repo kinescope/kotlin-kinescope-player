@@ -1,13 +1,14 @@
 package io.kinescope.sdk.player.quality
 
 import android.content.Context
+import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import io.kinescope.sdk.R
 import io.kinescope.sdk.extensions.EMPTY
 
-@UnstableApi
+@OptIn(UnstableApi::class)
 class KinescopeQualityManager(
     private val context: Context,
     private val trackSelector: DefaultTrackSelector,
@@ -48,7 +49,7 @@ class KinescopeQualityManager(
                 trackSelector.parameters =
                     trackSelector.parameters
                         .buildUpon()
-                        .clearOverrides()
+                        .clearOverridesOfType(C.TRACK_TYPE_VIDEO)
                         .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, false)
                         .build()
             }
@@ -59,7 +60,7 @@ class KinescopeQualityManager(
                 trackSelector.parameters =
                     trackSelector.parameters
                         .buildUpon()
-                        .clearOverrides()
+                        .clearOverridesOfType(C.TRACK_TYPE_VIDEO)
                         .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, true)
                         .build()
             }
@@ -73,7 +74,7 @@ class KinescopeQualityManager(
                             trackSelector.parameters =
                                 trackSelector.parameters
                                     .buildUpon()
-                                    .clearOverrides()
+                                    .clearOverridesOfType(C.TRACK_TYPE_VIDEO)
                                     .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, false)
                                     .addOverride(override)
                                     .build()
@@ -87,7 +88,7 @@ class KinescopeQualityManager(
 
     private fun updateUiVariants(variants: List<KinescopeQualityVariant>) {
         this.variants = variants
-            .sortedBy { variant -> variant.id }
+            .sortedByDescending { variant -> variant.id }
             .map { variant ->
                 KinescopeQualityVariantUi(
                     id = variant.id,

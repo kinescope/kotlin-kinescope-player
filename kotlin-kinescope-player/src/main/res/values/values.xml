@@ -2,10 +2,19 @@
 <resources>
     <color name="kinescope_primary_color">#6161FC</color>
 
-    <dimen name="kinescope_media_button_height">36dp</dimen>
-    <dimen name="kinescope_media_button_width">36dp</dimen>
-    <dimen name="kinescope_play_pause_size">55dp</dimen>
+    <dimen name="kinescope_media_button_height">24dp</dimen>
+    <dimen name="kinescope_media_button_width">24dp</dimen>
+    <dimen name="kinescope_fullscreen_icon_inset">3dp</dimen>
+    <dimen name="kinescope_play_pause_size">56dp</dimen>
+    <!-- Inset so morph glyph matches visual weight of ic_play/ic_pause (70dp, viewport 32). -->
+    <dimen name="kinescope_play_pause_glyph_inset">11dp</dimen>
+    <!-- Rewind has more viewport margin than morph paths; use a smaller inset. -->
+    <dimen name="kinescope_play_pause_rewind_glyph_inset">5dp</dimen>
+    <dimen name="kinescope_settings_row_height">36dp</dimen>
     <dimen name="kinescope_settings_popup_width">280dp</dimen>
+    <dimen name="kinescope_settings_popup_max_height">368dp</dimen>
+    <dimen name="kinescope_settings_popup_bottom_offset">48dp</dimen>
+    <dimen name="kinescope_settings_options_max_height">320dp</dimen>
     <dimen name="kinescope_settings_popup_height">196dp</dimen>
     <dimen name="kinescope_settings_popup_corner_radius">6dp</dimen>
     <dimen name="kinescope_settings_popup_padding_vertical">8dp</dimen>
@@ -13,7 +22,21 @@
     <dimen name="kinescope_settings_popup_edge_margin">12dp</dimen>
     <dimen name="kinescope_settings_popup_anchor_gap">8dp</dimen>
     <dimen name="kinescope_settings_popup_embedded_offset">55dp</dimen>
+    <dimen name="kinescope_settings_captions_search_row_inset">4dp</dimen>
     <dimen name="kinescope_media_settings_offset">8dp</dimen>
+    <dimen name="kinescope_caption_padding_horizontal">8dp</dimen>
+    <dimen name="kinescope_caption_padding_vertical">4dp</dimen>
+    <dimen name="kinescope_caption_margin_start">12dp</dimen>
+    <dimen name="kinescope_caption_margin_end">12dp</dimen>
+    <dimen name="kinescope_caption_max_width">280dp</dimen>
+    <dimen name="kinescope_caption_line_height">28sp</dimen>
+    <dimen name="kinescope_captions_search_indicator_height">20dp</dimen>
+    <dimen name="kinescope_captions_search_indicator_height_multiline">38dp</dimen>
+    <dimen name="kinescope_captions_search_panel_max_height">280dp</dimen>
+    <dimen name="kinescope_playlist_menu_max_height">420dp</dimen>
+
+    <dimen name="kinescope_settings_quality_badge_rise">5dp</dimen>
+    <dimen name="kinescope_settings_quality_badge_gap">2dp</dimen>
 
     <color name="kinescope_progressbar_buffered_color">#33FFFFFF</color>
     <color name="kinescope_progressbar_unplayed_color">#52FFFFFF</color>
@@ -30,6 +53,13 @@
     <color name="kinescope_settings">#222222</color>
     <color name="kinescope_settings_item">#222222</color>
     <color name="kinescope_settings_item_pressed">#444444</color>
+
+    <color name="kinescope_caption_search_overlay_bg">#F5000000</color>
+    <color name="kinescope_scrub_hint_background">#F5000000</color>
+    <color name="kinescope_caption_search_input_bg">#29FFFFFF</color>
+    <color name="kinescope_caption_search_input_border">#14FFFFFF</color>
+    <color name="kinescope_caption_search_highlight">#E85D04</color>
+    <color name="kinescope_caption_search_line_hover">#FF111111</color>
 
     <style name="KinescopeMediaButton">
         <item name="android:background">?android:attr/selectableItemBackground</item>
@@ -91,8 +121,9 @@
     <dimen name="kinescope_mobile_control_gap">12dp</dimen>
     <dimen name="kinescope_mobile_control_time_height">24dp</dimen>
     <dimen name="kinescope_control_section_gap">12dp</dimen>
+    <dimen name="kinescope_control_trailing_gap">16dp</dimen>
     <dimen name="kinescope_control_progress_leading_gap">4dp</dimen>
-    <dimen name="kinescope_mobile_media_button_size">28dp</dimen>
+    <dimen name="kinescope_mobile_media_button_size">@dimen/kinescope_media_button_height</dimen>
     <dimen name="kinescope_mobile_title_text_size">14sp</dimen>
     <dimen name="kinescope_mobile_author_text_size">12sp</dimen>
     <dimen name="kinescope_mobile_description_gap">4dp</dimen>
@@ -110,7 +141,14 @@
     <dimen name="kinescope_progress_enabled_thumb_size">10dp</dimen>
     <dimen name="kinescope_progress_dragged_thumb_size">14dp</dimen>
     <dimen name="kinescope_progress_layout_height">48dp</dimen>
+    <dimen name="kinescope_scrub_chapter_title_gap">8dp</dimen>
+    <dimen name="kinescope_scrub_chapter_title_offset_down">0dp</dimen>
+    <dimen name="kinescope_progress_chapter_gap">2dp</dimen>
     <dimen name="kinescope_control_bar_height">52dp</dimen>
+    <dimen name="kinescope_scrub_hint_margin_top">0dp</dimen>
+    <dimen name="kinescope_scrub_hint_content_margin_top">8dp</dimen>
+    <dimen name="kinescope_scrub_hint_padding_top">4dp</dimen>
+    <dimen name="kinescope_scrub_hint_padding_bottom">4dp</dimen>
     <dimen name="kinescope_scrub_seek_icon_width">28dp</dimen>
     <dimen name="kinescope_scrub_seek_icon_height">18dp</dimen>
     <dimen name="kinescope_seek_feedback_circle_diameter">280dp</dimen>

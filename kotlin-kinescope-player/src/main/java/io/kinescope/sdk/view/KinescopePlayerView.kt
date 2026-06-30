@@ -4,11 +4,17 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.PorterDuff
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.Drawable
 import android.media.AudioManager
 import android.os.Looper
 import android.util.AttributeSet
+import android.util.TypedValue
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.view.GestureDetector
+import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -20,28 +26,34 @@ import android.widget.LinearLayout
 import android.widget.PopupWindow
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.annotation.ColorInt
 import androidx.annotation.DrawableRes
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
+import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.GestureDetectorCompat
 import androidx.core.view.children
 import androidx.core.view.isVisible
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.text.CueGroup
 import androidx.media3.common.Timeline
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.Assertions
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
+import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerControlView
 import androidx.media3.ui.PlayerView
+import androidx.media3.ui.SubtitleView
 import androidx.media3.ui.TimeBar
+import androidx.interpolator.view.animation.FastOutSlowInInterpolator
 import com.bumptech.glide.Glide
 import io.kinescope.sdk.R
 import io.kinescope.sdk.analytics.KinescopeAnalyticsManager
@@ -53,24 +65,46 @@ import io.kinescope.sdk.logger.KinescopeLogger
 import io.kinescope.sdk.logger.KinescopeLoggerLevel
 import io.kinescope.sdk.models.videos.KinescopeVideo
 import io.kinescope.sdk.models.videos.KinescopeVideoAttachments
-import io.kinescope.sdk.models.videos.KinescopeVideoSubtitle
+import io.kinescope.sdk.models.videos.KinescopeVideoChapterItem
+import io.kinescope.sdk.models.videos.availableChapters
+import io.kinescope.sdk.models.videos.chapterAt
+import io.kinescope.sdk.models.videos.startTimeMs
 import io.kinescope.sdk.models.players.syncLegacyChromeFlags
+import io.kinescope.sdk.playlist.KinescopePlaylistItem
+import io.kinescope.sdk.playlist.KinescopePlaylistMenuView
 import io.kinescope.sdk.player.KinescopeGlideListener
+import io.kinescope.sdk.player.KinescopeChromeButton
 import io.kinescope.sdk.player.KinescopePictureInPicture
+import io.kinescope.sdk.player.KinescopePlayerChromeCustomization
 import io.kinescope.sdk.player.KinescopeVideoPlayer
-import io.kinescope.sdk.player.quality.KinescopeQualityManager
 import io.kinescope.sdk.player.quality.KinescopeQualityVariant
 import io.kinescope.sdk.player.quality.getQualityVariantsList
 import io.kinescope.sdk.player.speed.KinescopeSpeedVariant
+import io.kinescope.sdk.player.subtitles.ProgressiveSubtitleCues
+import io.kinescope.sdk.player.subtitles.ProgressiveSubtitleOverlay
+import io.kinescope.sdk.player.tracks.TrackController
 import io.kinescope.sdk.settings.KinescopeSettingsOption
+import io.kinescope.sdk.chapters.KinescopeChaptersView
 import io.kinescope.sdk.settings.KinescopeSettingsView
+import io.kinescope.sdk.settings.SubtitleStyle
+import io.kinescope.sdk.settings.qualityBadgeForVariant
+import io.kinescope.sdk.settings.qualitySettingsIconRes
+import io.kinescope.sdk.player.state.PlaybackBufferingWatchdog
 import io.kinescope.sdk.utils.formatLiveStartDate
+import io.kinescope.sdk.utils.formatPlayerTime
+import kotlin.math.roundToInt
 
 
+/**
+ * @param useTextureSurface When `true`, renders video via [android.view.TextureView] instead of
+ * [android.view.SurfaceView]. Enables smooth PiP transitions on some OEMs but
+ * cannot display Widevine L1 protected content — use only for non-DRM playback.
+ */
 @UnstableApi
-class KinescopePlayerView(
-    context: Context, attrs:
-    AttributeSet?
+class KinescopePlayerView @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null,
+    useTextureSurface: Boolean = false,
 ) : ConstraintLayout(context, attrs) {
     companion object {
         /**
@@ -87,16 +121,27 @@ class KinescopePlayerView(
             }
 
             val startedPlayback = oldPlayerView.hasStartedPlayback
-            val playPauseState = oldPlayerView.currentPlayPauseState
+            val playbackPlayer = player.exoPlayer ?: player.playbackPlayer
+            val showReplay = playbackPlayer?.playbackState == Player.STATE_ENDED
+            val showPauseIcon = if (showReplay) {
+                null
+            } else {
+                resolveShowPauseIconForSwitch(playbackPlayer, startedPlayback)
+            }
+
+            newPlayerView.suppressPlayPauseButtonUpdate = true
+            newPlayerView.beginViewSwitchPlayPauseOverride(
+                showPauseIcon = showPauseIcon,
+                showReplay = showReplay,
+            )
 
             newPlayerView.let {
                 it.setPlayer(player)
-                it.qualityManager = oldPlayerView.qualityManager
+                it.trackController = oldPlayerView.trackController
                 it.analyticsManager = oldPlayerView.analyticsManager
-                it.restorePlaybackChromeState(
-                    startedPlayback = startedPlayback,
-                    playPauseState = playPauseState,
-                )
+                it.hasStartedPlayback = startedPlayback
+                it.applyExoPlayerVisibility()
+                it.updateBuffering()
 
                 it.posterView?.isVisible = oldPlayerView.posterView?.isVisible ?: false
                 it.liveStartDateContainerView?.isVisible =
@@ -108,33 +153,63 @@ class KinescopePlayerView(
 
                     it.positionView?.isVisible = false
                     it.durationView?.isVisible = false
-                    it.timeSeparatorView?.isVisible = false
+                    it.timeDurationSuffixClip?.isVisible = false
                     it.liveDataView?.isVisible = true
                 }
             }
 
-            oldPlayerView.setPlayer(null)
+            oldPlayerView.detachForViewSwitch()
+            newPlayerView.suppressPlayPauseButtonUpdate = false
+            newPlayerView.applyCapturedPlayPauseIcon(
+                showPauseIcon = showPauseIcon,
+                showReplay = showReplay,
+            )
+            newPlayerView.rebindPlayerHost()
+            newPlayerView.ensureControlBarProgressChromeVisible()
+        }
+
+        private fun resolveShowPauseIconForSwitch(
+            playbackPlayer: Player?,
+            startedPlayback: Boolean,
+        ): Boolean {
+            if (playbackPlayer == null) {
+                return startedPlayback
+            }
+            if (playbackPlayer.playbackState == Player.STATE_ENDED) {
+                return false
+            }
+            if (playbackPlayer.isPlaying) {
+                return true
+            }
+            return playbackPlayer.playWhenReady || startedPlayback
         }
 
         private const val DEFAULT_TIME_BAR_MIN_UPDATE_INTERVAL_MS = 200
         private const val MAX_UPDATE_INTERVAL_MS = 1000
         private const val CONTROL_OVERLAY_FADE_DURATION_MS = 200L
         private const val CONTROL_OVERLAY_AUTO_HIDE_MS = 3000L
+        private const val TIME_DURATION_TOGGLE_ANIMATION_MS = 100L
+        private const val TIME_DURATION_LABEL_FADE_START = 0.4f
+        private const val TIME_LABEL_SEPARATOR = " / "
         private const val SCRUB_MODE_CONTROL_ELEVATION_DP = 8f
         private const val SETTINGS_MENU_ELEVATION_DP = 24f
         private const val SCRUB_SEEKBAR_SCALE = 1.85f
         private const val SCRUB_SEEKBAR_SCALE_DURATION_MS = 150L
         private const val DOUBLE_TAP_SEEK_SECONDS = 10
         private const val DOUBLE_TAP_SEEK_STREAK_WINDOW_MS = 1500L
-        private const val SUBTITLES_OPTION_OFF_ID = -1
         private const val MOBILE_TEXT_SHADOW_RADIUS = 2f
         private const val MOBILE_TEXT_SHADOW_DX = 0.5f
         private const val MOBILE_TEXT_SHADOW_DY = 0.5f
         private const val MOBILE_TEXT_SHADOW_COLOR = 0xA3000000.toInt()
         private const val MOBILE_BACKGROUND_GRADIENT_HEIGHT_PX = 120f
         private const val MOBILE_BACKGROUND_REFERENCE_HEIGHT_PX = 432f
-        private const val OPTIONS_BAR_ANIMATION_DURATION_MS = 280L
+        private const val OPTIONS_BAR_ANIMATION_DURATION_MS = 150L
+        private const val VIEW_SWITCH_PLAY_PAUSE_OVERRIDE_MS = 500L
+        private const val SUBTITLE_PROGRESS_UPDATE_INTERVAL_MS = 16
+        private const val SUBTITLE_SIZE_FRACTION_OF_HEIGHT = 0.062f
+        private const val LEGACY_CUSTOM_BUTTON_ID = "legacy_custom"
         private val optionsBarAnimationInterpolator = DecelerateInterpolator()
+        private val timeDurationToggleInterpolator = FastOutSlowInInterpolator()
     }
 
     private val gestureDetector: GestureDetectorCompat
@@ -165,7 +240,15 @@ class KinescopePlayerView(
 
             val isFwd = isForward(e)
             val totalSeconds = registerDoubleTapSeek(isFwd)
-            seekView?.showSeekFeedback(forward = isFwd, totalSeconds = totalSeconds)
+            val showControls = kinescopePlayer?.kinescopePlayerOptions?.controls == true
+            if (showControls) {
+                showSeekFeedbackChrome()
+                seekView?.showSeekFeedback(
+                    forward = isFwd,
+                    totalSeconds = totalSeconds,
+                    onHidden = ::hideControlOverlayAfterSeekFeedback,
+                )
+            }
             kinescopePlayer?.let {
                 if (isFwd) it.moveForward() else it.moveBack()
             }
@@ -174,13 +257,13 @@ class KinescopePlayerView(
 
         override fun onDown(e: MotionEvent): Boolean {
             KinescopeLogger.log(KinescopeLoggerLevel.PLAYER_VIEW, "tap down")
-            return super.onDown(e)
+            return true
         }
 
         override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
             KinescopeLogger.log(KinescopeLoggerLevel.PLAYER_VIEW, "single tap confirmed")
             toggleControlUI()
-            return false;
+            return true
         }
 
         override fun onSingleTapUp(e: MotionEvent): Boolean {
@@ -193,32 +276,56 @@ class KinescopePlayerView(
     var onPictureInPictureButtonCallback: (() -> Unit)? = null
     var onAttachmentSelected: ((KinescopeVideoAttachments) -> Unit)? = null
 
-    private val formatBuilder: StringBuilder = StringBuilder()
-    private val formatter = java.util.Formatter(formatBuilder, java.util.Locale.getDefault())
-
     private var posterView: ImageView? = null
 
     private var kinescopePlayer: KinescopeVideoPlayer? = null
+    private var boundPlaybackPlayer: Player? = null
     private var exoPlayerView: PlayerView? = null
+    private var subtitleView: SubtitleView? = null
+    private var progressiveSubtitleOverlay: ProgressiveSubtitleOverlay? = null
     private var controlView: FrameLayout? = null
     private var seekView: KinesopeSeekView? = null
     private var bufferingView: View? = null
     private var positionView: TextView? = null
     private var durationView: TextView? = null
-    private var timeSeparatorView: View? = null
+    private var timeDurationSuffixClip: View? = null
     private var timeBar: KinescopeTimeBar? = null
+    private var progressContainer: View? = null
+    private var scrubChapterTitleView: TextView? = null
 
     private var buttonsContainer: ViewGroup? = null
-    private var playPauseButton: View? = null
-    private var playPauseMorphView: KinescopePlayPauseMorphView? = null
-    private var currentPlayPauseState: KinescopePlayPauseMorphView.State? = null
+    private var playPauseButton: KinescopePlayPauseMorphView? = null
+    private var lastCenterPauseShown: Boolean? = null
+    private var lastCenterPlayControlVisible: Boolean? = null
+    private var viewSwitchPauseOverride: Boolean? = null
+    private var viewSwitchReplayOverride = false
+    private var suppressPlayPauseButtonUpdate = false
     private var optionsButton: View? = null
     private var optionsDotsButton: View? = null
     private var pictureInPictureButton: View? = null
+    private var castButton: View? = null
+    private var chaptersButton: View? = null
+    private var playlistButton: View? = null
+    private var subtitlesButton: View? = null
     private var fullscreenButton: View? = null
-    private var customButton: ImageButton? = null
-    private var selectedSubtitleIndex: Int = SUBTITLES_OPTION_OFF_ID
+    private var customButtonsContainer: ViewGroup? = null
+    private var chromeCustomization: KinescopePlayerChromeCustomization? = null
+    private var legacyCustomButton: KinescopeChromeButton? = null
+    internal var trackController: TrackController? = null
     private var settingsMenuView: KinescopeSettingsView? = null
+    private var chaptersMenuView: KinescopeChaptersView? = null
+    private var playlistMenuView: KinescopePlaylistMenuView? = null
+    private var playlistItems: List<KinescopePlaylistItem> = emptyList()
+    private var captionsSearchView: KinescopeCaptionsSearchView? = null
+    private var videoTransformContainer: View? = null
+    private var videoScaleBadge: TextView? = null
+    private var videoScaleController: KinescopeVideoScaleController? = null
+    private var videoSubtitlesHiddenForCaptionsSearch = false
+    private var savedFooterGradientBackground: Drawable? = null
+    private var savedControlBarBackground: Drawable? = null
+    private var subtitleStyle = SubtitleStyle()
+    private var pendingCueGroup: CueGroup? = null
+    private var learnedCueDurationUs: Long = C.TIME_UNSET
 
     private var titleView: TextView? = null
     private var authorView: TextView? = null
@@ -229,8 +336,18 @@ class KinescopePlayerView(
     private var controlBar: View? = null
     private var controlBarEndSpacer: View? = null
     private var optionsExpandedGroup: ViewGroup? = null
+    private var optionsExpandableStrip: View? = null
+    private var optionsExpandableContent: View? = null
+    private var optionsExpandableStripAnimator: ValueAnimator? = null
+    private var compactOptionsBarAnimator: ValueAnimator? = null
+    private var timeDurationSuffixAnimator: Animator? = null
     private var isMobilePlayerChrome = false
     private var isOptionsBarExpanded = false
+    private var isCompactOptionsBarAnimating = false
+    private var showTotalDuration = false
+    private var isPictureInPictureActive = false
+    private var timeBarLayoutWeight = 1f
+    private var lastCompactProgressBarWidth = 0
     private var wasCompactOptionsChrome = false
 
     private var liveDataView: View? = null
@@ -239,6 +356,32 @@ class KinescopePlayerView(
     private var liveTimeOffsetTextView: TextView? = null
     private var liveStartDateContainerView: View? = null
     private var liveStartDateTextView: TextView? = null
+
+    private var castOverlayView: View? = null
+    private var castDeviceView: TextView? = null
+    private var castPlayPauseView: ImageButton? = null
+    private var castPositionView: TextView? = null
+    private var castDurationView: TextView? = null
+    private var castSeekBar: android.widget.SeekBar? = null
+    private var castStopView: View? = null
+    private var castSupported = false
+    private var castRouteAvailable = false
+    private var isCastOverlayVisible = false
+    private var isUpdatingCastSeekBar = false
+    private val playbackBufferingWatchdog = PlaybackBufferingWatchdog()
+    private var playbackStallDispatched = false
+
+    /** Optional callback when buffering exceeds [PlaybackBufferingWatchdog.TIMEOUT_MS]. */
+    var onPlaybackStallListener: ((String) -> Unit)? = null
+
+    private val bufferingWatchdogRunnable: Runnable = object : Runnable {
+        override fun run() {
+            evaluatePlaybackBufferingWatchdog()
+            if (activePlaybackPlayer?.playbackState == Player.STATE_BUFFERING) {
+                postDelayed(this, PlaybackBufferingWatchdog.POLL_MS)
+            }
+        }
+    }
 
     private var isVideoFullscreen = false
         set(value) {
@@ -252,7 +395,11 @@ class KinescopePlayerView(
         }
 
     private var hasStartedPlayback = false
+    private var initialSubtitlesConfigured = false
     private var scrubbing = false
+    private var scrubOverlayHiding = false
+    private var controlOverlayHiding = false
+    private var seekFeedbackActive = false
     private var scrubbingLiveDurationCached = 0L
     private var controlElevationBeforeScrub = 0f
     private var lastDoubleTapSeekForward: Boolean? = null
@@ -260,7 +407,7 @@ class KinescopePlayerView(
     private var lastDoubleTapSeekTimeMs = 0L
 
     private val hideControlOverlayRunnable = Runnable {
-        if (scrubbing || settingsMenuView?.isVisible == true) {
+        if (scrubbing || settingsMenuView?.isVisible == true || isCaptionsSearchActive()) {
             return@Runnable
         }
         hideControlOverlay(animated = true)
@@ -280,7 +427,6 @@ class KinescopePlayerView(
         }
 
     private var analyticsCallback: ((event: String, data: String) -> Unit)? = null
-    private var qualityManager: KinescopeQualityManager? = null
     private var analyticsManager = KinescopeAnalyticsManager(
         context = context,
         onEvent = { event, data -> analyticsCallback?.invoke(event, data) }
@@ -291,6 +437,11 @@ class KinescopePlayerView(
         getAnalyticsArguments().let { args ->
             analyticsManager.tick(args = args)
         }
+    }
+
+    private val subtitleUpdateRunnable = Runnable {
+        applyProgressiveSubtitles()
+        scheduleSubtitleUpdates()
     }
 
     private val progressUpdateListener =
@@ -333,6 +484,115 @@ class KinescopePlayerView(
         )
     }
 
+    private val localExoPlayer: ExoPlayer?
+        get() = kinescopePlayer?.exoPlayer
+
+    private val activePlaybackPlayer: Player?
+        get() = kinescopePlayer?.playbackPlayer
+
+    private fun bindPlaybackPlayer(player: Player?) {
+        boundPlaybackPlayer?.removeListener(componentListener)
+        boundPlaybackPlayer = player
+        player?.addListener(componentListener)
+    }
+
+    private fun bindLocalEnginePlayer(player: ExoPlayer?) {
+        player?.removeListener(localEngineListener)
+        player?.addListener(localEngineListener)
+    }
+
+    private fun detachPlayerBindings(clearHostCallback: Boolean = true) {
+        bindPlaybackPlayer(null)
+        localExoPlayer?.removeListener(localEngineListener)
+        if (clearHostCallback) {
+            kinescopePlayer?.getOrCreatePlayerHost()?.onActivePlayerChanged = null
+        }
+    }
+
+    private val localEngineListener = object : Player.Listener {
+        override fun onTracksChanged(tracks: Tracks) {
+            localExoPlayer?.let { player ->
+                with(player.trackSelector as DefaultTrackSelector) {
+                    trackController?.updateQualityVariants(
+                        variants = getQualityVariantsList()
+                    )
+                }
+            }
+            trackController?.updateTextTracks(tracks)
+            trackController?.updateAudioTracks(tracks)
+            if (settingsMenuView?.isVisible == true) {
+                settingsMenuView?.runBatchUpdate {
+                    updateAudioTracksSettingsVisibility()
+                    applySettingsMenuCurrentValues()
+                }
+            } else {
+                updateAudioTracksSettingsVisibility()
+            }
+            updateOptionsButtonIcon()
+            val video = getVideo()
+            if (video != null) {
+                trackController?.applySubtitleSelection(
+                    trackController?.selectedSubtitleIndex ?: TrackController.SUBTITLES_OFF_ID,
+                )
+                updateSubtitlesButtonIcon()
+            }
+        }
+
+        override fun onCues(cueGroup: CueGroup) {
+            if (trackController?.selectedSubtitleIndex == TrackController.SUBTITLES_OFF_ID) {
+                pendingCueGroup = null
+                subtitleView?.setCues(emptyList())
+                progressiveSubtitleOverlay?.clear()
+                stopSubtitleUpdates()
+                return
+            }
+            if (cueGroup.cues.isNotEmpty()) {
+                val newStartUs = cueGroup.presentationTimeUs
+                val previousGroup = pendingCueGroup
+                if (previousGroup != null) {
+                    val previousStartUs = previousGroup.presentationTimeUs
+                    if (newStartUs > previousStartUs) {
+                        learnedCueDurationUs = newStartUs - previousStartUs
+                    }
+                }
+                pendingCueGroup = cueGroup
+            } else {
+                val player = localExoPlayer
+                val activeGroup = pendingCueGroup
+                if (player != null && activeGroup != null) {
+                    val positionUs = Util.msToUs(player.contentPosition)
+                    val cueStartUs = activeGroup.presentationTimeUs
+                    if (positionUs > cueStartUs) {
+                        learnedCueDurationUs = positionUs - cueStartUs
+                    }
+                }
+                pendingCueGroup = null
+            }
+            ensureSubtitleUpdatesRunning()
+            applyProgressiveSubtitles()
+        }
+
+        override fun onVideoSizeChanged(videoSize: VideoSize) {
+            if (videoSize.height != 0) {
+                updateOptionsButtonIcon()
+                getAnalyticsArguments().let { args ->
+                    when (trackController?.isAutoQuality) {
+                        true -> analyticsManager.autoQualityChanged(args = args)
+                        else -> analyticsManager.qualityChanged(args = args)
+                    }
+                }
+            }
+        }
+
+        override fun onPlayerError(error: PlaybackException) {
+            localExoPlayer?.let { player ->
+                if (player.playbackState == Player.STATE_IDLE && player.playWhenReady) {
+                    dispatchPlay(player)
+                }
+            }
+        }
+    }
+
     private var componentListener = object :
         Player.Listener,
         OnClickListener,
@@ -354,12 +614,14 @@ class KinescopePlayerView(
             getAnalyticsArguments().let { args ->
                 when (playbackState) {
                     Player.STATE_IDLE -> {
-                        hasStartedPlayback = false
+                        if (viewSwitchPauseOverride == null) {
+                            hasStartedPlayback = false
+                        }
                     }
 
                     Player.STATE_BUFFERING -> {
                         analyticsManager.buffering()
-                        if (!hasStartedPlayback && kinescopePlayer?.exoPlayer?.playWhenReady == true) {
+                        if (!hasStartedPlayback && activePlaybackPlayer?.playWhenReady == true) {
                             hidePoster()
                         }
                     }
@@ -369,6 +631,8 @@ class KinescopePlayerView(
                         if (isLiveState) {
                             hidePoster()
                             hideLiveStartDate()
+                        } else {
+                            applyVideoPoster()
                         }
                     }
 
@@ -383,29 +647,8 @@ class KinescopePlayerView(
             }
 
             updateBuffering()
-        }
-
-        override fun onTracksChanged(tracks: Tracks) {
-            super.onTracksChanged(tracks)
-            kinescopePlayer?.exoPlayer?.let { player ->
-                with(player.trackSelector as DefaultTrackSelector) {
-                    qualityManager?.updateVariants(
-                        variants = getQualityVariantsList()
-                    )
-                }
-            }
-        }
-
-        override fun onVideoSizeChanged(videoSize: VideoSize) {
-            super.onVideoSizeChanged(videoSize)
-            if (videoSize.height != 0) {
-                getAnalyticsArguments().let { args ->
-                    when (qualityManager?.isAutoQuality) {
-                        true -> analyticsManager.autoQualityChanged(args = args)
-                        else -> analyticsManager.qualityChanged(args = args)
-                    }
-                }
-            }
+            updatePlayPauseButton()
+            syncPlaybackBufferingWatchdog(playbackState)
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -414,12 +657,31 @@ class KinescopePlayerView(
                 hasStartedPlayback = true
                 hidePoster()
             }
+            if (isCastOverlayVisible) {
+                refreshCastOverlay()
+            }
+            progressiveSubtitleOverlay?.setAdvancementEnabled(isPlaying)
+            if (isPlaying) {
+                ensureSubtitleUpdatesRunning()
+            } else {
+                scheduleSubtitleUpdates()
+            }
+            applyProgressiveSubtitles()
             updateBuffering()
+            if (isPictureInPictureActive) {
+                showPipMinimalControls()
+                return
+            }
             updatePlayPauseButton()
         }
 
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
             super.onPlayWhenReadyChanged(playWhenReady, reason)
+            if (isPictureInPictureActive) {
+                updateBuffering()
+                showPipMinimalControls()
+                return
+            }
             if (!playWhenReady && !shouldShowReplayButton() && usesGradientChrome()) {
                 showControlOverlay(animated = true)
             }
@@ -431,23 +693,14 @@ class KinescopePlayerView(
             updatePlayPauseButton()
         }
 
-        override fun onPlayerError(error: PlaybackException) {
-            super.onPlayerError(error)
-
-            kinescopePlayer?.exoPlayer?.let { player ->
-                if (player.playbackState == Player.STATE_IDLE && player.playWhenReady) {
-                    dispatchPlay(player)
-                }
-            }
-        }
-
         override fun onScrubStart(timeBar: TimeBar, position: Long) {
             scrubbing = true
+            seekView?.hideSeekFeedback()
             enterScrubOverlayMode()
             seekView?.showScrubOverlay()
 
             if (isLiveState) {
-                scrubbingLiveDurationCached = kinescopePlayer?.exoPlayer?.duration ?: 0
+                scrubbingLiveDurationCached = activePlaybackPlayer?.duration ?: 0
                 showLiveTimeOffset(
                     isShown = true,
                     position = position
@@ -455,7 +708,8 @@ class KinescopePlayerView(
                 return
             }
 
-            positionView?.text = Util.getStringForTime(formatBuilder, formatter, position)
+            positionView?.text = formatPlayerTime(position)
+            updateScrubChapterTitle(position)
 
             getAnalyticsArguments().let { args ->
                 analyticsManager.seek(args = args)
@@ -472,22 +726,34 @@ class KinescopePlayerView(
                 return
             }
 
-            positionView?.text = Util.getStringForTime(formatBuilder, formatter, position)
+            positionView?.text = formatPlayerTime(position)
+            updateScrubChapterTitle(position)
         }
 
         override fun onScrubStop(timeBar: TimeBar, position: Long, canceled: Boolean) {
             scrubbing = false
-            seekView?.hideScrubOverlay()
+            scrubOverlayHiding = true
+            hideScrubChapterTitle()
             if (!canceled && kinescopePlayer != null) {
-                seekToTimeBarPosition(kinescopePlayer!!.exoPlayer!!, position)
+                activePlaybackPlayer?.let { player ->
+                    seekToTimeBarPosition(player, position)
+                }
             }
 
-            exitScrubOverlayMode()
-            updateAll()
-            if (controlView?.isVisible == true) {
-                scheduleControlOverlayAutoHide()
-            } else {
-                showControlOverlay(animated = true)
+            val controlWasVisible = controlView?.isVisible == true
+            seekView?.hideScrubOverlay {
+                scrubOverlayHiding = false
+                restoreScrubTimeBarChrome()
+                restoreScrubControlChrome()
+                updateMobileBackgroundGradients()
+                updatePlayPauseButton()
+                updateBuffering()
+                updateTimeline()
+                if (controlWasVisible) {
+                    scheduleControlOverlayAutoHide()
+                } else {
+                    showControlOverlay(animated = true)
+                }
             }
 
             if (isLiveState) {
@@ -500,7 +766,7 @@ class KinescopePlayerView(
         }
 
         override fun onClick(view: View?) {
-            val player: Player = kinescopePlayer?.exoPlayer ?: return
+            val player: Player = activePlaybackPlayer ?: return
 
             if (playPauseButton === view) {
                 dispatchPlayPause(player)
@@ -510,6 +776,12 @@ class KinescopePlayerView(
                 onPictureInPictureButtonCallback?.invoke()
             } else if (optionsButton === view) {
                 onOptionsButtonClick()
+            } else if (chaptersButton === view) {
+                onChaptersButtonClick()
+            } else if (playlistButton === view) {
+                onPlaylistButtonClick()
+            } else if (subtitlesButton === view) {
+                onSubtitlesButtonClick()
             }
         }
 
@@ -519,36 +791,74 @@ class KinescopePlayerView(
     }
 
     init {
-        inflate(context, R.layout.view_kinesope_player, this)
+        val playerLayoutRes = if (useTextureSurface) {
+            R.layout.view_kinesope_player_texture
+        } else {
+            R.layout.view_kinesope_player
+        }
+        inflate(context, playerLayoutRes, this)
+        bindRootLayoutConstraints()
         exoPlayerView = findViewById(R.id.view_exoplayer)
+        subtitleView = findViewById(R.id.kinescope_subtitle_view)
+        progressiveSubtitleOverlay = ProgressiveSubtitleOverlay(
+            container = findViewById(R.id.kinescope_progressive_subtitle_container),
+            linesContainer = findViewById(R.id.kinescope_progressive_subtitle_lines),
+            topView = findViewById(R.id.kinescope_progressive_subtitle_top),
+            bottomView = findViewById(R.id.kinescope_progressive_subtitle_bottom),
+        )
+        progressiveSubtitleOverlay?.setOnEnsureUpdatesRunning { ensureSubtitleUpdatesRunning() }
+        exoPlayerView?.subtitleView?.isVisible = false
 
         bufferingView = findViewById(R.id.view_buffering)
         bufferingView?.isVisible = false
 
-        gestureListener = KinescopeGestureListener(rootView)
+        gestureListener = KinescopeGestureListener(this@KinescopePlayerView)
         gestureDetector = GestureDetectorCompat(context, gestureListener)
 
         posterView = findViewById(R.id.poster_iv)
+        videoTransformContainer = findViewById(R.id.kinescope_video_transform_container)
+        videoScaleBadge = findViewById(R.id.kinescope_video_scale_badge)
+        videoTransformContainer?.let { transformContainer ->
+            videoScaleBadge?.let { badge ->
+                videoScaleController = KinescopeVideoScaleController(transformContainer, badge).apply {
+                    onScaleChanged = { updateVideoScaleSettingsValue() }
+                }
+                badge.setOnClickListener {
+                    videoScaleController?.reset(animated = true)
+                }
+            }
+        }
         mobileHeaderGradient = findViewById(R.id.kinescope_mobile_header_gradient)
         mobileFooterGradient = findViewById(R.id.kinescope_mobile_footer_gradient)
 
         controlView = findViewById(R.id.view_control)
         seekView = findViewById(R.id.kinescope_seek_view)
+        controlView?.findViewById<ViewGroup>(R.id.scrub_top_bar)?.let { scrubTopBar ->
+            seekView?.attachScrubHintBar(scrubTopBar)
+        }
 
+        progressContainer = controlView?.findViewById(R.id.kinescope_progress_container)
         timeBar = controlView?.findViewById(R.id.kinescope_progress)
+        scrubChapterTitleView = controlView?.findViewById(R.id.scrub_chapter_title)
+        applyScrubChapterTitleStyle()
         positionView = controlView?.findViewById(R.id.kinescope_position)
         durationView = controlView?.findViewById(R.id.kinescope_duration)
-        timeSeparatorView = controlView?.findViewById(R.id.time_separator_view)
+        timeDurationSuffixClip = controlView?.findViewById(R.id.kinescope_time_duration_suffix_clip)
 
         buttonsContainer = controlView?.findViewById(R.id.buttons_container_ll)
         optionsExpandedGroup = controlView?.findViewById(R.id.kinescope_options_expanded_group)
-        playPauseMorphView = controlView?.findViewById(R.id.kinescope_play_pause)
-        playPauseButton = playPauseMorphView
+        optionsExpandableStrip = controlView?.findViewById(R.id.kinescope_options_expandable_strip)
+        optionsExpandableContent = controlView?.findViewById(R.id.kinescope_options_expandable_content)
+        playPauseButton = controlView?.findViewById(R.id.kinescope_play_pause)
         pictureInPictureButton = controlView?.findViewById(R.id.kinescope_picture_in_picture)
+        castButton = controlView?.findViewById(R.id.kinescope_cast)
+        chaptersButton = controlView?.findViewById(R.id.kinescope_chapters)
+        playlistButton = controlView?.findViewById(R.id.kinescope_playlist)
+        subtitlesButton = controlView?.findViewById(R.id.kinescope_subtitles)
         optionsButton = controlView?.findViewById(R.id.kinescope_settings)
         optionsDotsButton = controlView?.findViewById(R.id.kinescope_options_dots)
         fullscreenButton = controlView?.findViewById(R.id.kinescope_fullscreen)
-        customButton = controlView?.findViewById(R.id.custom_btn)
+        customButtonsContainer = controlView?.findViewById(R.id.kinescope_custom_buttons_container)
 
         titleView = controlView?.findViewById(R.id.kinescope_title)
         authorView = controlView?.findViewById(R.id.kinescope_author)
@@ -564,22 +874,52 @@ class KinescopePlayerView(
         liveStartDateContainerView = findViewById(R.id.live_start_date_ll)
         liveStartDateTextView = findViewById(R.id.live_start_date_tv)
 
+        castOverlayView = findViewById(R.id.kinescope_cast_overlay)
+        castDeviceView = findViewById(R.id.kinescope_cast_device_tv)
+        castPlayPauseView = findViewById(R.id.kinescope_cast_play_pause)
+        castPositionView = findViewById(R.id.kinescope_cast_position_tv)
+        castDurationView = findViewById(R.id.kinescope_cast_duration_tv)
+        castSeekBar = findViewById(R.id.kinescope_cast_seek_bar)
+        castStopView = findViewById(R.id.kinescope_cast_stop_tv)
+        castSeekBar?.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                if (!fromUser || isUpdatingCastSeekBar || !isCastOverlayVisible) return
+                val duration = activePlaybackPlayer?.duration ?: return
+                if (duration > 0) {
+                    kinescopePlayer?.seekToPosition((progress / 1000f * duration).toLong())
+                }
+            }
+
+            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) = Unit
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) = Unit
+        })
+
         settingsMenuView = findViewById<KinescopeSettingsView?>(R.id.settings_menu)
             .apply {
                 addParameter(
+                    parameter = KinescopeSettingsView.Parameter.Subtitles,
+                    title = resources.getString(R.string.settings_parameter_subtitles),
+                    icon = R.drawable.ic_menu_cc,
+                )
+                addParameter(
+                    parameter = KinescopeSettingsView.Parameter.AudioTracks,
+                    title = resources.getString(R.string.settings_parameter_audio_tracks),
+                    icon = R.drawable.ic_menu_audio,
+                )
+                addParameter(
                     parameter = KinescopeSettingsView.Parameter.PlaybackSpeed,
                     title = resources.getString(R.string.settings_parameter_playback_speed),
-                    icon = R.drawable.ic_playback_speed
+                    icon = R.drawable.ic_menu_speed,
                 )
                 addParameter(
                     parameter = KinescopeSettingsView.Parameter.VideoQuality,
                     title = resources.getString(R.string.settings_parameter_video_quality),
-                    icon = R.drawable.ic_quality
+                    icon = R.drawable.ic_menu_quality,
                 )
                 addParameter(
-                    parameter = KinescopeSettingsView.Parameter.Subtitles,
-                    title = resources.getString(R.string.settings_parameter_subtitles),
-                    icon = R.drawable.ic_subtitles,
+                    parameter = KinescopeSettingsView.Parameter.Scale,
+                    title = resources.getString(R.string.settings_parameter_scale),
+                    icon = R.drawable.ic_menu_scale,
                 )
                 addParameter(
                     parameter = KinescopeSettingsView.Parameter.Attachments,
@@ -587,13 +927,83 @@ class KinescopePlayerView(
                     icon = R.drawable.ic_attachments,
                 )
                 onOptionSelected = ::onSettingsOptionSelected
+                onSubtitleStyleChanged = { style ->
+                    subtitleStyle = style
+                    applySubtitleStyle()
+                }
+                onCaptionsSearchClick = ::openCaptionsSearch
+                videoScalePercentProvider = { videoScaleController?.percentLabel().orEmpty() }
+                onVideoScaleStep = { factor -> videoScaleController?.multiplyScale(factor) }
+                onVideoScaleReset = { videoScaleController?.reset(animated = true) }
+                onNavigationChanged = {
+                    updateVideoScaleBadgeVisibility()
+                    if (settingsMenuView?.isVisible != true) {
+                        restoreChromeAfterSettingsDismiss()
+                    }
+                }
             }
         settingsMenuView?.setAnchorView(optionsButton)
         settingsMenuView?.setFullscreenMode(isVideoFullscreen)
 
+        captionsSearchView = findViewById(R.id.captions_search_overlay)
+        captionsSearchView?.onSeekToMs = { positionMs ->
+            kinescopePlayer?.seekToPosition(positionMs)
+            if (isCaptionsSearchActive()) {
+                applyCaptionsSearchControlChrome(active = true)
+            }
+        }
+        captionsSearchView?.onVisibilityChanged = { visible ->
+            setVideoSubtitlesHiddenForCaptionsSearch(visible)
+            applyCaptionsSearchControlChrome(visible)
+            if (visible) {
+                descriptionBlock?.isVisible = false
+                playPauseButton?.isVisible = false
+                updateCaptionsSearchInsets()
+                updateProgressControlsVisibility()
+                refreshCaptionsSearchChrome()
+            } else {
+                restoreControlOverlayAfterCaptionsSearch()
+            }
+        }
+
+        chaptersMenuView = findViewById(R.id.chapters_menu)
+        chaptersMenuView?.setAnchorView(chaptersButton)
+        chaptersMenuView?.setFullscreenMode(isVideoFullscreen)
+        chaptersMenuView?.onChapterSelected = { chapter ->
+            kinescopePlayer?.seekToPosition(chapter.startTimeMs())
+            if (isOptionsBarExpanded) {
+                collapseOptionsBar(animated = false)
+            } else {
+                updateProgressControlsVisibility(animated = false)
+            }
+            if (controlView?.isVisible == true) {
+                scheduleControlOverlayAutoHide()
+            }
+        }
+
+        playlistMenuView = findViewById(R.id.playlist_menu)
+        playlistMenuView?.onItemSelected = { item ->
+            onPlaylistItemSelected?.invoke(item)
+            scheduleControlOverlayAutoHide()
+        }
+        playlistMenuView?.onCopyLinkClick = { item ->
+            onPlaylistCopyLinkClick?.invoke(item)
+        }
+        playlistMenuView?.onDismiss = {
+            scheduleControlOverlayAutoHide()
+        }
+
         applyKinescopePlayerOptions()
         applyPlayerChromeLayout()
-        setSubtitlesStyling()
+        applySubtitleStyle()
+        addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+            val widthChanged = right - left != oldRight - oldLeft
+            val heightChanged = bottom - top != oldBottom - oldTop
+            if ((widthChanged || heightChanged) && width > 0 && height > 0) {
+                applySubtitleStyle()
+                updateCaptionsSearchInsets()
+            }
+        }
         setUIListeners()
         updatePlayPauseButton()
     }
@@ -603,43 +1013,180 @@ class KinescopePlayerView(
      * to this KinescopePlayerView
      *
      */
-    private fun restorePlaybackChromeState(
-        startedPlayback: Boolean,
-        playPauseState: KinescopePlayPauseMorphView.State?,
+    private fun applyCapturedPlayPauseIcon(
+        showPauseIcon: Boolean?,
+        showReplay: Boolean,
     ) {
-        hasStartedPlayback = startedPlayback
-        currentPlayPauseState = playPauseState
-        applyExoPlayerVisibility()
-        updateBuffering()
+        resetPlayPauseButtonStateCache()
+        syncPlayPauseButtonForViewSwitch(
+            showPauseIcon = showPauseIcon,
+            showReplay = showReplay,
+        )
+        post {
+            syncPlayPauseButtonForViewSwitch(
+                showPauseIcon = showPauseIcon,
+                showReplay = showReplay,
+            )
+        }
+    }
+
+    private fun beginViewSwitchPlayPauseOverride(
+        showPauseIcon: Boolean?,
+        showReplay: Boolean,
+    ) {
+        removeCallbacks(endViewSwitchPlayPauseOverrideRunnable)
+        viewSwitchReplayOverride = showReplay
+        viewSwitchPauseOverride = showPauseIcon
+        postDelayed(endViewSwitchPlayPauseOverrideRunnable, VIEW_SWITCH_PLAY_PAUSE_OVERRIDE_MS)
+    }
+
+    private fun endViewSwitchPlayPauseOverride() {
+        val expectedPause = viewSwitchPauseOverride
+        if (expectedPause != null && expectedPause != shouldShowPauseButton()) {
+            postDelayed(endViewSwitchPlayPauseOverrideRunnable, 100L)
+            return
+        }
+        viewSwitchPauseOverride = null
+        viewSwitchReplayOverride = false
         updatePlayPauseButton()
+    }
+
+    private val endViewSwitchPlayPauseOverrideRunnable = Runnable {
+        endViewSwitchPlayPauseOverride()
+    }
+
+    internal fun detachForViewSwitch() {
+        if (kinescopePlayer == null) {
+            return
+        }
+        settingsMenuView?.takeIf { it.isVisible }?.dismiss()
+        isOptionsBarExpanded = false
+        ensureControlBarProgressChromeVisible()
+        removeCallbacks(bufferingWatchdogRunnable)
+        detachPlayerBindings(clearHostCallback = false)
+        exoPlayerView?.player = null
+        kinescopePlayer = null
+        hasStartedPlayback = false
+    }
+
+    private fun resolvePauseForPlayPauseButton(): Boolean {
+        viewSwitchPauseOverride?.let { return it }
+        return shouldShowPauseButton()
+    }
+
+    private fun resolveReplayForPlayPauseButton(): Boolean {
+        if (viewSwitchReplayOverride) {
+            return true
+        }
+        return shouldShowReplayButton()
+    }
+
+    private fun syncPlayPauseButtonForViewSwitch(
+        showPauseIcon: Boolean?,
+        showReplay: Boolean,
+    ) {
+        if (isPictureInPictureActive || isCaptionsSearchActive()) {
+            playPauseButton?.isVisible = false
+            lastCenterPlayControlVisible = false
+            return
+        }
+        val showControls = kinescopePlayer?.kinescopePlayerOptions?.controls ?: true
+        val showCenterPlayControl = shouldShowCenterPlayControl(showControls)
+        lastCenterPlayControlVisible = showCenterPlayControl
+        playPauseButton?.isVisible = showCenterPlayControl
+        if (!showCenterPlayControl) {
+            return
+        }
+        val button = playPauseButton ?: return
+        when {
+            showReplay || resolveReplayForPlayPauseButton() -> {
+                if (!button.isShowingReplay()) {
+                    button.showReplay()
+                }
+                lastCenterPauseShown = null
+            }
+
+            else -> {
+                val pause = showPauseIcon ?: resolvePauseForPlayPauseButton()
+                button.setPlaying(pause, animated = false)
+                lastCenterPauseShown = pause
+            }
+        }
+    }
+
+    private fun rebindPlayerHost() {
+        kinescopePlayer?.getOrCreatePlayerHost()?.let { host ->
+            host.onActivePlayerChanged = { newPlayer ->
+                bindPlaybackPlayer(newPlayer)
+                updateAll()
+            }
+            bindPlaybackPlayer(host.activePlayer)
+        }
+    }
+
+    private fun resetPlayPauseButtonStateCache() {
+        lastCenterPauseShown = null
+        lastCenterPlayControlVisible = null
+    }
+
+    private fun playbackPlayerForChrome(): Player? {
+        return localExoPlayer ?: activePlaybackPlayer
     }
 
     fun setPlayer(kinescopePlayer: KinescopeVideoPlayer?) {
         Assertions.checkState(Looper.myLooper() == Looper.getMainLooper())
         if (this.kinescopePlayer === kinescopePlayer) return
-        this.kinescopePlayer?.exoPlayer?.removeListener(componentListener)
+        detachPlayerBindings()
+        removeCallbacks(bufferingWatchdogRunnable)
+        playbackBufferingWatchdog.reset()
         hasStartedPlayback = false
-        currentPlayPauseState = null
+        initialSubtitlesConfigured = false
+        hidePoster()
+        pendingCueGroup = null
+        learnedCueDurationUs = C.TIME_UNSET
+        stopSubtitleUpdates()
+        subtitleView?.setCues(emptyList())
+        progressiveSubtitleOverlay?.clear()
+        playbackBufferingWatchdog.reset()
+        playbackStallDispatched = false
+        removeCallbacks(bufferingWatchdogRunnable)
         this.kinescopePlayer = kinescopePlayer
 
         kinescopePlayer?.exoPlayer?.let { player ->
-            this.qualityManager =
-                KinescopeQualityManager(context, player.trackSelector as DefaultTrackSelector)
+            this.trackController =
+                TrackController(context, player.trackSelector as DefaultTrackSelector)
         }
 
-        kinescopePlayer?.exoPlayer?.addListener(componentListener)
         kinescopePlayer?.onSourceChanged = { source, metricUrl ->
             hasStartedPlayback = false
+            initialSubtitlesConfigured = false
+            pendingCueGroup = null
+            learnedCueDurationUs = C.TIME_UNSET
+            stopSubtitleUpdates()
+            subtitleView?.setCues(emptyList())
+            progressiveSubtitleOverlay?.clear()
             applyDefaultQuality()
             analyticsManager.setSource(
                 source = source,
                 metricUrl = metricUrl,
             )
+            resetOptionsChromeForSourceChange()
+            postVideoLoadedChromeUpdate()
         }
         exoPlayerView?.player = kinescopePlayer?.exoPlayer
+        bindLocalEnginePlayer(kinescopePlayer?.exoPlayer)
+        kinescopePlayer?.getOrCreatePlayerHost()?.let { host ->
+            host.onActivePlayerChanged = { newPlayer ->
+                bindPlaybackPlayer(newPlayer)
+                updateAll()
+            }
+            bindPlaybackPlayer(host.activePlayer)
+        }
+        applyProgressiveSubtitles()
         applyKinescopePlayerOptions()
         applyAccentColor()
         applyExoPlayerVisibility()
+        ensureControlBarProgressChromeVisible()
         updateAll()
     }
 
@@ -660,11 +1207,21 @@ class KinescopePlayerView(
     ) {
         buttonColor?.let { color ->
             tintControlIcon(pictureInPictureButton, color)
-            tintControlIcon(optionsButton, color)
-            tintControlIcon(optionsDotsButton, color)
-            tintControlIcon(fullscreenButton, color)
-            tintControlIcon(customButton, color)
+            tintControlIcon(castButton, color)
+            tintControlIcon(chaptersButton, color)
             buttonsContainer?.children?.forEach { child ->
+                if (child is ImageButton && child !== subtitlesButton) {
+                    tintControlIcon(child, color)
+                }
+            }
+            subtitlesButton?.let { button ->
+                if (button is android.widget.ImageView) {
+                    button.imageTintList = null
+                }
+            }
+            updateSubtitlesButtonIcon()
+            tintControlIcon(playPauseButton, color)
+            customButtonsContainer?.children?.forEach { child ->
                 if (child is ImageButton) {
                     tintControlIcon(child, color)
                 }
@@ -689,14 +1246,14 @@ class KinescopePlayerView(
 
         positionView?.isVisible = false
         durationView?.isVisible = false
-        timeSeparatorView?.isVisible = false
+        timeDurationSuffixClip?.isVisible = false
         liveDataView?.isVisible = true
     }
 
     /**
      * Sets the poster image.
-     * Poster will be automatically hidden once the buffering started.
-     * For the live stream it will be hidden once the video is ready.
+     * Poster stays visible while the video is loading until playback starts.
+     * For live streams it is hidden once the video is ready.
      * @param url Image url
      * @param placeholder Will be shown while image is loading.
      * @param errorPlaceholder Will be shown if image loading failed.
@@ -708,23 +1265,34 @@ class KinescopePlayerView(
         @DrawableRes errorPlaceholder: Int = R.drawable.default_poster,
         onLoadFinished: ((isSuccess: Boolean) -> Unit)? = null,
     ) {
-        with(kinescopePlayer?.exoPlayer?.playbackState) {
-            if ((!isLiveState && this == Player.STATE_BUFFERING) ||
-                (isLiveState && this == Player.STATE_READY)
-            ) {
-                return
-            }
+        if (shouldSuppressPosterDisplay()) {
+            return
         }
         posterView?.let {
             it.isVisible = true
+            it.setImageResource(placeholder)
             Glide.with(context)
                 .load(url)
+                .centerCrop()
                 .placeholder(placeholder)
                 .error(errorPlaceholder)
                 .addListener(KinescopeGlideListener { isSuccess ->
                     onLoadFinished?.invoke(isSuccess)
                 })
                 .into(it)
+        }
+    }
+
+    private fun showDefaultPoster(
+        @DrawableRes drawableRes: Int = R.drawable.default_poster,
+    ) {
+        if (shouldSuppressPosterDisplay()) {
+            return
+        }
+        posterView?.let {
+            it.isVisible = true
+            Glide.with(context).clear(it)
+            it.setImageResource(drawableRes)
         }
     }
 
@@ -740,7 +1308,7 @@ class KinescopePlayerView(
      * @param startDate ISO8601 date string
      */
     fun showLiveStartDate(startDate: String) {
-        with(kinescopePlayer?.exoPlayer?.playbackState) {
+        with(activePlaybackPlayer?.playbackState) {
             if ((!isLiveState && this == Player.STATE_BUFFERING) ||
                 (isLiveState && this == Player.STATE_READY)
             ) {
@@ -764,6 +1332,62 @@ class KinescopePlayerView(
     }
 
     /**
+     * Built-in settings popup. Use [configureChrome] or [configureSettingsMenu] to add custom rows.
+     */
+    val settingsMenu: KinescopeSettingsView?
+        get() = settingsMenuView
+
+    /**
+     * Applies optional chrome customization: extra control-bar buttons and settings-menu tweaks.
+     */
+    fun configureChrome(customization: KinescopePlayerChromeCustomization?) {
+        chromeCustomization = customization
+        applyChromeCustomization()
+    }
+
+    /**
+     * Builds and applies [KinescopePlayerChromeCustomization].
+     */
+    fun configureChrome(block: KinescopePlayerChromeCustomization.() -> Unit) {
+        configureChrome(KinescopePlayerChromeCustomization().apply(block))
+    }
+
+    /**
+     * Mutates the built-in settings menu after default parameters are registered.
+     */
+    fun configureSettingsMenu(block: KinescopeSettingsView.() -> Unit) {
+        settingsMenuView?.apply(block)
+    }
+
+    var onPlaylistItemSelected: ((KinescopePlaylistItem) -> Unit)? = null
+    var onPlaylistCopyLinkClick: ((KinescopePlaylistItem) -> Unit)? = null
+
+    /**
+     * Supplies playlist rows for the built-in playlist menu opened from the control bar.
+     */
+    fun setPlaylistItems(items: List<KinescopePlaylistItem>, selectedId: String? = null) {
+        playlistItems = items
+        playlistMenuView?.setItems(items, selectedId)
+        updatePlaylistButtonVisibility()
+    }
+
+    fun setSelectedPlaylistItemId(id: String?) {
+        playlistMenuView?.setSelectedId(id)
+    }
+
+    fun dismissPlaylistMenu() {
+        playlistMenuView?.dismiss()
+    }
+
+    private fun applyChromeCustomization() {
+        chromeCustomization?.settingsMenuConfigurator?.let { configurator ->
+            settingsMenuView?.configurator()
+        }
+        rebuildCustomChromeButtons()
+        refreshPlayerChrome()
+    }
+
+    /**
      * Adds the custom button to the player.
      * This method must be called before the [setColors].
      * @param iconRes Icon resource for the button
@@ -772,17 +1396,66 @@ class KinescopePlayerView(
     fun showCustomButton(
         @DrawableRes iconRes: Int,
         onClick: () -> Unit,
-    ) = customButton?.apply {
-        isVisible = true
-        setImageResource(iconRes)
-        setOnClickListener { onClick() }
+    ) {
+        legacyCustomButton = KinescopeChromeButton(
+            id = LEGACY_CUSTOM_BUTTON_ID,
+            iconRes = iconRes,
+            contentDescription = null,
+            onClick = onClick,
+        )
+        rebuildCustomChromeButtons()
     }
 
     /**
-     * Hides custom button.
+     * Hides custom button added via [showCustomButton].
      */
     fun hideCustomButton() {
-        customButton?.isVisible = false
+        legacyCustomButton = null
+        rebuildCustomChromeButtons()
+    }
+
+    private fun rebuildCustomChromeButtons() {
+        val container = customButtonsContainer ?: return
+        container.removeAllViews()
+        val buttons = buildList {
+            legacyCustomButton?.let(::add)
+            addAll(chromeCustomization?.customButtons.orEmpty())
+        }
+        if (buttons.isEmpty()) {
+            container.isVisible = false
+            return
+        }
+        val sectionGap = resources.getDimensionPixelSize(R.dimen.kinescope_control_section_gap)
+        buttons.forEachIndexed { index, spec ->
+            val button = ImageButton(context, null, 0, R.style.KinescopeMediaButton).apply {
+                importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
+                contentDescription = spec.contentDescription
+                setImageResource(spec.iconRes)
+                setOnClickListener { spec.onClick() }
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).also { params ->
+                    if (index > 0) {
+                        params.marginStart = sectionGap
+                    }
+                }
+            }
+            container.addView(button)
+        }
+        updateCustomButtonsVisibility()
+    }
+
+    private fun updateCustomButtonsVisibility() {
+        val container = customButtonsContainer ?: return
+        val options = kinescopePlayer?.kinescopePlayerOptions
+        val showControls = options?.controls != false
+        val compactExpanded = usesCompactOptionsChrome() && isOptionsBarExpanded
+        val hasButtons = container.childCount > 0
+        container.isVisible = showControls &&
+            hasButtons &&
+            (!usesCompactOptionsChrome() || compactExpanded)
+        optionsExpandedGroup?.isVisible = container.isVisible
     }
 
     /**
@@ -802,28 +1475,109 @@ class KinescopePlayerView(
         super.onAttachedToWindow()
         applyPlayerChromeLayout()
         updateAll()
+        refreshCaptionsSearchChrome()
+    }
+
+    override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+        super.onWindowFocusChanged(hasWindowFocus)
+        if (hasWindowFocus) {
+            refreshCaptionsSearchChrome()
+        }
+    }
+
+    private fun refreshCaptionsSearchChrome() {
+        if (!isCaptionsSearchActive()) {
+            return
+        }
+        playPauseButton?.isVisible = false
+        captionsSearchView?.let { search ->
+            (search.parent as? ViewGroup)?.bringChildToFront(search)
+        }
+        updateCaptionsSearchInsets()
+        applyCaptionsSearchControlChrome(active = true)
     }
 
     fun setIsFullscreen(value: Boolean) {
         isVideoFullscreen = value
         seekView?.setFullscreenMode(value)
         settingsMenuView?.setFullscreenMode(value)
+        chaptersMenuView?.setFullscreenMode(value)
         applyPlayerChromeLayout()
         updateFullscreenButton()
+        updatePlayPauseButton()
     }
 
     private fun isBufferingSpinnerVisible(): Boolean {
-        val player = kinescopePlayer?.exoPlayer ?: return false
-        val waitingForFirstPlayback = !hasStartedPlayback && player.playWhenReady
-        val isRebuffering = hasStartedPlayback
-                && player.playbackState == Player.STATE_BUFFERING
-                && (showBuffering == PlayerView.SHOW_BUFFERING_ALWAYS
-                || showBuffering == PlayerView.SHOW_BUFFERING_WHEN_PLAYING && player.playWhenReady)
-        return waitingForFirstPlayback || isRebuffering
+        val player = localExoPlayer ?: return false
+        if (!hasStartedPlayback && player.playbackState == Player.STATE_BUFFERING) {
+            return true
+        }
+        return hasStartedPlayback &&
+            player.playbackState == Player.STATE_BUFFERING &&
+            (showBuffering == PlayerView.SHOW_BUFFERING_ALWAYS ||
+                showBuffering == PlayerView.SHOW_BUFFERING_WHEN_PLAYING && player.playWhenReady)
+    }
+
+    private fun isVideoLoaded(): Boolean = getVideo() != null
+
+    private fun postVideoLoadedChromeUpdate() {
+        val update = {
+            applyVideoPoster()
+            ensureInitialSubtitlesIfNeeded()
+            updateChaptersMenuContent()
+            updatePlayPauseButton()
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            update()
+        } else {
+            post(update)
+        }
+    }
+
+    private fun shouldSuppressPosterDisplay(): Boolean {
+        if (hasStartedPlayback) {
+            return true
+        }
+        val player = activePlaybackPlayer ?: return false
+        return if (!isLiveState) {
+            player.playbackState == Player.STATE_BUFFERING && player.playWhenReady
+        } else {
+            player.playbackState == Player.STATE_READY
+        }
+    }
+
+    private fun applyVideoPoster() {
+        if (hasStartedPlayback || shouldSuppressPosterDisplay()) {
+            return
+        }
+        val posterUrl = getVideo()?.poster?.url
+        if (posterUrl.isNullOrBlank()) {
+            showDefaultPoster()
+        } else {
+            showPoster(posterUrl)
+        }
+    }
+
+    private fun bindRootLayoutConstraints() {
+        if (childCount == 0) {
+            return
+        }
+        val root = getChildAt(0)
+        root.layoutParams = LayoutParams(0, 0).apply {
+            topToTop = LayoutParams.PARENT_ID
+            bottomToBottom = LayoutParams.PARENT_ID
+            startToStart = LayoutParams.PARENT_ID
+            endToEnd = LayoutParams.PARENT_ID
+        }
+    }
+
+    private fun isControlOverlayVisible(): Boolean {
+        val overlay = controlView ?: return false
+        return overlay.isVisible && overlay.alpha > 0.01f
     }
 
     private fun updateBuffering() {
-        val player = kinescopePlayer?.exoPlayer
+        val player = localExoPlayer
         val waitingForFirstPlayback = player != null && !hasStartedPlayback && player.playWhenReady
         val showBufferingSpinner = isBufferingSpinnerVisible()
 
@@ -836,7 +1590,7 @@ class KinescopePlayerView(
                     android.graphics.Color.TRANSPARENT
                 },
             )
-            val spinner = overlay.findViewById<ProgressBar>(R.id.kinescope_buffering)
+            val spinner = overlay.findViewById<ProgressBar>(KinescopeSdkViewIds.bufferingSpinner)
             if (showBufferingSpinner) {
                 (overlay.parent as? ViewGroup)?.bringChildToFront(overlay)
                 settingsMenuView?.let { settings ->
@@ -853,9 +1607,18 @@ class KinescopePlayerView(
             !hasStartedPlayback -> View.INVISIBLE
             else -> View.VISIBLE
         }
+
+        if (!hasStartedPlayback && player != null && !player.playWhenReady) {
+            applyVideoPoster()
+        } else if (kinescopePlayer == null) {
+            hidePoster()
+        }
     }
 
     private fun updateAll() {
+        if (isPictureInPictureActive) {
+            return
+        }
         updatePlayPauseButton()
         updateBuffering()
         updateTimeline()
@@ -903,6 +1666,12 @@ class KinescopePlayerView(
     }
 
     private fun shouldShowCenterPlayControl(showControls: Boolean): Boolean {
+        if (isPictureInPictureActive) {
+            return false
+        }
+        if (isCaptionsSearchActive()) {
+            return false
+        }
         if (!showControls) {
             return false
         }
@@ -927,23 +1696,22 @@ class KinescopePlayerView(
     }
 
     private fun applyPlayerChromeLayout() {
+        val previousMobileChrome = isMobilePlayerChrome
+        val previousCompactOptionsChrome = wasCompactOptionsChrome
         val mobile = usesMobilePlayerChrome()
         val compactOptions = mobile || isVideoFullscreen
-        if (isMobilePlayerChrome != mobile || wasCompactOptionsChrome != compactOptions) {
+        val chromeModeChanged = previousMobileChrome != mobile ||
+            previousCompactOptionsChrome != compactOptions
+        if (chromeModeChanged) {
             isOptionsBarExpanded = false
+            ensureControlBarProgressChromeVisible()
         }
         wasCompactOptionsChrome = compactOptions
         isMobilePlayerChrome = mobile
 
         val horizontalMargin = resources.getDimensionPixelSize(R.dimen.kinescope_mobile_control_margin_horizontal)
         val bottomMargin = resources.getDimensionPixelSize(R.dimen.kinescope_mobile_control_margin_bottom)
-        val buttonSize = resources.getDimensionPixelSize(
-            if (mobile) {
-                R.dimen.kinescope_mobile_media_button_size
-            } else {
-                R.dimen.kinescope_media_button_height
-            },
-        )
+        val buttonSize = resources.getDimensionPixelSize(R.dimen.kinescope_media_button_height)
 
         descriptionBlock?.let { block ->
             (block.layoutParams as? MarginLayoutParams)?.let { params ->
@@ -962,8 +1730,25 @@ class KinescopePlayerView(
 
         applyControlBarLayout(mobile)
 
-        listOf(fullscreenButton, optionsButton, optionsDotsButton, pictureInPictureButton, customButton).forEach { button ->
+        listOf(
+            fullscreenButton,
+            optionsButton,
+            optionsDotsButton,
+            pictureInPictureButton,
+            playlistButton,
+            chaptersButton,
+            subtitlesButton,
+            castButton,
+        ).forEach { button ->
             button?.layoutParams?.let { params ->
+                params.width = buttonSize
+                params.height = buttonSize
+                button.layoutParams = params
+            }
+            button?.setPadding(0, 0, 0, 0)
+        }
+        customButtonsContainer?.children?.forEach { button ->
+            button.layoutParams?.let { params ->
                 params.width = buttonSize
                 params.height = buttonSize
                 button.layoutParams = params
@@ -1008,11 +1793,21 @@ class KinescopePlayerView(
         }
 
         controlView?.setBackgroundColor(getControlOverlayBackgroundColor())
-        updateOptionsBarUi()
         seekView?.setMobilePlayerChrome(mobile)
         updateMobileBackgroundGradientHeight()
+        if (isPictureInPictureActive) {
+            hidePipOverlays()
+            return
+        }
+        updateOptionsBarUi()
+        updateFullscreenButton()
         updateMobileBackgroundGradients()
         applyKinescopePlayerOptions()
+        updateCaptionsSearchInsets()
+        if (chromeModeChanged) {
+            resetPlayPauseButtonStateCache()
+            updatePlayPauseButton()
+        }
     }
 
     private fun applyControlBarLayout(mobile: Boolean) {
@@ -1039,7 +1834,7 @@ class KinescopePlayerView(
             timeContainer?.layoutParams = params
         }
 
-        (timeBar?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
+        (progressContainer?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
             params.marginStart = progressLeadingGap
             params.marginEnd = 0
             params.width = 0
@@ -1048,7 +1843,7 @@ class KinescopePlayerView(
                 params.weight = 1f
                 params.gravity = android.view.Gravity.CENTER_VERTICAL
             }
-            timeBar?.layoutParams = params
+            progressContainer?.layoutParams = params
         }
 
         (buttonsContainer?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
@@ -1056,13 +1851,55 @@ class KinescopePlayerView(
             buttonsContainer?.layoutParams = params
         }
 
+        (optionsExpandableStrip?.layoutParams as? LinearLayout.LayoutParams)?.let { params ->
+            if (!mobile && !isVideoFullscreen) {
+                params.width = LinearLayout.LayoutParams.WRAP_CONTENT
+                params.weight = 0f
+            }
+            optionsExpandableStrip?.layoutParams = params
+        }
+
+        (optionsButton?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
+            params.marginStart = if (mobile || isVideoFullscreen) sectionGap else 0
+            optionsButton?.layoutParams = params
+        }
+
+        (pictureInPictureButton?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
+            params.marginStart = 0
+            params.marginEnd = 0
+            pictureInPictureButton?.layoutParams = params
+        }
+
+        (subtitlesButton?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
+            params.marginStart = if (pictureInPictureButton?.isVisible == true) {
+                sectionGap
+            } else if (!mobile && !isVideoFullscreen) {
+                0
+            } else {
+                sectionGap
+            }
+            params.marginEnd = 0
+            subtitlesButton?.layoutParams = params
+        }
+
+        (castButton?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
+            params.marginStart = if (mobile || isVideoFullscreen) sectionGap else 0
+            castButton?.layoutParams = params
+        }
+
+        val trailingGap = resources.getDimensionPixelSize(R.dimen.kinescope_control_trailing_gap)
+
         (optionsDotsButton?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
             params.marginStart = if (mobile || isVideoFullscreen) sectionGap else 0
             optionsDotsButton?.layoutParams = params
         }
 
         (fullscreenButton?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
-            params.marginStart = if (mobile || isVideoFullscreen) sectionGap else 0
+            params.marginStart = when {
+                mobile || isVideoFullscreen -> trailingGap
+                !usesCompactOptionsChrome() && optionsButton?.isVisible == true -> trailingGap
+                else -> 0
+            }
             fullscreenButton?.layoutParams = params
         }
     }
@@ -1084,16 +1921,32 @@ class KinescopePlayerView(
     }
 
     private fun isPlaybackPaused(): Boolean {
-        val player = kinescopePlayer?.exoPlayer ?: return false
+        val player = activePlaybackPlayer ?: return false
         return !player.playWhenReady &&
             player.playbackState != Player.STATE_ENDED &&
             player.playbackState != Player.STATE_IDLE
     }
 
     private fun shouldShowMobileBackgroundGradients(controlsVisible: Boolean? = null): Boolean {
-        val overlayVisible = controlsVisible ?: (controlView?.isVisible == true)
+        if (isPictureInPictureActive) {
+            return false
+        }
+        if (isCaptionsSearchActive()) {
+            return usesGradientChrome() &&
+                kinescopePlayer?.kinescopePlayerOptions?.controls == true
+        }
+        if (seekFeedbackActive) {
+            return usesGradientChrome() &&
+                kinescopePlayer?.kinescopePlayerOptions?.controls == true
+        }
+        val overlayVisible = when {
+            controlsVisible != null -> controlsVisible
+            controlOverlayHiding -> false
+            else -> isControlOverlayVisible()
+        }
         return usesGradientChrome() &&
             !scrubbing &&
+            !scrubOverlayHiding &&
             kinescopePlayer?.kinescopePlayerOptions?.controls == true &&
             (isPlaybackPaused() || overlayVisible)
     }
@@ -1106,9 +1959,19 @@ class KinescopePlayerView(
             visible = shouldShowMobileBackgroundGradients(controlsVisible),
             animated = animated,
         )
+        if (isCaptionsSearchActive()) {
+            applyCaptionsSearchControlChrome(active = true)
+        }
     }
 
     private fun setMobileBackgroundGradientsVisible(visible: Boolean, animated: Boolean) {
+        if (!visible && isCaptionsSearchActive()) {
+            mobileHeaderGradient?.animate()?.cancel()
+            mobileHeaderGradient?.isVisible = false
+            mobileHeaderGradient?.alpha = 1f
+            applyCaptionsSearchControlChrome(active = true)
+            return
+        }
         val gradients = listOfNotNull(mobileHeaderGradient, mobileFooterGradient)
         if (gradients.isEmpty()) {
             return
@@ -1172,11 +2035,24 @@ class KinescopePlayerView(
     }
 
     private fun updateOptionsButtonIcon() {
-        if (usesCompactOptionsChrome()) {
-            return
+        val controller = trackController
+        val iconRes = qualitySettingsIconRes(
+            isAudioOnlyQuality = controller?.isAudioOnlyQuality == true,
+            playbackHeightPx = resolvePlaybackHeightForSettingsIcon(),
+        )
+        setOptionsButtonIcon(iconRes)
+    }
+
+    private fun resolvePlaybackHeightForSettingsIcon(): Int {
+        val videoHeight = localExoPlayer?.videoSize?.height ?: 0
+        if (videoHeight > 0) {
+            return videoHeight
         }
-        isOptionsBarExpanded = false
-        setOptionsButtonIcon(R.drawable.ic_settings)
+        val controller = trackController ?: return 0
+        if (controller.isAutoQuality || controller.isAudioOnlyQuality) {
+            return 0
+        }
+        return controller.selectedQualityVariant.id.coerceAtLeast(0)
     }
 
     private fun updateOptionsButtonsVisibility() {
@@ -1185,12 +2061,13 @@ class KinescopePlayerView(
             optionsDotsButton?.isVisible = showOptions
             if (!isOptionsBarExpanded) {
                 resetExpandedButtonsTransform()
-                optionsExpandedGroup?.isVisible = false
+                optionsExpandableStrip?.isVisible = false
             }
+            updateExpandedButtonsChildVisibility()
         } else {
             optionsDotsButton?.isVisible = false
+            optionsExpandableStrip?.isVisible = true
             resetExpandedButtonsTransform()
-            optionsExpandedGroup?.isVisible = true
             updateExpandedButtonsChildVisibility()
             updateFullscreenButtonVisibility()
         }
@@ -1199,11 +2076,87 @@ class KinescopePlayerView(
     private fun updateExpandedButtonsChildVisibility() {
         val options = kinescopePlayer?.kinescopePlayerOptions
         val showControls = options?.controls != false
-        optionsButton?.isVisible = showControls && options?.showOptionsButton != false
+        val showOptions = options?.showOptionsButton != false
+        val compactExpanded = usesCompactOptionsChrome() && isOptionsBarExpanded
+        optionsButton?.isVisible = showControls &&
+            showOptions &&
+            (!usesCompactOptionsChrome() || compactExpanded)
         pictureInPictureButton?.isVisible = showControls &&
             options?.pictureInPicture == true &&
             KinescopePictureInPicture.isSupported(context) &&
-            !isMobilePlayerChrome
+            (!usesCompactOptionsChrome() || compactExpanded)
+        updateCastButtonVisibility()
+        updateChaptersButtonVisibility()
+        updatePlaylistButtonVisibility()
+        updateSubtitlesButtonVisibility()
+        updateCustomButtonsVisibility()
+    }
+
+    private fun updateSubtitlesButtonVisibility() {
+        val options = kinescopePlayer?.kinescopePlayerOptions
+        val showControls = options?.controls != false
+        val compactExpanded = usesCompactOptionsChrome() && isOptionsBarExpanded
+        val hasSubtitles = !getVideo()?.subtitles.isNullOrEmpty()
+        subtitlesButton?.isVisible = showControls &&
+            options?.showSubtitlesButton != false &&
+            hasSubtitles &&
+            !isLiveState &&
+            (!usesCompactOptionsChrome() || compactExpanded)
+        updateSubtitlesButtonIcon()
+    }
+
+    private fun updateSubtitlesButtonIcon() {
+        val button = subtitlesButton as? android.widget.ImageView ?: return
+        val subtitlesOn = trackController?.selectedSubtitleIndex != TrackController.SUBTITLES_OFF_ID
+        button.setImageResource(
+            if (subtitlesOn) {
+                R.drawable.ic_cc_on
+            } else {
+                R.drawable.ic_cc_off
+            },
+        )
+        button.imageTintList = null
+    }
+
+    private fun updateChaptersButtonVisibility() {
+        val options = kinescopePlayer?.kinescopePlayerOptions
+        val showControls = options?.controls != false
+        val compactExpanded = usesCompactOptionsChrome() && isOptionsBarExpanded
+        val hasChapters = getVideo()?.availableChapters().orEmpty().isNotEmpty()
+        chaptersButton?.isVisible = showControls &&
+            options?.showChaptersButton != false &&
+            hasChapters &&
+            !isLiveState &&
+            (!usesCompactOptionsChrome() || compactExpanded)
+    }
+
+    private fun updatePlaylistButtonVisibility() {
+        val options = kinescopePlayer?.kinescopePlayerOptions
+        val showControls = options?.controls != false
+        val compactExpanded = usesCompactOptionsChrome() && isOptionsBarExpanded
+        val hasPlaylist = playlistItems.isNotEmpty()
+        playlistButton?.isVisible = showControls &&
+            options?.showPlaylistButton == true &&
+            hasPlaylist &&
+            !isLiveState &&
+            (!usesCompactOptionsChrome() || compactExpanded)
+    }
+
+    private fun updateCastButtonVisibility() {
+        val options = kinescopePlayer?.kinescopePlayerOptions
+        val showControls = options?.controls != false
+        val compactExpanded = usesCompactOptionsChrome() && isOptionsBarExpanded
+        castButton?.isVisible = showControls &&
+            castSupported &&
+            options?.showCastButton == true &&
+            (!usesCompactOptionsChrome() || compactExpanded)
+    }
+
+    private fun shouldShowCompactExpandedSettings(): Boolean {
+        val options = kinescopePlayer?.kinescopePlayerOptions
+        val showControls = options?.controls != false
+        val showOptions = options?.showOptionsButton != false
+        return showControls && showOptions
     }
 
     private fun updateFullscreenButtonVisibility() {
@@ -1212,8 +2165,49 @@ class KinescopePlayerView(
         fullscreenButton?.isVisible = showControls && options?.fullscreen != false
     }
 
+    private fun lockTimeBarWidthForFade() {
+        val container = progressContainer ?: return
+        val lockedWidth = container.width
+        if (lockedWidth <= 0) {
+            return
+        }
+        (container.layoutParams as? LinearLayout.LayoutParams)?.let { params ->
+            if (params.weight > 0f) {
+                timeBarLayoutWeight = params.weight
+            }
+            params.width = lockedWidth
+            params.weight = 0f
+            container.layoutParams = params
+        }
+    }
+
+    private fun restoreTimeBarFlexibleWidth() {
+        val container = progressContainer ?: return
+        (container.layoutParams as? LinearLayout.LayoutParams)?.let { params ->
+            params.width = 0
+            if (timeBarLayoutWeight <= 0f) {
+                timeBarLayoutWeight = 1f
+            }
+            params.weight = timeBarLayoutWeight
+            container.layoutParams = params
+        }
+        container.requestLayout()
+    }
+
+    private fun recoverCompactOptionsBarLayout() {
+        cancelCompactOptionsBarTransition()
+        isCompactOptionsBarAnimating = false
+        if (!isOptionsBarExpanded) {
+            controlBarEndSpacer?.isVisible = false
+            optionsExpandableStrip?.isVisible = false
+            resetCompactExpandedChromeTransforms()
+            restoreTimeBarFlexibleWidth()
+            progressContainer?.alpha = 1f
+            timeContainer?.alpha = 1f
+        }
+    }
+
     private fun resetExpandedButtonsTransform() {
-        optionsExpandedGroup?.animate()?.cancel()
         optionsExpandedGroup?.let { group ->
             group.alpha = 1f
             group.translationX = 0f
@@ -1221,33 +2215,445 @@ class KinescopePlayerView(
         }
     }
 
-    private fun getExpandedButtonsSlideDistance(): Float {
-        val group = optionsExpandedGroup ?: return getDefaultMediaButtonSize()
-        if (group.width > 0) {
-            return group.width.toFloat()
+    private fun cancelCompactExpandedChromeAnimations() {
+        optionsExpandableStripAnimator?.cancel()
+        optionsExpandableStripAnimator = null
+    }
+
+    private fun measureOptionsExpandableContentWidth(): Int {
+        val content = optionsExpandableContent ?: return 0
+        val height = optionsExpandableStrip?.height?.takeIf { it > 0 }
+            ?: getDefaultMediaButtonSize().toInt()
+        val widthSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        val heightSpec = View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY)
+        content.measure(widthSpec, heightSpec)
+        return content.measuredWidth
+    }
+
+    private fun updateExpandableStripLayout(widthPx: Int) {
+        val strip = optionsExpandableStrip ?: return
+        val params = (strip.layoutParams as? LinearLayout.LayoutParams)
+            ?: LinearLayout.LayoutParams(widthPx, ViewGroup.LayoutParams.WRAP_CONTENT)
+        params.width = widthPx
+        strip.layoutParams = params
+    }
+
+    private fun updateProgressContainerWidth(widthPx: Int) {
+        val container = progressContainer ?: return
+        val params = (container.layoutParams as? LinearLayout.LayoutParams)
+            ?: LinearLayout.LayoutParams(widthPx, ViewGroup.LayoutParams.WRAP_CONTENT)
+        params.width = widthPx.coerceAtLeast(0)
+        container.layoutParams = params
+    }
+
+    private fun prepareProgressContainerForWidthAnimation(initialWidthPx: Int = 0) {
+        val container = progressContainer ?: return
+        (container.layoutParams as? LinearLayout.LayoutParams)?.let { params ->
+            if (params.weight != 0f) {
+                timeBarLayoutWeight = params.weight
+            }
+            params.width = initialWidthPx.coerceAtLeast(0)
+            params.weight = 0f
+            container.layoutParams = params
         }
-        return getDefaultMediaButtonSize() * 3f
+        container.isVisible = true
+        container.alpha = 1f
+    }
+
+    private fun cancelCompactOptionsBarTransition() {
+        compactOptionsBarAnimator?.cancel()
+        compactOptionsBarAnimator = null
+        isCompactOptionsBarAnimating = false
+        cancelCompactExpandedChromeAnimations()
+        progressContainer?.animate()?.cancel()
+        timeContainer?.animate()?.cancel()
+    }
+
+    private fun resetCompactExpandedChromeTransforms() {
+        cancelCompactExpandedChromeAnimations()
+        optionsExpandableContent?.alpha = 1f
+        optionsExpandableContent?.translationX = 0f
+        optionsExpandableStrip?.let { strip ->
+            val params = (strip.layoutParams as? LinearLayout.LayoutParams)
+                ?: LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                )
+            params.width = ViewGroup.LayoutParams.WRAP_CONTENT
+            strip.layoutParams = params
+        }
+        resetExpandedButtonsTransform()
+    }
+
+    private fun hideCompactExpandedChromeForAnimation() {
+        cancelCompactExpandedChromeAnimations()
+        optionsExpandableStrip?.isVisible = false
+        resetCompactExpandedChromeTransforms()
+    }
+
+    private fun finishCompactOptionsBarExpand() {
+        isCompactOptionsBarAnimating = false
+        progressContainer?.isVisible = false
+        progressContainer?.alpha = 1f
+        restoreTimeBarFlexibleWidth()
+        if (timeContainer?.isVisible == true) {
+            timeContainer?.isVisible = false
+            timeContainer?.alpha = 1f
+        }
+        positionView?.isVisible = false
+        controlBarEndSpacer?.isVisible = true
+        resetCompactExpandedChromeTransforms()
+        applyControlBarLayout(usesMobilePlayerChrome())
+    }
+
+    private fun animateCompactOptionsBarExpand() {
+        cancelCompactOptionsBarTransition()
+        updateExpandedButtonsChildVisibility()
+
+        val strip = optionsExpandableStrip ?: return
+        strip.isVisible = true
+        updateExpandableStripLayout(0)
+        controlBarEndSpacer?.isVisible = false
+        restoreTimeBarFlexibleWidth()
+
+        val progressVisible = progressContainer?.isVisible == true
+        val showTime = timeContainer?.isVisible == true
+
+        if (progressVisible && (progressContainer?.width ?: 0) <= 0) {
+            controlBar?.post { animateCompactOptionsBarExpand() }
+            return
+        }
+
+        (controlBar as? ViewGroup)?.requestLayout()
+        controlBar?.post {
+            val progressStartWidth = if (progressContainer?.isVisible == true) {
+                progressContainer?.width ?: 0
+            } else {
+                0
+            }
+            val stripTargetWidth = measureOptionsExpandableContentWidth()
+            if (stripTargetWidth <= 0 && progressStartWidth <= 0) {
+                controlBarEndSpacer?.isVisible = true
+                finishCompactOptionsBarExpand()
+                return@post
+            }
+
+            if (progressStartWidth > 0) {
+                lastCompactProgressBarWidth = progressStartWidth
+                lockTimeBarWidthForFade()
+            }
+            controlBarEndSpacer?.isVisible = true
+            (controlBar as? ViewGroup)?.requestLayout()
+
+            isCompactOptionsBarAnimating = true
+            compactOptionsBarAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = OPTIONS_BAR_ANIMATION_DURATION_MS
+                interpolator = optionsBarAnimationInterpolator
+                addUpdateListener { animator ->
+                    val fraction = animator.animatedValue as Float
+                    if (progressStartWidth > 0) {
+                        updateProgressContainerWidth(
+                            (progressStartWidth * (1f - fraction)).roundToInt(),
+                        )
+                    }
+                    if (stripTargetWidth > 0) {
+                        updateExpandableStripLayout(
+                            (stripTargetWidth * fraction).roundToInt(),
+                        )
+                    }
+                    if (showTime) {
+                        timeContainer?.alpha = 1f - fraction
+                    }
+                }
+                addListener(object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: Animator) {
+                        compactOptionsBarAnimator = null
+                        finishCompactOptionsBarExpand()
+                    }
+
+                    override fun onAnimationCancel(animation: Animator) {
+                        compactOptionsBarAnimator = null
+                        if (isOptionsBarExpanded) {
+                            finishCompactOptionsBarExpand()
+                        } else {
+                            finishCompactOptionsBarCollapse()
+                        }
+                    }
+                })
+                start()
+            }
+        }
+    }
+
+    private fun finishCompactOptionsBarCollapse() {
+        isCompactOptionsBarAnimating = false
+        progressContainer?.alpha = 1f
+        restoreTimeBarFlexibleWidth()
+        timeContainer?.alpha = 1f
+        controlBarEndSpacer?.isVisible = false
+        updateProgressControlsVisibility(animated = false)
+        progressContainer?.isVisible = shouldShowProgressControlsInBar()
+        timeContainer?.isVisible = shouldShowTimeContainerInBar()
+        syncPositionViewWithTimeChrome()
+        updateOptionsButtonsVisibility()
+        applyControlBarLayout(usesMobilePlayerChrome())
+        controlBar?.post {
+            restoreTimeBarFlexibleWidth()
+            controlBar?.requestLayout()
+        }
+    }
+
+    private fun animateCompactOptionsBarCollapse() {
+        val strip = optionsExpandableStrip
+        cancelCompactOptionsBarTransition()
+
+        val showProgress = shouldShowProgressControlsInBar()
+        val showTime = shouldShowTimeContainerInBar()
+        val progressTargetWidth = lastCompactProgressBarWidth.takeIf { showProgress && it > 0 } ?: 0
+
+        val stripStartWidth = strip?.width?.takeIf { it > 0 }
+            ?: measureOptionsExpandableContentWidth().takeIf { it > 0 }
+            ?: 0
+
+        if (stripStartWidth <= 0 && progressTargetWidth <= 0) {
+            strip?.isVisible = false
+            resetCompactExpandedChromeTransforms()
+            finishCompactOptionsBarCollapse()
+            if (showProgress || showTime) {
+                animateCompactOptionsProgressIn()
+            }
+            return
+        }
+
+        strip?.let {
+            it.isVisible = true
+            updateExpandableStripLayout(stripStartWidth)
+        }
+        if (progressTargetWidth > 0) {
+            prepareProgressContainerForWidthAnimation(initialWidthPx = 0)
+        }
+        if (showTime) {
+            syncPositionViewWithTimeChrome()
+            timeContainer?.isVisible = true
+            timeContainer?.alpha = 0f
+        }
+        controlBarEndSpacer?.isVisible = true
+        (controlBar as? ViewGroup)?.requestLayout()
+
+        isCompactOptionsBarAnimating = true
+        compactOptionsBarAnimator = ValueAnimator.ofFloat(1f, 0f).apply {
+            duration = OPTIONS_BAR_ANIMATION_DURATION_MS
+            interpolator = optionsBarAnimationInterpolator
+            addUpdateListener { animator ->
+                val fraction = animator.animatedValue as Float
+                if (stripStartWidth > 0) {
+                    updateExpandableStripLayout((stripStartWidth * fraction).roundToInt())
+                }
+                if (progressTargetWidth > 0) {
+                    updateProgressContainerWidth(
+                        (progressTargetWidth * (1f - fraction)).roundToInt(),
+                    )
+                }
+                if (showTime) {
+                    timeContainer?.alpha = 1f - fraction
+                }
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    compactOptionsBarAnimator = null
+                    strip?.isVisible = false
+                    resetCompactExpandedChromeTransforms()
+                    finishCompactOptionsBarCollapse()
+                    val showProgress = shouldShowProgressControlsInBar()
+                    val showTime = shouldShowTimeContainerInBar()
+                    if (showProgress || showTime) {
+                        animateCompactOptionsProgressIn()
+                    }
+                }
+
+                override fun onAnimationCancel(animation: Animator) {
+                    compactOptionsBarAnimator = null
+                    strip?.isVisible = false
+                    resetCompactExpandedChromeTransforms()
+                    finishCompactOptionsBarCollapse()
+                }
+            })
+            start()
+        }
+    }
+
+    private fun animateCompactOptionsProgressOut(onEnd: (() -> Unit)? = null) {
+        val showProgress = progressContainer?.isVisible == true
+        val showTimeContainer = timeContainer?.isVisible == true
+        if (!showProgress && !showTimeContainer) {
+            onEnd?.invoke()
+            return
+        }
+
+        if (showProgress && (progressContainer?.width ?: 0) <= 0) {
+            controlBar?.post { animateCompactOptionsProgressOut(onEnd) }
+            return
+        }
+
+        if (showProgress) {
+            lockTimeBarWidthForFade()
+        }
+
+        var pending = 0
+        fun maybeEnd() {
+            pending--
+            if (pending <= 0) {
+                progressContainer?.isVisible = false
+                progressContainer?.alpha = 1f
+                restoreTimeBarFlexibleWidth()
+                onEnd?.invoke()
+            }
+        }
+
+        if (showProgress) {
+            pending++
+            progressContainer?.let { container ->
+                container.animate().cancel()
+                container.animate()
+                    .alpha(0f)
+                    .setDuration(OPTIONS_BAR_ANIMATION_DURATION_MS)
+                    .setInterpolator(optionsBarAnimationInterpolator)
+                    .withEndAction { maybeEnd() }
+                    .start()
+            } ?: maybeEnd()
+        }
+        if (showTimeContainer) {
+            pending++
+            animateControlBarSubviewVisibility(timeContainer, show = false) { maybeEnd() }
+        }
+        if (pending == 0) {
+            onEnd?.invoke()
+        }
+    }
+
+    private fun animateCompactOptionsProgressIn() {
+        restoreTimeBarFlexibleWidth()
+        val showProgress = shouldShowProgressControlsInBar()
+        val showTime = shouldShowTimeContainerInBar()
+        if (!showProgress && !showTime) {
+            controlBarEndSpacer?.isVisible = false
+            return
+        }
+
+        var pending = 0
+        fun maybeEnd() {
+            pending--
+            if (pending <= 0) {
+                controlBarEndSpacer?.isVisible = false
+            }
+        }
+
+        if (showProgress) {
+            pending++
+            animateControlBarSubviewVisibility(progressContainer, show = true) { maybeEnd() }
+        }
+        if (showTime) {
+            syncPositionViewWithTimeChrome()
+            pending++
+            animateControlBarSubviewVisibility(timeContainer, show = true) { maybeEnd() }
+        }
+        if (pending == 0) {
+            controlBarEndSpacer?.isVisible = false
+        }
+    }
+
+    private fun animateCompactExpandedChromeIn(animated: Boolean) {
+        val strip = optionsExpandableStrip ?: return
+        updateExpandedButtonsChildVisibility()
+
+        if (!animated) {
+            strip.isVisible = true
+            resetCompactExpandedChromeTransforms()
+            return
+        }
+
+        cancelCompactExpandedChromeAnimations()
+        strip.isVisible = true
+        updateExpandableStripLayout(0)
+
+        (controlBar as? ViewGroup)?.requestLayout()
+        controlBar?.post {
+            val targetWidth = measureOptionsExpandableContentWidth()
+            if (targetWidth <= 0) {
+                resetCompactExpandedChromeTransforms()
+                return@post
+            }
+            optionsExpandableStripAnimator = ValueAnimator.ofInt(0, targetWidth).apply {
+                duration = OPTIONS_BAR_ANIMATION_DURATION_MS
+                interpolator = optionsBarAnimationInterpolator
+                addUpdateListener { animator ->
+                    updateExpandableStripLayout(animator.animatedValue as Int)
+                }
+                start()
+            }
+        }
+    }
+
+    private fun animateCompactExpandedChromeOut(animated: Boolean, onEnd: (() -> Unit)? = null) {
+        val strip = optionsExpandableStrip ?: run {
+            onEnd?.invoke()
+            return
+        }
+
+        if (!animated) {
+            strip.isVisible = false
+            resetCompactExpandedChromeTransforms()
+            onEnd?.invoke()
+            return
+        }
+
+        cancelCompactExpandedChromeAnimations()
+
+        val startWidth = strip.width.takeIf { it > 0 } ?: measureOptionsExpandableContentWidth()
+        if (startWidth <= 0) {
+            strip.isVisible = false
+            resetCompactExpandedChromeTransforms()
+            onEnd?.invoke()
+            return
+        }
+
+        updateExpandableStripLayout(startWidth)
+        optionsExpandableStripAnimator = ValueAnimator.ofInt(startWidth, 0).apply {
+            duration = OPTIONS_BAR_ANIMATION_DURATION_MS
+            interpolator = optionsBarAnimationInterpolator
+            addUpdateListener { animator ->
+                updateExpandableStripLayout(animator.animatedValue as Int)
+            }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    strip.isVisible = false
+                    resetCompactExpandedChromeTransforms()
+                    onEnd?.invoke()
+                }
+            })
+            start()
+        }
     }
 
     private fun getDefaultMediaButtonSize(): Float {
-        return resources.getDimension(
-            if (isMobilePlayerChrome) {
-                R.dimen.kinescope_mobile_media_button_size
-            } else {
-                R.dimen.kinescope_media_button_height
-            },
-        )
+        return resources.getDimension(R.dimen.kinescope_media_button_height)
+    }
+
+    private fun isCaptionsSearchActive(): Boolean = captionsSearchView?.isVisible == true
+
+    private fun pinsExpandedOptionsToBarEnd(): Boolean {
+        return usesCompactOptionsChrome() && isOptionsBarExpanded
     }
 
     private fun shouldShowProgressControlsInBar(): Boolean {
-        if (usesCompactOptionsChrome() && isOptionsBarExpanded) {
+        if (pinsExpandedOptionsToBarEnd() && !isCaptionsSearchActive()) {
             return false
         }
         return kinescopePlayer?.kinescopePlayerOptions?.showSeekBar != false
     }
 
     private fun shouldShowTimeContainerInBar(): Boolean {
-        if (usesCompactOptionsChrome() && isOptionsBarExpanded) {
+        if (pinsExpandedOptionsToBarEnd() && !isCaptionsSearchActive()) {
             return false
         }
         val options = kinescopePlayer?.kinescopePlayerOptions
@@ -1260,25 +2666,327 @@ class KinescopePlayerView(
         return !isLiveState && (isMobilePlayerChrome || options?.showDuration == true)
     }
 
-    private fun updateProgressControlsVisibility() {
+    private fun shouldShowTotalDurationInBar(): Boolean {
+        return showTotalDuration && !isLiveState && shouldShowTimeContainerInBar()
+    }
+
+    private fun syncPositionViewWithTimeChrome() {
+        val options = kinescopePlayer?.kinescopePlayerOptions
+        val showControls = options?.controls != false
+        val showTime = shouldShowTimeContainerInBar()
+        positionView?.isVisible = showControls &&
+            !isLiveState &&
+            (isMobilePlayerChrome || options?.showDuration == true) &&
+            showTime
+    }
+
+    private fun toggleTotalDurationVisibility() {
+        if (isLiveState || !shouldShowTimeContainerInBar()) {
+            return
+        }
+        showTotalDuration = !showTotalDuration
+        updateTotalDurationVisibility(animated = true)
+        cancelControlOverlayAutoHide()
+        scheduleControlOverlayAutoHide()
+    }
+
+    private fun durationLabelText(durationMs: Long): String {
+        return TIME_LABEL_SEPARATOR + formatPlayerTime(durationMs)
+    }
+
+    private fun updateTotalDurationVisibility(animated: Boolean = false) {
+        val show = shouldShowTotalDurationInBar()
+        val label = durationView ?: return
+        val clip = timeDurationSuffixClip ?: return
+        val secondaryColor = ContextCompat.getColor(context, R.color.white_secondary)
+        label.setTextColor(secondaryColor)
+        if (!animated) {
+            cancelTimeDurationSuffixAnimation()
+            if (show) {
+                val targetWidth = measureTimeDurationSuffixWidth()
+                lockTimeDurationLabelWidth(targetWidth)
+                updateTimeDurationSuffixClipWidth(targetWidth)
+                label.alpha = 1f
+                clip.isVisible = true
+            } else {
+                updateTimeDurationSuffixClipWidth(0)
+                label.alpha = 1f
+                clip.isVisible = false
+            }
+            return
+        }
+        if (show) {
+            animateTimeDurationSuffixIn()
+        } else {
+            animateTimeDurationSuffixOut()
+        }
+    }
+
+    private fun cancelTimeDurationSuffixAnimation() {
+        timeDurationSuffixAnimator?.cancel()
+        timeDurationSuffixAnimator = null
+        durationView?.animate()?.cancel()
+    }
+
+    private fun timeDurationRowHeightPx(): Int {
+        return resources.getDimensionPixelSize(R.dimen.kinescope_mobile_control_time_height)
+    }
+
+    private fun timeDurationWidthFraction(progress: Float): Float = progress
+
+    private fun timeDurationLabelAlpha(progress: Float): Float {
+        return ((progress - TIME_DURATION_LABEL_FADE_START) / (1f - TIME_DURATION_LABEL_FADE_START))
+            .coerceIn(0f, 1f)
+    }
+
+    private fun measureTimeDurationSuffixWidth(): Int {
+        val label = durationView ?: return 0
+        val widthSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        val heightSpec = View.MeasureSpec.makeMeasureSpec(timeDurationRowHeightPx(), View.MeasureSpec.EXACTLY)
+        label.measure(widthSpec, heightSpec)
+        return label.measuredWidth
+    }
+
+    private fun lockTimeDurationLabelWidth(widthPx: Int) {
+        val label = durationView ?: return
+        val params = (label.layoutParams as? FrameLayout.LayoutParams)
+            ?: FrameLayout.LayoutParams(widthPx, timeDurationRowHeightPx())
+        params.width = widthPx
+        params.height = timeDurationRowHeightPx()
+        params.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+        label.layoutParams = params
+    }
+
+    private fun updateTimeDurationSuffixClipWidth(widthPx: Int) {
+        val clip = timeDurationSuffixClip ?: return
+        val params = (clip.layoutParams as? LinearLayout.LayoutParams)
+            ?: LinearLayout.LayoutParams(widthPx, timeDurationRowHeightPx())
+        params.width = widthPx.coerceAtLeast(0)
+        params.height = timeDurationRowHeightPx()
+        params.gravity = Gravity.CENTER_VERTICAL
+        clip.layoutParams = params
+        (clip.parent as? View)?.requestLayout()
+    }
+
+    private fun syncTimeDurationSuffixLayoutIfExpanded() {
+        if (!shouldShowTotalDurationInBar() || timeDurationSuffixAnimator != null) {
+            return
+        }
+        val targetWidth = measureTimeDurationSuffixWidth()
+        if (targetWidth <= 0) {
+            return
+        }
+        lockTimeDurationLabelWidth(targetWidth)
+        updateTimeDurationSuffixClipWidth(targetWidth)
+    }
+
+    private fun animateTimeDurationSuffixIn() {
+        val label = durationView ?: return
+        val clip = timeDurationSuffixClip ?: return
+        cancelTimeDurationSuffixAnimation()
+        clip.isVisible = true
+        label.alpha = 0f
+        updateTimeDurationSuffixClipWidth(0)
+        clip.post {
+            val targetWidth = measureTimeDurationSuffixWidth()
+            if (targetWidth <= 0) {
+                clip.isVisible = false
+                label.alpha = 1f
+                return@post
+            }
+            lockTimeDurationLabelWidth(targetWidth)
+            timeDurationSuffixAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = TIME_DURATION_TOGGLE_ANIMATION_MS
+                interpolator = timeDurationToggleInterpolator
+                addUpdateListener { animator ->
+                    val progress = animator.animatedValue as Float
+                    updateTimeDurationSuffixClipWidth(
+                        (targetWidth * timeDurationWidthFraction(progress)).roundToInt(),
+                    )
+                    label.alpha = timeDurationLabelAlpha(progress)
+                }
+                addListener(object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: Animator) {
+                        timeDurationSuffixAnimator = null
+                        lockTimeDurationLabelWidth(targetWidth)
+                        updateTimeDurationSuffixClipWidth(targetWidth)
+                        label.alpha = 1f
+                        clip.isVisible = true
+                    }
+                })
+                start()
+            }
+        }
+    }
+
+    private fun animateTimeDurationSuffixOut() {
+        val label = durationView ?: return
+        val clip = timeDurationSuffixClip ?: return
+        if (!clip.isVisible) {
+            return
+        }
+        cancelTimeDurationSuffixAnimation()
+        val startWidth = clip.width.takeIf { it > 0 } ?: measureTimeDurationSuffixWidth()
+        if (startWidth <= 0) {
+            clip.isVisible = false
+            label.alpha = 1f
+            updateTimeDurationSuffixClipWidth(0)
+            return
+        }
+        lockTimeDurationLabelWidth(startWidth)
+        updateTimeDurationSuffixClipWidth(startWidth)
+        timeDurationSuffixAnimator = ValueAnimator.ofFloat(1f, 0f).apply {
+            duration = TIME_DURATION_TOGGLE_ANIMATION_MS
+            interpolator = timeDurationToggleInterpolator
+            addUpdateListener { animator ->
+                val progress = animator.animatedValue as Float
+                updateTimeDurationSuffixClipWidth(
+                    (startWidth * timeDurationWidthFraction(progress)).roundToInt(),
+                )
+                label.alpha = timeDurationLabelAlpha(progress)
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    timeDurationSuffixAnimator = null
+                    clip.isVisible = false
+                    label.alpha = 1f
+                    updateTimeDurationSuffixClipWidth(0)
+                }
+            })
+            start()
+        }
+    }
+
+    private fun updateProgressControlsVisibility(animated: Boolean = false) {
+        if (isCompactOptionsBarAnimating) {
+            return
+        }
         val showProgress = shouldShowProgressControlsInBar()
         val showTimeContainer = shouldShowTimeContainerInBar()
-        val pinButtonsToEnd = usesCompactOptionsChrome() && isOptionsBarExpanded
+        val pinButtonsToEnd = pinsExpandedOptionsToBarEnd()
 
-        timeBar?.animate()?.cancel()
-        timeContainer?.animate()?.cancel()
-        timeBar?.alpha = 1f
-        timeContainer?.alpha = 1f
-        timeBar?.isVisible = showProgress
-        timeContainer?.isVisible = showTimeContainer
-        controlBarEndSpacer?.isVisible = pinButtonsToEnd
+        if (!animated) {
+            progressContainer?.animate()?.cancel()
+            timeContainer?.animate()?.cancel()
+            progressContainer?.alpha = 1f
+            timeContainer?.alpha = 1f
+            if (!pinButtonsToEnd) {
+                controlBarEndSpacer?.isVisible = false
+                if (showProgress) {
+                    restoreTimeBarFlexibleWidth()
+                }
+            }
+            progressContainer?.isVisible = showProgress
+            timeContainer?.isVisible = showTimeContainer
+            syncPositionViewWithTimeChrome()
+            controlBarEndSpacer?.isVisible = pinButtonsToEnd && !showProgress
+            updateTotalDurationVisibility(animated = false)
+            return
+        }
+
+        if (pinButtonsToEnd && !showProgress) {
+            controlBarEndSpacer?.isVisible = true
+            animateControlBarSubviewVisibility(progressContainer, show = false)
+        } else if (!pinButtonsToEnd && showProgress) {
+            animateControlBarSubviewVisibility(progressContainer, show = true) {
+                controlBarEndSpacer?.isVisible = false
+            }
+        } else {
+            controlBarEndSpacer?.isVisible = pinButtonsToEnd && !showProgress
+            animateControlBarSubviewVisibility(progressContainer, showProgress)
+        }
+        if (showTimeContainer) {
+            syncPositionViewWithTimeChrome()
+        }
+        animateControlBarSubviewVisibility(timeContainer, showTimeContainer) {
+            if (!showTimeContainer) {
+                syncPositionViewWithTimeChrome()
+            }
+        }
+    }
+
+    private fun animateControlBarSubviewVisibility(
+        view: View?,
+        show: Boolean,
+        onEnd: (() -> Unit)? = null,
+    ) {
+        view ?: run {
+            onEnd?.invoke()
+            return
+        }
+        view.animate().cancel()
+        if (show) {
+            if (view.isVisible && view.alpha >= 1f) {
+                onEnd?.invoke()
+                return
+            }
+            view.isVisible = true
+            view.alpha = 0f
+            view.animate()
+                .alpha(1f)
+                .setDuration(OPTIONS_BAR_ANIMATION_DURATION_MS)
+                .setInterpolator(optionsBarAnimationInterpolator)
+                .withEndAction { onEnd?.invoke() }
+                .start()
+            return
+        }
+        if (!view.isVisible) {
+            onEnd?.invoke()
+            return
+        }
+        view.animate()
+            .alpha(0f)
+            .setDuration(OPTIONS_BAR_ANIMATION_DURATION_MS)
+            .setInterpolator(optionsBarAnimationInterpolator)
+            .withEndAction {
+                view.isVisible = false
+                view.alpha = 1f
+                onEnd?.invoke()
+            }
+            .start()
     }
 
     private fun updateOptionsBarUi() {
+        if (!usesCompactOptionsChrome()) {
+            isOptionsBarExpanded = false
+        }
         updateOptionsButtonIcon()
         updateOptionsButtonsVisibility()
         updateFullscreenButtonVisibility()
         updateProgressControlsVisibility()
+    }
+
+    private fun onChaptersButtonClick() {
+        if (!usesCompactOptionsChrome()) {
+            toggleChaptersMenu()
+            return
+        }
+        if (!isOptionsBarExpanded) {
+            return
+        }
+        toggleChaptersMenu()
+    }
+
+    private fun onPlaylistButtonClick() {
+        if (!usesCompactOptionsChrome()) {
+            togglePlaylistMenu()
+            return
+        }
+        if (!isOptionsBarExpanded) {
+            return
+        }
+        togglePlaylistMenu()
+    }
+
+    private fun onSubtitlesButtonClick() {
+        if (!usesCompactOptionsChrome()) {
+            showSubtitlesSettingsMenu()
+            return
+        }
+        if (!isOptionsBarExpanded) {
+            return
+        }
+        showSubtitlesSettingsMenu()
     }
 
     private fun onOptionsButtonClick() {
@@ -1286,7 +2994,7 @@ class KinescopePlayerView(
             toggleSettingsMenu()
             return
         }
-        if (!isOptionsBarExpanded) {
+        if (!isOptionsBarExpanded && !isCaptionsSearchActive()) {
             return
         }
         toggleSettingsMenu()
@@ -1299,6 +3007,15 @@ class KinescopePlayerView(
         if (settingsMenuView?.isVisible == true) {
             settingsMenuView?.dismiss()
         }
+        if (chaptersMenuView?.isShowing() == true) {
+            chaptersMenuView?.dismiss()
+        }
+        if (playlistMenuView?.isShowing() == true) {
+            playlistMenuView?.dismiss()
+        }
+        if (isCompactOptionsBarAnimating) {
+            return
+        }
         cancelControlOverlayAutoHide()
         if (isOptionsBarExpanded) {
             collapseOptionsBar(animated = true)
@@ -1309,116 +3026,112 @@ class KinescopePlayerView(
     }
 
     private fun expandOptionsBar(animated: Boolean) {
-        if (!usesCompactOptionsChrome() || isOptionsBarExpanded) {
+        if (!usesCompactOptionsChrome() || isOptionsBarExpanded || isCompactOptionsBarAnimating) {
             return
         }
+        showTotalDuration = false
+        updateTotalDurationVisibility(animated = true)
         isOptionsBarExpanded = true
-        updateProgressControlsVisibility()
-        updateExpandedButtonsChildVisibility()
-        animateExpandedButtonsIn(animated)
+        applyControlBarLayout(usesMobilePlayerChrome())
+        if (!animated) {
+            controlBarEndSpacer?.isVisible = true
+            updateExpandedButtonsChildVisibility()
+            animateCompactExpandedChromeIn(animated = false)
+            updateProgressControlsVisibility(animated = false)
+            cancelControlOverlayAutoHide()
+            return
+        }
         cancelControlOverlayAutoHide()
+        animateCompactOptionsBarExpand()
+    }
+
+    private fun resetOptionsChromeForSourceChange() {
+        if (isPictureInPictureActive) {
+            return
+        }
+        settingsMenuView?.dismiss()
+        chaptersMenuView?.dismiss()
+        playlistMenuView?.dismiss()
+        cancelCompactOptionsBarTransition()
+        isOptionsBarExpanded = false
+        controlBarEndSpacer?.isVisible = false
+        resetCompactExpandedChromeTransforms()
+        optionsExpandableStrip?.isVisible = false
+        progressContainer?.alpha = 1f
+        timeContainer?.alpha = 1f
+        restoreTimeBarFlexibleWidth()
+        updateProgressControlsVisibility(animated = false)
+        updateOptionsButtonsVisibility()
     }
 
     private fun collapseOptionsBar(animated: Boolean) {
+        if (isCompactOptionsBarAnimating) {
+            cancelCompactOptionsBarTransition()
+            isCompactOptionsBarAnimating = false
+        }
         if (!isOptionsBarExpanded) {
+            ensureControlBarProgressChromeVisible()
             return
         }
         isOptionsBarExpanded = false
         if (!animated) {
-            animateExpandedButtonsOut(animated = false)
-            updateProgressControlsVisibility()
-            updateOptionsButtonsVisibility()
+            cancelCompactOptionsBarTransition()
+            animateCompactExpandedChromeOut(animated = false)
+            controlBarEndSpacer?.isVisible = false
+            finishCompactOptionsBarCollapse()
             return
         }
-        animateExpandedButtonsOut(animated = true) {
-            updateProgressControlsVisibility()
-            updateOptionsButtonsVisibility()
-        }
+        animateCompactOptionsBarCollapse()
     }
 
-    private fun animateExpandedButtonsIn(animated: Boolean) {
-        val group = optionsExpandedGroup ?: return
-        group.animate().cancel()
-        updateExpandedButtonsChildVisibility()
-        if (!animated) {
-            group.isVisible = true
-            resetExpandedButtonsTransform()
-            return
-        }
-
-        val initialSlideDistance = getExpandedButtonsSlideDistance()
-        group.alpha = 0f
-        group.translationX = initialSlideDistance
-        group.isVisible = true
-        (controlBar as? ViewGroup)?.requestLayout()
-        controlBar?.post {
-            val slideDistance = getExpandedButtonsSlideDistance()
-            group.pivotX = group.width.toFloat().coerceAtLeast(1f)
-            group.alpha = 0f
-            group.translationX = slideDistance
-            group.animate()
-                .alpha(1f)
-                .translationX(0f)
-                .setDuration(OPTIONS_BAR_ANIMATION_DURATION_MS)
-                .setInterpolator(optionsBarAnimationInterpolator)
-                .start()
-        }
-    }
-
-    private fun animateExpandedButtonsOut(animated: Boolean, onEnd: (() -> Unit)? = null) {
-        val group = optionsExpandedGroup ?: run {
-            onEnd?.invoke()
-            return
-        }
-        group.animate().cancel()
-        if (!animated) {
-            group.isVisible = false
-            resetExpandedButtonsTransform()
-            onEnd?.invoke()
-            return
-        }
-        val slideDistance = getExpandedButtonsSlideDistance()
-        group.pivotX = group.width.toFloat().coerceAtLeast(1f)
-        group.animate()
-            .alpha(0f)
-            .translationX(slideDistance)
-            .setDuration(OPTIONS_BAR_ANIMATION_DURATION_MS)
-            .setInterpolator(optionsBarAnimationInterpolator)
-            .withEndAction {
-                group.isVisible = false
-                resetExpandedButtonsTransform()
-                onEnd?.invoke()
-            }
-            .start()
+    private fun resetOptionsBarForControlsDisabled() {
+        settingsMenuView?.dismiss()
+        chaptersMenuView?.dismiss()
+        playlistMenuView?.dismiss()
+        cancelCompactOptionsBarTransition()
+        isOptionsBarExpanded = false
+        isCompactOptionsBarAnimating = false
+        controlBarEndSpacer?.isVisible = false
+        resetCompactExpandedChromeTransforms()
+        optionsExpandableStrip?.isVisible = false
+        progressContainer?.alpha = 1f
+        timeContainer?.alpha = 1f
+        restoreTimeBarFlexibleWidth()
     }
 
     private fun applyKinescopePlayerOptions() {
+        if (isPictureInPictureActive) {
+            return
+        }
         val options = kinescopePlayer?.kinescopePlayerOptions
         if (options != null) {
             val showControls = options.controls
-            controlView?.isVisible = showControls
+            if (!showControls) {
+                resetOptionsBarForControlsDisabled()
+            }
+            when {
+                !showControls -> controlView?.isVisible = false
+                !usesGradientChrome() -> controlView?.isVisible = true
+            }
             updateFullscreenButtonVisibility()
             seekView?.isVisible = showControls && options.showSeekBar
             if (usesCompactOptionsChrome()) {
                 optionsDotsButton?.isVisible = showControls && options.showOptionsButton
                 if (!isOptionsBarExpanded) {
-                    optionsExpandedGroup?.isVisible = false
-                } else {
-                    updateExpandedButtonsChildVisibility()
+                    optionsExpandableStrip?.isVisible = false
                 }
+                updateExpandedButtonsChildVisibility()
             } else {
                 optionsDotsButton?.isVisible = false
-                optionsExpandedGroup?.isVisible = true
+                optionsExpandableStrip?.isVisible = true
                 updateExpandedButtonsChildVisibility()
             }
-            playPauseButton?.isVisible = shouldShowCenterPlayControl(showControls)
             positionView?.isVisible = showControls &&
                 !isLiveState &&
                 (isMobilePlayerChrome || options.showDuration) &&
                 shouldShowTimeContainerInBar()
-            durationView?.isVisible = false
-            timeSeparatorView?.isVisible = false
-            timeBar?.isVisible = showControls && options.showSeekBar && shouldShowProgressControlsInBar()
+            updateTotalDurationVisibility(animated = false)
+            progressContainer?.isVisible = showControls && options.showSeekBar && shouldShowProgressControlsInBar()
             timeContainer?.isVisible = showControls && shouldShowTimeContainerInBar()
             settingsMenuView?.setParameterVisible(
                 KinescopeSettingsView.Parameter.PlaybackSpeed,
@@ -1433,18 +3146,32 @@ class KinescopePlayerView(
                 KinescopeSettingsView.Parameter.Subtitles,
                 showControls && options.showSubtitlesButton && !video?.subtitles.isNullOrEmpty(),
             )
+            updateAudioTracksSettingsVisibility(showControls)
             settingsMenuView?.setParameterVisible(
                 KinescopeSettingsView.Parameter.Attachments,
                 showControls && options.showAttachments && !video?.attachments.isNullOrEmpty(),
             )
+            settingsMenuView?.setParameterVisible(
+                KinescopeSettingsView.Parameter.Scale,
+                showControls && options.videoScale,
+            )
+            if (options.videoScale) {
+                videoScaleController?.setEnabled(true)
+            } else {
+                videoScaleController?.reset(animated = false)
+                videoScaleController?.setEnabled(false)
+            }
+            if (showControls) {
+                ensureControlBarProgressChromeVisible()
+            }
         } else {
-            playPauseButton?.isVisible = true
             controlView?.isVisible = true
             settingsMenuView?.setParameterVisible(
                 KinescopeSettingsView.Parameter.PlaybackSpeed,
                 true
             )
         }
+        updatePlayPauseButton()
     }
 
     /**
@@ -1456,6 +3183,21 @@ class KinescopePlayerView(
         applyPlayerChromeLayout()
         applyAccentColor()
         updateAll()
+    }
+
+    /**
+     * Re-applies chrome after returning from PiP without flashing the title overlay.
+     */
+    fun refreshPlayerChromeAfterPictureInPictureExit() {
+        kinescopePlayer?.kinescopePlayerOptions?.syncLegacyChromeFlags()
+        applyPlayerChromeLayout()
+        applyAccentColor()
+        restoreProgressChromeAfterPipExit()
+        dismissControlOverlayForPictureInPictureExit()
+        applyKinescopePlayerOptions()
+        updatePlayPauseButton()
+        updateBuffering()
+        updateTimeline()
     }
 
     fun applyTemplateOptions() {
@@ -1471,7 +3213,7 @@ class KinescopePlayerView(
             "audio", "audio_only", "audio-only" -> KinescopeQualityVariant.QUALITY_VARIANT_AUDIO_ONLY_ID
             else -> quality.toIntOrNull() ?: KinescopeQualityVariant.QUALITY_VARIANT_AUTO_ID
         }
-        qualityManager?.setVariant(variantId)
+        trackController?.setQualityVariant(variantId)
     }
 
     private fun applyAccentColor() {
@@ -1487,25 +3229,27 @@ class KinescopePlayerView(
     }
 
     private fun tintControlIcon(view: View?, @ColorInt color: Int) {
-        (view as? android.widget.ImageView)?.setColorFilter(color, PorterDuff.Mode.SRC_IN)
+        when (view) {
+            is KinescopePlayPauseMorphView -> view.applyIconTint(color)
+            is android.widget.ImageView -> {
+                view.imageTintList = android.content.res.ColorStateList.valueOf(color)
+            }
+        }
     }
 
     private fun updateTitles() {
-        val video = getVideo() ?: return
-        titleView?.apply {
-            text = video.title
-            isVisible = video.title.isNotEmpty()
-        }
-        authorView?.apply {
-            text = video.subtitle
-            isVisible = !video.subtitle.isNullOrEmpty()
-        }
-        if (
-            selectedSubtitleIndex == SUBTITLES_OPTION_OFF_ID &&
-            kinescopePlayer?.getShowSubtitles() == true &&
-            video.subtitles.isNotEmpty()
-        ) {
-            selectedSubtitleIndex = 0
+        val video = getVideo()
+        if (video != null) {
+            titleView?.apply {
+                text = video.title
+                isVisible = video.title.isNotEmpty()
+            }
+            authorView?.apply {
+                text = video.subtitle
+                isVisible = !video.subtitle.isNullOrEmpty()
+            }
+            applyVideoPoster()
+            updateChaptersMenuContent()
         }
         applyKinescopePlayerOptions()
     }
@@ -1525,57 +3269,90 @@ class KinescopePlayerView(
         return doubleTapSeekStreakCount * DOUBLE_TAP_SEEK_SECONDS
     }
 
-    private fun isPlayPauseMorphState(state: KinescopePlayPauseMorphView.State?): Boolean {
-        return state == KinescopePlayPauseMorphView.State.PLAY ||
-            state == KinescopePlayPauseMorphView.State.PAUSE
+    private fun hideControlOverlayAfterSeekFeedback() {
+        seekFeedbackActive = false
+        if (scrubbing || settingsMenuView?.isVisible == true || isCaptionsSearchActive()) {
+            seekView?.hideSeekFeedback()
+            return
+        }
+        if (usesGradientChrome() && isPlaybackPaused()) {
+            seekView?.hideSeekFeedback()
+            scheduleControlOverlayAutoHide()
+            return
+        }
+        hideControlOverlay(animated = true)
+    }
+
+    private fun showSeekFeedbackChrome() {
+        seekFeedbackActive = true
+        controlOverlayHiding = false
+        cancelControlOverlayAutoHide()
+        if (!isControlOverlayVisible()) {
+            showControlOverlay(animated = true)
+            cancelControlOverlayAutoHide()
+        }
+        updateMobileBackgroundGradients(animated = true, controlsVisible = true)
     }
 
     private fun updatePlayPauseButton() {
-        val showControls = kinescopePlayer?.kinescopePlayerOptions?.controls ?: true
-        val morphView = playPauseMorphView ?: return
-
-        val showCenterPlayControl = shouldShowCenterPlayControl(showControls)
-        morphView.isVisible = showCenterPlayControl
-
-        val layoutParams = morphView.layoutParams ?: return
-        val size = resources.getDimensionPixelSize(R.dimen.kinescope_play_pause_size)
-        layoutParams.width = size
-        layoutParams.height = size
-        morphView.layoutParams = layoutParams
-
-        val state = when {
-            shouldShowReplayButton() -> KinescopePlayPauseMorphView.State.REPLAY
-            shouldShowPauseButton() -> KinescopePlayPauseMorphView.State.PAUSE
-            else -> KinescopePlayPauseMorphView.State.PLAY
-        }
-        if (state == currentPlayPauseState) {
+        if (suppressPlayPauseButtonUpdate) {
             return
         }
+        if (isPictureInPictureActive || isCaptionsSearchActive()) {
+            playPauseButton?.isVisible = false
+            lastCenterPlayControlVisible = false
+            return
+        }
+        val showControls = kinescopePlayer?.kinescopePlayerOptions?.controls ?: true
+        val showCenterPlayControl = shouldShowCenterPlayControl(showControls)
+        val centerControlVisibilityChanged = lastCenterPlayControlVisible != showCenterPlayControl
+        lastCenterPlayControlVisible = showCenterPlayControl
+        val button = playPauseButton
+        button?.isVisible = showCenterPlayControl
+        if (!showCenterPlayControl || button == null) {
+            return
+        }
+        when {
+            resolveReplayForPlayPauseButton() -> {
+                if (!button.isShowingReplay()) {
+                    button.showReplay()
+                }
+                lastCenterPauseShown = null
+            }
 
-        val animated = showCenterPlayControl &&
-            isPlayPauseMorphState(state) &&
-            isPlayPauseMorphState(currentPlayPauseState) &&
-            currentPlayPauseState != state
-        morphView.setState(state, animated = animated)
-        currentPlayPauseState = state
+            else -> {
+                val pause = resolvePauseForPlayPauseButton()
+                val leavingReplay = button.isShowingReplay()
+                if (leavingReplay || lastCenterPauseShown != pause || centerControlVisibilityChanged) {
+                    val animate = !leavingReplay &&
+                        lastCenterPauseShown != null &&
+                        !centerControlVisibilityChanged
+                    button.setPlaying(pause, animated = animate)
+                    lastCenterPauseShown = pause
+                }
+            }
+        }
     }
 
     private fun enterScrubOverlayMode() {
         cancelControlOverlayAutoHide()
         collapseOptionsBar(animated = false)
         showControlOverlay(animated = false)
-        titleView?.isVisible = false
-        authorView?.isVisible = false
-        setMobileBackgroundGradientsVisible(visible = false, animated = false)
-        controlView?.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        val captionsSearchActive = isCaptionsSearchActive()
+        if (captionsSearchActive) {
+            mobileHeaderGradient?.animate()?.cancel()
+            mobileHeaderGradient?.isVisible = false
+            mobileHeaderGradient?.alpha = 1f
+            applyCaptionsSearchControlChrome(active = true)
+        } else {
+            setMobileBackgroundGradientsVisible(visible = false, animated = false)
+            controlView?.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        }
         seekView?.isVisible = true
 
         val density = resources.displayMetrics.density
         controlElevationBeforeScrub = controlView?.elevation ?: 0f
         controlView?.elevation = SCRUB_MODE_CONTROL_ELEVATION_DP * density
-        controlView?.let { control ->
-            (control.parent as? android.view.ViewGroup)?.bringChildToFront(control)
-        }
 
         timeBar?.let { bar ->
             bar.setScrubVisualExpanded(expanded = true)
@@ -1592,10 +3369,9 @@ class KinescopePlayerView(
         }
     }
 
-    private fun exitScrubOverlayMode() {
+    private fun restoreScrubTimeBarChrome() {
+        hideScrubChapterTitle()
         controlView?.elevation = controlElevationBeforeScrub
-        controlView?.setBackgroundColor(getControlOverlayBackgroundColor())
-        updateMobileBackgroundGradients()
 
         timeBar?.let { bar ->
             bar.setScrubVisualExpanded(expanded = false)
@@ -1608,12 +3384,29 @@ class KinescopePlayerView(
         }
     }
 
+    private fun restoreScrubControlChrome() {
+        if (isCaptionsSearchActive()) {
+            applyCaptionsSearchControlChrome(active = true)
+        } else {
+            controlView?.setBackgroundColor(getControlOverlayBackgroundColor())
+        }
+    }
+
+    private fun exitScrubOverlayMode() {
+        restoreScrubTimeBarChrome()
+        restoreScrubControlChrome()
+        updateMobileBackgroundGradients()
+    }
+
     private fun scheduleControlOverlayAutoHide() {
         removeCallbacks(hideControlOverlayRunnable)
         if (kinescopePlayer?.kinescopePlayerOptions?.controls != true) {
             return
         }
         if (settingsMenuView?.isVisible == true || scrubbing) {
+            return
+        }
+        if (isCaptionsSearchActive()) {
             return
         }
         if (usesGradientChrome() && isPlaybackPaused()) {
@@ -1630,18 +3423,24 @@ class KinescopePlayerView(
     }
 
     private fun showControlOverlay(animated: Boolean) {
+        if (isPictureInPictureActive) {
+            return
+        }
         val overlay = controlView ?: return
+        controlOverlayHiding = false
         if (overlay.isVisible && overlay.alpha >= 1f) {
             updateAll()
+            applySubtitleStyle()
             scheduleControlOverlayAutoHide()
             return
         }
         overlay.animate().cancel()
         overlay.isVisible = true
         updateMobileBackgroundGradients(animated = animated, controlsVisible = true)
+        applySubtitleStyle(controlsVisibleOverride = true)
+        updateAll()
         if (!animated) {
             overlay.alpha = 1f
-            updateAll()
             scheduleControlOverlayAutoHide()
             return
         }
@@ -1650,23 +3449,37 @@ class KinescopePlayerView(
             .alpha(1f)
             .setDuration(CONTROL_OVERLAY_FADE_DURATION_MS)
             .withEndAction {
-                updateAll()
+                applySubtitleStyle(controlsVisibleOverride = true)
                 scheduleControlOverlayAutoHide()
             }
             .start()
     }
 
     private fun hideControlOverlay(animated: Boolean) {
-        val overlay = controlView ?: return
-        if (!overlay.isVisible) {
+        if (isCaptionsSearchActive()) {
             return
         }
+        val overlay = controlView ?: return
+        seekView?.hideSeekFeedback()
         cancelControlOverlayAutoHide()
-        overlay.animate().cancel()
+        seekFeedbackActive = false
+        controlOverlayHiding = true
         updateMobileBackgroundGradients(animated = animated, controlsVisible = false)
+        applySubtitleStyle(controlsVisibleOverride = false)
+        if (!isControlOverlayVisible()) {
+            overlay.animate().cancel()
+            overlay.isVisible = false
+            overlay.alpha = 1f
+            controlOverlayHiding = false
+            updatePlayPauseButton()
+            return
+        }
+        overlay.animate().cancel()
+        updatePlayPauseButton()
         if (!animated) {
             overlay.isVisible = false
             overlay.alpha = 1f
+            controlOverlayHiding = false
             collapseOptionsBar(animated = false)
             updatePlayPauseButton()
             return
@@ -1677,6 +3490,7 @@ class KinescopePlayerView(
             .withEndAction {
                 overlay.isVisible = false
                 overlay.alpha = 1f
+                controlOverlayHiding = false
                 collapseOptionsBar(animated = false)
                 updatePlayPauseButton()
             }
@@ -1684,24 +3498,166 @@ class KinescopePlayerView(
     }
 
     private fun updateFullscreenButton() {
-        if (fullscreenButton != null) {
-            if (isVideoFullscreen) {
-                (fullscreenButton as ImageView)
-                    .setImageDrawable(
-                        AppCompatResources.getDrawable(
-                            context,
-                            R.drawable.ic_fullscreen_exit
-                        )
-                    )
-            } else {
-                (fullscreenButton as ImageView)
-                    .setImageDrawable(
-                        AppCompatResources.getDrawable(
-                            context,
-                            R.drawable.ic_fullscreen
-                        )
-                    )
+        val button = fullscreenButton as? ImageButton ?: return
+        val drawableRes = if (isVideoFullscreen) {
+            R.drawable.ic_fullscreen_exit
+        } else {
+            R.drawable.ic_fullscreen
+        }
+        button.setImageDrawable(AppCompatResources.getDrawable(context, drawableRes))
+        button.setPadding(0, 0, 0, 0)
+    }
+
+    private fun toggleChaptersMenu() {
+        if (chaptersMenuView?.isShowing() == true) {
+            chaptersMenuView?.dismiss()
+            if (controlView?.isVisible == true) {
+                scheduleControlOverlayAutoHide()
             }
+            return
+        }
+        showChaptersMenu()
+    }
+
+    private fun togglePlaylistMenu() {
+        if (playlistMenuView?.isShowing() == true) {
+            playlistMenuView?.dismiss()
+            if (controlView?.isVisible == true) {
+                scheduleControlOverlayAutoHide()
+            }
+            return
+        }
+        showPlaylistMenu()
+    }
+
+    private fun showPlaylistMenu() {
+        if (playlistItems.isEmpty()) {
+            return
+        }
+        cancelControlOverlayAutoHide()
+        settingsMenuView?.dismiss()
+        chaptersMenuView?.dismiss()
+        playlistMenuView?.show()
+        playlistMenuView?.let { menu ->
+            (menu.parent as? ViewGroup)?.bringChildToFront(menu)
+        }
+    }
+
+    private fun showChaptersMenu() {
+        val chapters = getVideo()?.availableChapters().orEmpty()
+        if (chapters.isEmpty()) {
+            return
+        }
+        cancelControlOverlayAutoHide()
+        settingsMenuView?.dismiss()
+        playlistMenuView?.dismiss()
+        chaptersMenuView?.apply {
+            setFullscreenMode(isVideoFullscreen)
+            setChapters(chapters)
+            show()
+        }
+        bringChaptersAboveOverlay()
+    }
+
+    private fun bringChaptersAboveOverlay() {
+        chaptersMenuView?.let { chapters ->
+            (chapters.parent as? android.view.ViewGroup)?.bringChildToFront(chapters)
+        }
+    }
+
+    private fun updateChaptersMenuContent() {
+        val chapters = getVideo()?.availableChapters().orEmpty()
+        chaptersMenuView?.setChapters(chapters)
+        updateTimeBarChapters(chapters)
+        if (chapters.isEmpty()) {
+            chaptersMenuView?.dismiss()
+        }
+        updateChaptersButtonVisibility()
+    }
+
+    private fun updateTimeBarChapters(chapters: List<KinescopeVideoChapterItem>) {
+        timeBar?.setChapterStartTimesMs(chapters.map { it.startTimeMs() })
+    }
+
+    private fun updateScrubChapterTitle(positionMs: Long) {
+        val titleView = scrubChapterTitleView ?: return
+        val bar = timeBar ?: return
+        val control = controlView ?: return
+        val chapter = getVideo()?.availableChapters().orEmpty().chapterAt(positionMs)
+        if (chapter == null) {
+            titleView.isVisible = false
+            return
+        }
+
+        titleView.text = chapter.title
+        titleView.isVisible = true
+        titleView.post {
+            if (!titleView.isVisible) {
+                return@post
+            }
+            val durationMs = activePlaybackPlayer?.duration?.takeIf { it > 0 } ?: return@post
+            val fraction = (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
+            val controlLocation = IntArray(2)
+            val barLocation = IntArray(2)
+            control.getLocationInWindow(controlLocation)
+            bar.getLocationInWindow(barLocation)
+
+            val barLeft = barLocation[0] - controlLocation[0]
+            val barWidth = bar.width
+            val barTop = barLocation[1] - controlLocation[1]
+            val anchorX = barLeft + barWidth * fraction
+            val gap = resources.getDimensionPixelSize(R.dimen.kinescope_scrub_chapter_title_gap)
+            val offsetDown = resources.getDimensionPixelSize(R.dimen.kinescope_scrub_chapter_title_offset_down)
+            val desiredTop = barTop - gap - titleView.height + offsetDown
+            titleView.translationY = (desiredTop - titleView.top).toFloat()
+
+            val minX = barLeft.toFloat()
+            val maxX = (barLeft + barWidth - titleView.width).toFloat().coerceAtLeast(minX)
+            titleView.translationX = if (titleView.width > barWidth) {
+                minX
+            } else {
+                (anchorX - titleView.width / 2f).coerceIn(minX, maxX)
+            }
+        }
+    }
+
+    private fun hideScrubChapterTitle() {
+        scrubChapterTitleView?.isVisible = false
+        scrubChapterTitleView?.translationX = 0f
+        scrubChapterTitleView?.translationY = 0f
+    }
+
+    private fun ensureInitialSubtitlesIfNeeded() {
+        if (initialSubtitlesConfigured) {
+            return
+        }
+        val video = getVideo() ?: return
+        trackController?.ensureDefaultSubtitleEnabled(
+            showSubtitles = kinescopePlayer?.getShowSubtitles() == true,
+            subtitles = video.subtitles,
+        )
+        initialSubtitlesConfigured = true
+        updateSubtitlesButtonIcon()
+    }
+
+    private fun showSubtitlesSettingsMenu() {
+        cancelControlOverlayAutoHide()
+        chaptersMenuView?.dismiss()
+        playlistMenuView?.dismiss()
+        settingsMenuView?.setAnchorView(subtitlesButton ?: optionsButton)
+        settingsMenuView?.apply {
+            setFullscreenMode(isVideoFullscreen)
+            setSubtitleStyle(subtitleStyle)
+            setParameterOptions(
+                parameter = KinescopeSettingsView.Parameter.Subtitles,
+                options = getSettingsMenuSubtitlesOptions(),
+            )
+            updateSettingsMenuCurrentValues()
+            showParameterOptions(KinescopeSettingsView.Parameter.Subtitles)
+        }
+        bringSettingsAboveOverlay()
+        if (isCaptionsSearchActive()) {
+            updateProgressControlsVisibility()
         }
     }
 
@@ -1716,65 +3672,98 @@ class KinescopePlayerView(
         showSettingsMenu()
     }
 
+    private fun restoreChromeAfterSettingsDismiss() {
+        if (isCaptionsSearchActive()) {
+            return
+        }
+        if (settingsMenuView?.isVisible == true) {
+            return
+        }
+        if (usesCompactOptionsChrome() && isOptionsBarExpanded) {
+            optionsExpandableStrip?.isVisible = true
+            val stripWidth = measureOptionsExpandableContentWidth()
+            if (stripWidth > 0) {
+                updateExpandableStripLayout(stripWidth)
+            }
+            controlBarEndSpacer?.isVisible = true
+            progressContainer?.isVisible = false
+            timeContainer?.isVisible = false
+            positionView?.isVisible = false
+            updateExpandedButtonsChildVisibility()
+        }
+        ensureControlBarProgressChromeVisible()
+        updateOptionsButtonsVisibility()
+        applyControlBarLayout(usesMobilePlayerChrome())
+        updateProgress()
+    }
+
+    private fun ensureControlBarProgressChromeVisible() {
+        cancelCompactOptionsBarTransition()
+        isCompactOptionsBarAnimating = false
+        if (usesCompactOptionsChrome()) {
+            if (!isOptionsBarExpanded) {
+                optionsExpandableStrip?.isVisible = false
+                controlBarEndSpacer?.isVisible = false
+            }
+        } else {
+            optionsExpandableStrip?.isVisible = true
+            controlBarEndSpacer?.isVisible = false
+        }
+        resetCompactExpandedChromeTransforms()
+        restoreTimeBarFlexibleWidth()
+        progressContainer?.alpha = 1f
+        timeContainer?.alpha = 1f
+        updateProgressControlsVisibility(animated = false)
+        val options = kinescopePlayer?.kinescopePlayerOptions
+        val showControls = options?.controls != false
+        progressContainer?.isVisible = showControls && shouldShowProgressControlsInBar()
+        timeContainer?.isVisible = showControls && shouldShowTimeContainerInBar()
+        positionView?.isVisible = showControls &&
+            !isLiveState &&
+            (isMobilePlayerChrome || options?.showDuration == true) &&
+            shouldShowTimeContainerInBar()
+        updateTotalDurationVisibility(animated = false)
+    }
+
     private fun showSettingsMenu() {
         cancelControlOverlayAutoHide()
-        val playbackSpeedCurrentValue = playbackSpeedVariants
-            .find { variant -> variant.speed == kinescopePlayer?.exoPlayer?.playbackSpeed }
-            ?.name
-            .orEmpty()
-
-        val qualityCurrentValue = when {
-            qualityManager?.isAudioOnlyQuality == true ->
-                context.getString(R.string.settings_video_quality_audio_only)
-
-            qualityManager?.isAutoQuality == true ->
-                context.getString(
-                    R.string.settings_video_quality_variant_auto_caption,
-                    kinescopePlayer?.exoPlayer?.videoSize?.height.toString()
-                )
-
-            else -> qualityManager?.selectedVariant?.name.orEmpty()
-        }
-
+        chaptersMenuView?.dismiss()
+        playlistMenuView?.dismiss()
+        settingsMenuView?.setAnchorView(optionsButton)
         settingsMenuView?.apply {
             setFullscreenMode(isVideoFullscreen)
-            setParameterCurrentValue(
-                parameter = KinescopeSettingsView.Parameter.PlaybackSpeed,
-                value = playbackSpeedCurrentValue,
-            )
-            setParameterCurrentValue(
-                parameter = KinescopeSettingsView.Parameter.VideoQuality,
-                value = qualityCurrentValue
-            )
+            setSubtitleStyle(subtitleStyle)
             setParameterOptions(
                 parameter = KinescopeSettingsView.Parameter.PlaybackSpeed,
-                options = getSettingsMenuPlaybackSpeedOptions()
+                options = getSettingsMenuPlaybackSpeedOptions(),
             )
             setParameterOptions(
                 parameter = KinescopeSettingsView.Parameter.VideoQuality,
-                options = getSettingsMenuVideoQualityOptions()
-            )
-            setParameterCurrentValue(
-                parameter = KinescopeSettingsView.Parameter.Subtitles,
-                value = getSubtitlesCurrentValueLabel(),
+                options = getSettingsMenuVideoQualityOptions(),
             )
             setParameterOptions(
                 parameter = KinescopeSettingsView.Parameter.Subtitles,
                 options = getSettingsMenuSubtitlesOptions(),
             )
             setParameterOptions(
+                parameter = KinescopeSettingsView.Parameter.AudioTracks,
+                options = getSettingsMenuAudioTrackOptions(),
+            )
+            setParameterOptions(
                 parameter = KinescopeSettingsView.Parameter.Attachments,
                 options = getSettingsMenuAttachmentsOptions(),
             )
+            updateSettingsMenuCurrentValues()
             show()
         }
         bringSettingsAboveOverlay()
+        if (isCaptionsSearchActive()) {
+            updateProgressControlsVisibility()
+        }
     }
 
     private fun bringSettingsAboveOverlay() {
         settingsMenuView?.let { settings ->
-            val density = resources.displayMetrics.density
-            settings.elevation = SETTINGS_MENU_ELEVATION_DP * density
             (settings.parent as? android.view.ViewGroup)?.bringChildToFront(settings)
         }
     }
@@ -1785,20 +3774,23 @@ class KinescopePlayerView(
                 KinescopeSettingsOption(
                     id = index,
                     title = variant.name,
-                    isSelected = kinescopePlayer?.exoPlayer?.playbackSpeed == variant.speed,
+                    isSelected = kotlin.math.abs(
+                        (localExoPlayer?.playbackSpeed ?: 1f) - variant.speed,
+                    ) < 0.01f,
                 )
             }
 
     private fun getSettingsMenuVideoQualityOptions(): List<KinescopeSettingsOption> {
         val options = kinescopePlayer?.kinescopePlayerOptions
         val includeAudioOnly = options?.showAudioOnlyQualityInSettings != false
-        return qualityManager?.variants
+        return trackController?.qualityVariants
             .orEmpty()
             .map { variant ->
                 KinescopeSettingsOption(
                     id = variant.id,
                     title = variant.name,
-                    isSelected = variant.isSelected
+                    isSelected = variant.isSelected,
+                    badge = qualityBadgeForVariant(variant.id),
                 )
             }
             .toMutableList()
@@ -1808,7 +3800,7 @@ class KinescopePlayerView(
                         KinescopeSettingsOption(
                             id = KinescopeQualityVariant.QUALITY_VARIANT_AUDIO_ONLY_ID,
                             title = resources.getString(R.string.settings_video_quality_audio_only),
-                            isSelected = qualityManager?.isAudioOnlyQuality == true
+                            isSelected = trackController?.isAudioOnlyQuality == true
                         )
                     )
                 }
@@ -1816,7 +3808,7 @@ class KinescopePlayerView(
                     KinescopeSettingsOption(
                         id = KinescopeQualityVariant.QUALITY_VARIANT_AUTO_ID,
                         title = resources.getString(R.string.settings_video_quality_variant_auto),
-                        isSelected = qualityManager?.isAutoQuality == true
+                        isSelected = trackController?.isAutoQuality == true
                     )
                 )
             }
@@ -1831,11 +3823,13 @@ class KinescopePlayerView(
                 speed = playbackSpeedVariants[optionId].speed
             )
 
-            is KinescopeSettingsView.Parameter.VideoQuality -> qualityManager?.setVariant(
+            is KinescopeSettingsView.Parameter.VideoQuality -> trackController?.setQualityVariant(
                 id = optionId
             )
 
             is KinescopeSettingsView.Parameter.Subtitles -> applySubtitlesSelection(optionId)
+
+            is KinescopeSettingsView.Parameter.AudioTracks -> applyAudioTrackSelection(optionId)
 
             is KinescopeSettingsView.Parameter.Attachments ->
                 getVideo()?.attachments?.getOrNull(optionId)?.let { attachment ->
@@ -1844,35 +3838,229 @@ class KinescopePlayerView(
 
             else -> Unit
         }
+        updateSettingsMenuCurrentValues()
+        if (parameter is KinescopeSettingsView.Parameter.VideoQuality) {
+            updateOptionsButtonIcon()
+        }
+    }
+
+    private fun openCaptionsSearch() {
+        val subtitleUrl = resolveCaptionsSearchSubtitleUrl() ?: return
+        settingsMenuView?.dismiss()
+        if (isOptionsBarExpanded) {
+            collapseOptionsBar(animated = false)
+        }
+        cancelControlOverlayAutoHide()
+        showControlOverlay(animated = false)
+        captionsSearchView?.show(subtitleUrl)
+        updateCaptionsSearchPlayback()
+        updateCaptionsSearchInsets()
+        updateProgressControlsVisibility()
+    }
+
+    private fun restoreControlOverlayAfterCaptionsSearch() {
+        descriptionBlock?.isVisible = true
+        updateTitles()
+        ensureControlBarProgressChromeVisible()
+        updatePlayPauseButton()
+        showControlOverlay(animated = false)
+    }
+
+    private fun updateCaptionsSearchInsets() {
+        val searchView = captionsSearchView ?: return
+        if (!searchView.isVisible) {
+            return
+        }
+        val bar = controlBar ?: return
+        searchView.post {
+            val barHeight = bar.height
+            if (barHeight <= 0) {
+                bar.post { updateCaptionsSearchInsets() }
+                return@post
+            }
+            val layoutParams = searchView.layoutParams as? FrameLayout.LayoutParams ?: return@post
+            layoutParams.gravity = Gravity.BOTTOM
+            layoutParams.bottomMargin = barHeight + bar.paddingBottom
+            searchView.layoutParams = layoutParams
+        }
+    }
+
+    private fun applyCaptionsSearchControlChrome(active: Boolean) {
+        val searchBackground = ContextCompat.getColor(context, R.color.kinescope_caption_search_overlay_bg)
+        if (active) {
+            mobileFooterGradient?.animate()?.cancel()
+            mobileHeaderGradient?.animate()?.cancel()
+            if (savedFooterGradientBackground == null) {
+                savedFooterGradientBackground = mobileFooterGradient?.background
+            }
+            mobileFooterGradient?.setBackgroundColor(searchBackground)
+            mobileFooterGradient?.isVisible = true
+            mobileFooterGradient?.alpha = 1f
+            if (savedControlBarBackground == null) {
+                savedControlBarBackground = controlBar?.background
+            }
+            controlBar?.setBackgroundColor(searchBackground)
+            captionsSearchView?.findViewById<View>(R.id.captions_search_bottom_divider)?.isVisible = false
+            if (!usesGradientChrome()) {
+                controlView?.setBackgroundColor(searchBackground)
+            }
+            controlBar?.isVisible = true
+            return
+        }
+        mobileFooterGradient?.background = savedFooterGradientBackground
+        savedFooterGradientBackground = null
+        controlBar?.background = savedControlBarBackground
+        savedControlBarBackground = null
+        captionsSearchView?.findViewById<View>(R.id.captions_search_bottom_divider)?.isVisible = true
+        controlView?.setBackgroundColor(getControlOverlayBackgroundColor())
+        updateMobileBackgroundGradients()
+    }
+
+    private fun setVideoSubtitlesHiddenForCaptionsSearch(hidden: Boolean) {
+        videoSubtitlesHiddenForCaptionsSearch = hidden
+        if (hidden) {
+            subtitleView?.setCues(emptyList())
+            progressiveSubtitleOverlay?.clear()
+            findViewById<View>(R.id.kinescope_progressive_subtitle_container)?.isVisible = false
+            subtitleView?.isVisible = false
+            return
+        }
+        if (trackController?.selectedSubtitleIndex != TrackController.SUBTITLES_OFF_ID) {
+            subtitleView?.isVisible = true
+            applyProgressiveSubtitles()
+        }
+    }
+
+    private fun updateCaptionsSearchPlayback(positionMs: Long? = null) {
+        val searchView = captionsSearchView ?: return
+        if (!searchView.isVisible) {
+            return
+        }
+        val player = activePlaybackPlayer ?: return
+        val position = positionMs ?: (currentWindowOffset + player.contentPosition)
+        searchView.updatePlaybackPosition(position)
+    }
+
+    private fun resolveCaptionsSearchSubtitleUrl(): String? {
+        val subtitles = getVideo()?.subtitles.orEmpty()
+        if (subtitles.isEmpty()) {
+            return null
+        }
+        val selectedIndex = trackController?.selectedSubtitleIndex ?: TrackController.SUBTITLES_OFF_ID
+        val resolvedIndex = if (selectedIndex >= 0) selectedIndex else 0
+        return subtitles.getOrNull(resolvedIndex)?.url
+    }
+
+    private fun updateVideoScaleSettingsValue() {
+        val controller = videoScaleController ?: return
+        settingsMenuView?.setParameterCurrentValue(
+            parameter = KinescopeSettingsView.Parameter.Scale,
+            value = controller.percentLabel(),
+        )
+        settingsMenuView?.refreshVideoScaleScreenIfVisible()
+    }
+
+    private fun updateVideoScaleBadgeVisibility() {
+        val suppress = settingsMenuView?.isVideoScaleScreenVisible() == true
+        videoScaleController?.setBadgeSuppressed(suppress)
+    }
+
+    private fun updateSettingsMenuCurrentValues() {
+        settingsMenuView?.runBatchUpdate {
+            applySettingsMenuCurrentValues()
+        }
+        updateSubtitlesButtonIcon()
+    }
+
+    private fun applySettingsMenuCurrentValues() {
+        settingsMenuView?.setParameterCurrentValue(
+                parameter = KinescopeSettingsView.Parameter.PlaybackSpeed,
+                value = playbackSpeedVariants
+                    .find { variant ->
+                        kotlin.math.abs(
+                            variant.speed - (localExoPlayer?.playbackSpeed ?: 1f),
+                        ) < 0.01f
+                    }
+                    ?.name
+                    .orEmpty(),
+            )
+            settingsMenuView?.setParameterCurrentValue(
+                parameter = KinescopeSettingsView.Parameter.VideoQuality,
+                value = when {
+                    trackController?.isAudioOnlyQuality == true ->
+                        context.getString(R.string.settings_video_quality_audio_only)
+
+                    trackController?.isAutoQuality == true ->
+                        context.getString(
+                            R.string.settings_video_quality_variant_auto_caption,
+                            localExoPlayer?.videoSize?.height.toString(),
+                        )
+
+                    else -> trackController?.selectedQualityVariant?.name.orEmpty()
+                },
+            )
+            settingsMenuView?.setParameterCurrentValue(
+                parameter = KinescopeSettingsView.Parameter.Scale,
+                value = videoScaleController?.percentLabel().orEmpty(),
+            )
+            settingsMenuView?.setParameterCurrentValue(
+                parameter = KinescopeSettingsView.Parameter.Subtitles,
+                value = getSubtitlesCurrentValueLabel(),
+            )
+            settingsMenuView?.setParameterCurrentValue(
+                parameter = KinescopeSettingsView.Parameter.AudioTracks,
+                value = trackController?.currentAudioLabel().orEmpty(),
+            )
+            settingsMenuView?.setParameterOptions(
+                parameter = KinescopeSettingsView.Parameter.PlaybackSpeed,
+                options = getSettingsMenuPlaybackSpeedOptions(),
+            )
+            settingsMenuView?.setParameterOptions(
+                parameter = KinescopeSettingsView.Parameter.VideoQuality,
+                options = getSettingsMenuVideoQualityOptions(),
+            )
+            settingsMenuView?.setParameterOptions(
+                parameter = KinescopeSettingsView.Parameter.Subtitles,
+                options = getSettingsMenuSubtitlesOptions(),
+            )
+            settingsMenuView?.setParameterOptions(
+                parameter = KinescopeSettingsView.Parameter.AudioTracks,
+                options = getSettingsMenuAudioTrackOptions(),
+        )
+    }
+
+    private fun updateAudioTracksSettingsVisibility(showControls: Boolean? = null) {
+        val options = kinescopePlayer?.kinescopePlayerOptions
+        val controlsVisible = showControls ?: (options?.controls != false)
+        settingsMenuView?.setParameterVisible(
+            KinescopeSettingsView.Parameter.AudioTracks,
+            controlsVisible &&
+                options?.showAudioTracksInSettings != false &&
+                trackController?.hasMultipleAudioTracks == true,
+        )
+    }
+
+    private fun getSettingsMenuAudioTrackOptions(): List<KinescopeSettingsOption> =
+        trackController?.buildAudioOptions().orEmpty()
+
+    private fun applyAudioTrackSelection(optionId: Int) {
+        trackController?.applyAudioSelection(optionId)
     }
 
     private fun getSubtitlesCurrentValueLabel(): String {
-        if (selectedSubtitleIndex == SUBTITLES_OPTION_OFF_ID) {
-            return context.getString(R.string.settings_subtitles_off)
-        }
-        return getVideo()?.subtitles?.getOrNull(selectedSubtitleIndex)?.displayLabel().orEmpty()
+        val controller = trackController ?: return context.getString(R.string.settings_subtitles_off)
+        return controller.currentSubtitleLabel(
+            subtitles = getVideo()?.subtitles.orEmpty(),
+            offLabel = context.getString(R.string.settings_subtitles_off),
+        )
     }
 
     private fun getSettingsMenuSubtitlesOptions(): List<KinescopeSettingsOption> {
-        val subtitles = getVideo()?.subtitles.orEmpty()
-        return buildList {
-            add(
-                KinescopeSettingsOption(
-                    id = SUBTITLES_OPTION_OFF_ID,
-                    title = context.getString(R.string.settings_subtitles_off),
-                    isSelected = selectedSubtitleIndex == SUBTITLES_OPTION_OFF_ID,
-                )
-            )
-            subtitles.forEachIndexed { index, subtitle ->
-                add(
-                    KinescopeSettingsOption(
-                        id = index,
-                        title = subtitle.displayLabel(),
-                        isSelected = selectedSubtitleIndex == index,
-                    )
-                )
-            }
-        }
+        val controller = trackController ?: return emptyList()
+        return controller.buildSubtitleOptions(
+            subtitles = getVideo()?.subtitles.orEmpty(),
+            offLabel = context.getString(R.string.settings_subtitles_off),
+        )
     }
 
     private fun getSettingsMenuAttachmentsOptions(): List<KinescopeSettingsOption> =
@@ -1885,42 +4073,63 @@ class KinescopePlayerView(
         }
 
     private fun applySubtitlesSelection(optionId: Int) {
-        selectedSubtitleIndex = optionId
-        val trackSelector = kinescopePlayer?.exoPlayer?.trackSelector as? DefaultTrackSelector
-            ?: return
-        trackSelector.parameters = trackSelector.buildUponParameters()
-            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, optionId == SUBTITLES_OPTION_OFF_ID)
-            .build()
+        trackController?.applySubtitleSelection(optionId)
+        pendingCueGroup = null
+        subtitleView?.setCues(emptyList())
+        progressiveSubtitleOverlay?.clear()
+        stopSubtitleUpdates()
+        updateSubtitlesButtonIcon()
     }
 
-    private fun KinescopeVideoSubtitle.displayLabel(): String =
-        description.ifBlank { language }.ifBlank { id }
-
     private fun shouldShowPauseButton(): Boolean {
-        return kinescopePlayer?.exoPlayer != null && kinescopePlayer!!.exoPlayer!!.playbackState != Player.STATE_ENDED && kinescopePlayer!!.exoPlayer!!.playbackState != Player.STATE_IDLE && kinescopePlayer!!.exoPlayer!!.playWhenReady
+        val player = playbackPlayerForChrome() ?: return false
+        if (player.playbackState == Player.STATE_ENDED) {
+            return false
+        }
+        if (player.isPlaying) {
+            return true
+        }
+        return player.playWhenReady
     }
 
     private fun shouldShowReplayButton(): Boolean {
-        return kinescopePlayer?.exoPlayer != null && kinescopePlayer!!.exoPlayer!!.playbackState == Player.STATE_ENDED
+        return playbackPlayerForChrome()?.playbackState == Player.STATE_ENDED
     }
 
     private fun setUIListeners() {
-        controlView?.isVisible = false
-        this.setOnTouchListener { v, event ->
-            gestureDetector.onTouchEvent(event)
-            return@setOnTouchListener true
+        if (isPictureInPictureActive) {
+            return
         }
+        controlView?.isVisible = false
+
+        val passThroughTouchListener = View.OnTouchListener { _, _ -> false }
+        setOnTouchListener { _, event ->
+            if (!isPictureInPictureActive) {
+                videoScaleController?.onTouchEvent(event)
+                if (videoScaleController?.shouldConsumeGestures() != true) {
+                    gestureDetector.onTouchEvent(event)
+                }
+            }
+            true
+        }
+        seekView?.setOnTouchListener(passThroughTouchListener)
+        controlView?.setOnTouchListener(passThroughTouchListener)
+        getChildAt(0)?.setOnTouchListener(passThroughTouchListener)
 
         timeBar?.addListener(componentListener)
         playPauseButton?.setOnClickListener(componentListener)
         pictureInPictureButton?.setOnClickListener(componentListener)
         optionsButton?.setOnClickListener(componentListener)
+        chaptersButton?.setOnClickListener(componentListener)
+        playlistButton?.setOnClickListener(componentListener)
+        subtitlesButton?.setOnClickListener(componentListener)
         optionsDotsButton?.setOnClickListener { onOptionsDotsButtonClick() }
         fullscreenButton?.setOnClickListener(componentListener)
+        timeContainer?.setOnClickListener { toggleTotalDurationVisibility() }
 
         liveDataView?.setOnClickListener {
             if (!isLiveSynced) {
-                kinescopePlayer?.exoPlayer?.let {
+                localExoPlayer?.let {
                     it.seekTo(it.duration)
                     isLiveSynced = true
                 }
@@ -1929,7 +4138,7 @@ class KinescopePlayerView(
     }
 
     private fun updateTimeline() {
-        val player: Player = kinescopePlayer?.exoPlayer ?: return
+        val player: Player = activePlaybackPlayer ?: return
 
         currentWindowOffset = 0
         var durationUs: Long = 0
@@ -1951,7 +4160,8 @@ class KinescopePlayerView(
             }
         }
         val durationMs = Util.usToMs(durationUs)
-        durationView?.text = Util.getStringForTime(formatBuilder, formatter, durationMs)
+        durationView?.text = durationLabelText(durationMs)
+        syncTimeDurationSuffixLayoutIfExpanded()
         timeBar?.setDuration(durationMs)
         updateProgress()
     }
@@ -1960,7 +4170,7 @@ class KinescopePlayerView(
         if (!isAttachedToWindow) {
             return
         }
-        val player: Player? = kinescopePlayer?.exoPlayer
+        val player: Player? = activePlaybackPlayer
 
         if (isLiveState) {
             timeBar?.let { bar ->
@@ -1978,6 +4188,11 @@ class KinescopePlayerView(
                     }
                 }
             }
+            applyProgressiveSubtitles()
+            if (shouldApplyProgressiveSubtitles()) {
+                scheduleSubtitleUpdates()
+            }
+            updateCaptionsSearchPlayback(player?.currentPosition)
             return
         }
 
@@ -1993,16 +4208,25 @@ class KinescopePlayerView(
         positionView
             ?.takeIf { !scrubbing }
             ?.let {
-                it.text = Util.getStringForTime(formatBuilder, formatter, position)
+                it.text = formatPlayerTime(position)
             }
 
-        durationView?.text = Util.getStringForTime(formatBuilder, formatter, duration)
+        durationView?.text = durationLabelText(duration)
+        syncTimeDurationSuffixLayoutIfExpanded()
 
         timeBar?.setPosition(position)
         timeBar?.setBufferedPosition(bufferedPosition)
         if (progressUpdateListener != null) {
             progressUpdateListener.onProgressUpdate(position, bufferedPosition)
         }
+        applyProgressiveSubtitles()
+        updateCaptionsSearchPlayback(position)
+
+        if (isCastOverlayVisible) {
+            refreshCastOverlay()
+        }
+
+        evaluatePlaybackBufferingWatchdog()
 
         // Cancel any pending updates and schedule a new one if necessary.
         removeCallbacks(updateProgressRunnable)
@@ -2023,7 +4247,7 @@ class KinescopePlayerView(
             // Constrain the delay to avoid too frequent / infrequent updates.
             delayMs = Util.constrainValue(
                 delayMs,
-                timeBarMinUpdateIntervalMs.toLong(),
+                subtitleUpdateMinIntervalMs(player).toLong(),
                 MAX_UPDATE_INTERVAL_MS.toLong()
             )
             postDelayed(updateProgressRunnable, delayMs)
@@ -2036,8 +4260,10 @@ class KinescopePlayerView(
     }
 
     private fun toggleControlUI() {
-        val overlay = controlView ?: return
-        if (overlay.isVisible) {
+        if (isCaptionsSearchActive()) {
+            return
+        }
+        if (isControlOverlayVisible()) {
             hideControlOverlay(animated = true)
         } else {
             showControlOverlay(animated = true)
@@ -2091,6 +4317,13 @@ class KinescopePlayerView(
             seekTo(player, player.currentMediaItemIndex, C.TIME_UNSET)
         }
         player.play()
+        if (isPictureInPictureActive) {
+            showPipMinimalControls()
+            getAnalyticsArguments().let { args ->
+                analyticsManager.play(args = args)
+            }
+            return
+        }
         updatePlayPauseButton()
         updateMobileBackgroundGradients()
         if (controlView?.isVisible == true) {
@@ -2104,6 +4337,16 @@ class KinescopePlayerView(
 
     private fun dispatchPause(player: Player) {
         player.pause()
+        if (isPictureInPictureActive) {
+            showPipMinimalControls()
+            if (isLiveState) {
+                isLiveSynced = false
+            }
+            getAnalyticsArguments().let { args ->
+                analyticsManager.pause(args = args)
+            }
+            return
+        }
         if (usesGradientChrome()) {
             showControlOverlay(animated = true)
         } else if (controlView?.isVisible == true) {
@@ -2122,19 +4365,224 @@ class KinescopePlayerView(
     }
 
 
-    private fun setSubtitlesStyling() {
-        exoPlayerView?.subtitleView?.setStyle(
+    private fun applySubtitleStyle(controlsVisibleOverride: Boolean? = null) {
+        val subtitleView = this.subtitleView ?: return
+        subtitleView.visibility = View.VISIBLE
+        val controlsVisible = controlsVisibleOverride ?: (
+            controlView?.isVisible == true && (controlView?.alpha ?: 0f) > 0f
+            )
+        val bg = (subtitleStyle.bgColor and 0x00FFFFFF) or
+            ((subtitleStyle.bgOpacityPercent * 255 / 100) shl 24)
+        val roboto = ResourcesCompat.getFont(context, R.font.roboto_regular)
+
+        subtitleView.setApplyEmbeddedStyles(false)
+        subtitleView.setApplyEmbeddedFontSizes(false)
+        subtitleView.setStyle(
             CaptionStyleCompat(
-                Color.WHITE,
-                Color.BLACK,
+                subtitleStyle.fontColor,
+                bg,
                 Color.TRANSPARENT,
                 CaptionStyleCompat.EDGE_TYPE_NONE,
-                Color.WHITE,
-                Typeface.SERIF
-            )
+                Color.TRANSPARENT,
+                roboto,
+            ),
         )
-        //exoPlayerView?.subtitleView?.setFixedTextSize(TypedValue .COMPLEX_UNIT_SP, 24f)
-        exoPlayerView?.subtitleView?.setBottomPaddingFraction(96f)
+
+        val viewHeight = when {
+            subtitleView.height > 1 -> subtitleView.height.toFloat()
+            height > 1 -> height.toFloat()
+            else -> 0f
+        }
+        if (viewHeight > 1f) {
+            subtitleView.setFixedTextSize(
+                TypedValue.COMPLEX_UNIT_PX,
+                SUBTITLE_SIZE_FRACTION_OF_HEIGHT * viewHeight * subtitleStyle.fontSizePercent / 100f,
+            )
+        } else {
+            subtitleView.setFixedTextSize(
+                TypedValue.COMPLEX_UNIT_SP,
+                15f * subtitleStyle.fontSizePercent / 100f,
+            )
+        }
+
+        val density = resources.displayMetrics.density
+        val bottomPx = if (controlsVisible) {
+            if (viewHeight > 1f) {
+                (0.2f * viewHeight + 4f * density).toInt()
+            } else {
+                (64f * density).toInt()
+            }
+        } else {
+            (12f * density).toInt()
+        }
+        if (subtitleView.paddingBottom != bottomPx) {
+            subtitleView.setPadding(0, 0, 0, bottomPx)
+        }
+        subtitleView.setBottomPaddingFraction(0f)
+
+        val textSizePx = if (viewHeight > 1f) {
+            SUBTITLE_SIZE_FRACTION_OF_HEIGHT * viewHeight * subtitleStyle.fontSizePercent / 100f
+        } else {
+            15f * subtitleStyle.fontSizePercent / 100f * resources.displayMetrics.scaledDensity
+        }
+        progressiveSubtitleOverlay?.applyStyle(
+            style = subtitleStyle,
+            textSizePx = textSizePx,
+            bottomPaddingPx = bottomPx,
+        )
+
+        pendingCueGroup?.let { cueGroup ->
+            subtitleView.setCues(cueGroup.cues)
+        }
+        applyScrubChapterTitleStyle()
+    }
+
+    private fun applyScrubChapterTitleStyle() {
+        val titleView = scrubChapterTitleView ?: return
+        val backgroundColor = (subtitleStyle.bgColor and 0x00FFFFFF) or
+            ((subtitleStyle.bgOpacityPercent * 255 / 100) shl 24)
+        titleView.background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            setColor(backgroundColor)
+        }
+        titleView.setTextColor(subtitleStyle.fontColor)
+        ResourcesCompat.getFont(context, R.font.roboto_regular)?.let { titleView.typeface = it }
+    }
+
+    private fun shouldApplyProgressiveSubtitles(): Boolean {
+        if (trackController?.selectedSubtitleIndex == TrackController.SUBTITLES_OFF_ID) {
+            return false
+        }
+        return pendingCueGroup != null ||
+            progressiveSubtitleOverlay?.isDisplayComplete() == false ||
+            progressiveSubtitleOverlay?.isAnimating() == true
+    }
+
+    private fun subtitleUpdateMinIntervalMs(player: Player): Int {
+        return if (shouldApplyProgressiveSubtitles() && player.isPlaying) {
+            SUBTITLE_PROGRESS_UPDATE_INTERVAL_MS
+        } else {
+            timeBarMinUpdateIntervalMs
+        }
+    }
+
+    private fun ensureSubtitleUpdatesRunning() {
+        removeCallbacks(subtitleUpdateRunnable)
+        scheduleSubtitleUpdates()
+    }
+
+    private fun scheduleSubtitleUpdates() {
+        removeCallbacks(subtitleUpdateRunnable)
+        if (!shouldApplyProgressiveSubtitles()) {
+            return
+        }
+        val player = localExoPlayer ?: return
+        val intervalMs = if (player.isPlaying) {
+            SUBTITLE_PROGRESS_UPDATE_INTERVAL_MS.toLong()
+        } else {
+            SUBTITLE_PROGRESS_UPDATE_INTERVAL_MS * 2L
+        }
+        postDelayed(subtitleUpdateRunnable, intervalMs)
+    }
+
+    private fun stopSubtitleUpdates() {
+        removeCallbacks(subtitleUpdateRunnable)
+    }
+
+    private fun resolveCueEndUs(cueStartUs: Long): Long {
+        if (learnedCueDurationUs == C.TIME_UNSET) {
+            return C.TIME_UNSET
+        }
+        return cueStartUs + learnedCueDurationUs
+    }
+
+    private fun applyProgressiveSubtitles() {
+        if (videoSubtitlesHiddenForCaptionsSearch) {
+            subtitleView?.setCues(emptyList())
+            progressiveSubtitleOverlay?.clear()
+            return
+        }
+        val player = localExoPlayer
+        if (player == null) {
+            subtitleView?.setCues(emptyList())
+            pendingCueGroup = null
+            progressiveSubtitleOverlay?.clear()
+            return
+        }
+
+        if (!shouldApplyProgressiveSubtitles()) {
+            subtitleView?.setCues(emptyList())
+            pendingCueGroup = null
+            progressiveSubtitleOverlay?.clear()
+            stopSubtitleUpdates()
+            return
+        }
+
+        subtitleView?.setCues(emptyList())
+
+        val cueGroup = pendingCueGroup
+        if (cueGroup == null) {
+            progressiveSubtitleOverlay?.ensureWordPumpRunning()
+            return
+        }
+
+        val positionUs = Util.msToUs(player.contentPosition)
+        val cueStartUs = cueGroup.presentationTimeUs
+        val words = ProgressiveSubtitleCues.extractWords(cueGroup.cues)
+
+        if (words.isEmpty()) {
+            progressiveSubtitleOverlay?.clear()
+            subtitleView?.setCues(cueGroup.cues)
+            return
+        }
+
+        if (positionUs < cueStartUs) {
+            val overlay = progressiveSubtitleOverlay
+            if (overlay?.hasVisibleContent() == true && overlay.shouldKeepVisible(positionUs) != true) {
+                overlay.clear()
+            }
+            return
+        }
+
+        if (!shouldKeepCueVisible(positionUs, cueStartUs, words.size)) {
+            pendingCueGroup = null
+            if (progressiveSubtitleOverlay?.hasVisibleContent() == true) {
+                progressiveSubtitleOverlay?.clear()
+            }
+            return
+        }
+
+        val state = ProgressiveSubtitleCues.buildState(
+            cues = cueGroup.cues,
+            positionUs = positionUs,
+            cueStartUs = cueStartUs,
+            cueId = ProgressiveSubtitleCues.stableCueId(cueStartUs, words),
+            cueEndUs = resolveCueEndUs(cueStartUs),
+        ) ?: run {
+            progressiveSubtitleOverlay?.ensureWordPumpRunning()
+            return
+        }
+
+        progressiveSubtitleOverlay?.setAdvancementEnabled(player.isPlaying)
+        progressiveSubtitleOverlay?.update(state, cueStartUs)
+    }
+
+    private fun shouldKeepCueVisible(positionUs: Long, cueStartUs: Long, wordCount: Int): Boolean {
+        val overlay = progressiveSubtitleOverlay
+        if (overlay?.isAnimating() == true) {
+            return true
+        }
+        if (overlay?.isDisplayComplete() == false) {
+            return true
+        }
+        if (overlay?.shouldKeepVisible(positionUs) == true) {
+            return true
+        }
+        return positionUs <= ProgressiveSubtitleCues.cueVisibleUntilUs(
+            cueStartUs = cueStartUs,
+            wordCount = wordCount,
+            cueEndUs = resolveCueEndUs(cueStartUs),
+        )
     }
 
     private fun setLiveBadgeState(isLiveSynced: Boolean) {
@@ -2155,44 +4603,134 @@ class KinescopePlayerView(
             isVisible = isShown
             text = resources.getString(
                 R.string.live_time_offset,
-                Util.getStringForTime(
-                    formatBuilder,
-                    formatter,
-                    scrubbingLiveDurationCached - position
-                )
+                formatPlayerTime(scrubbingLiveDurationCached - position),
             )
         }
     }
 
     private fun getAnalyticsArguments() =
-        kinescopePlayer?.exoPlayer.getAnalyticsArguments(
+        localExoPlayer.getAnalyticsArguments(
             volume = audioManager.currentVolumeInPercent,
             isFullscreen = isVideoFullscreen,
         )
 
     fun hideControlsExceptPlayPause() {
         controlView?.children?.forEach { child ->
-            child.isVisible = (child == playPauseButton)
+            child.isVisible = false
         }
     }
     fun hideAllControls(){
         controlView?.isVisible = false
     }
 
+    /** Hides control chrome after returning from PiP so the title bar does not flash on expand. */
+    fun dismissControlOverlayForPictureInPictureExit() {
+        cancelControlOverlayAutoHide()
+        controlView?.animate()?.cancel()
+        controlView?.isVisible = false
+        titleView?.isVisible = false
+        authorView?.isVisible = false
+        setMobileBackgroundGradientsVisible(visible = false, animated = false)
+    }
+
+    /** Поднимает/опускает progressive-субтитры при показе Compose-контролов. */
+    fun syncSubtitleChromeForControls(controlsVisible: Boolean) {
+        applySubtitleStyle(controlsVisibleOverride = controlsVisible)
+    }
+
+    private fun hidePipOverlays() {
+        captionsSearchView?.dismiss()
+        videoScaleController?.reset(animated = false)
+        if (settingsMenuView?.isVisible == true) {
+            settingsMenuView?.dismiss()
+        }
+        chaptersMenuView?.dismiss()
+        isOptionsBarExpanded = false
+        lastCompactProgressBarWidth = 0
+        recoverCompactOptionsBarLayout()
+        seekView?.isVisible = false
+        seekView?.isEnabled = false
+        posterView?.isVisible = false
+        liveStartDateContainerView?.isVisible = false
+        bufferingView?.isVisible = false
+        mobileHeaderGradient?.animate()?.cancel()
+        mobileFooterGradient?.animate()?.cancel()
+        mobileHeaderGradient?.isVisible = false
+        mobileFooterGradient?.isVisible = false
+        mobileHeaderGradient?.alpha = 0f
+        mobileFooterGradient?.alpha = 0f
+        controlView?.animate()?.cancel()
+        controlView?.alpha = 1f
+        setMobileBackgroundGradientsVisible(visible = false, animated = false)
+        showPipMinimalControls()
+    }
+
+    private fun showPipMinimalControls() {
+        fullscreenButton?.isVisible = false
+        controlBar?.isVisible = false
+        hideAllControls()
+    }
+
+    private fun restorePlayerChromeAfterPipExit() {
+        isOptionsBarExpanded = false
+        cancelCompactOptionsBarTransition()
+        controlBarEndSpacer?.isVisible = false
+        resetCompactExpandedChromeTransforms()
+        optionsExpandableStrip?.isVisible = false
+        controlBar?.isVisible = true
+    }
+
+    private fun restoreProgressChromeAfterPipExit() {
+        cancelCompactOptionsBarTransition()
+        isCompactOptionsBarAnimating = false
+        isOptionsBarExpanded = false
+        lastCompactProgressBarWidth = 0
+        controlOverlayHiding = false
+        scrubbing = false
+        scrubOverlayHiding = false
+        recoverCompactOptionsBarLayout()
+        timeBar?.animate()?.cancel()
+        timeBar?.scaleX = 1f
+        timeBar?.scaleY = 1f
+        timeBar?.setScrubVisualExpanded(expanded = false)
+        controlElevationBeforeScrub = 0f
+        controlView?.elevation = 0f
+        updateProgressControlsVisibility(animated = false)
+        progressContainer?.post {
+            recoverCompactOptionsBarLayout()
+            timeBar?.requestLayout()
+            timeBar?.invalidate()
+            progressContainer?.requestLayout()
+        }
+    }
+
+    /**
+     * View used for PiP transition bounds — the ExoPlayer surface, not the full chrome.
+     */
+    fun getPipAnchorView(): View = exoPlayerView ?: this
+
     /**
      * Prepares player chrome for Picture-in-Picture: hides controls and overlays so only video is visible.
      */
     fun prepareForPictureInPicture(preparing: Boolean) {
+        isPictureInPictureActive = preparing
         if (preparing) {
-            settingsMenuView?.isVisible = false
-            seekView?.isVisible = false
-            posterView?.isVisible = false
-            liveStartDateContainerView?.isVisible = false
-            setMobileBackgroundGradientsVisible(visible = false, animated = false)
-            hideAllControls()
+            hidePipOverlays()
+            isClickable = false
+            isFocusable = false
+            post { hidePipOverlays() }
         } else {
+            seekView?.isEnabled = true
+            isClickable = true
+            isFocusable = true
+            restorePlayerChromeAfterPipExit()
+            restoreProgressChromeAfterPipExit()
+            setUIListeners()
             applyKinescopePlayerOptions()
-            updateAll()
+            dismissControlOverlayForPictureInPictureExit()
+            updatePlayPauseButton()
+            updateBuffering()
+            updateTimeline()
         }
     }
 
@@ -2202,6 +4740,125 @@ class KinescopePlayerView(
             child.isVisible = true
         }
         updateAll()
+    }
+
+    private var castButtonClickListener: (() -> Unit)? = null
+
+    fun setCastSupported(supported: Boolean) {
+        castSupported = supported
+        updateCastButtonVisibility()
+    }
+
+    fun setCastRouteAvailable(available: Boolean) {
+        castRouteAvailable = available
+        updateCastButtonVisibility()
+    }
+
+    fun setCastButtonClickListener(listener: (() -> Unit)?) {
+        castButtonClickListener = listener
+        castButton?.setOnClickListener(
+            if (listener != null) {
+                OnClickListener { listener() }
+            } else {
+                null
+            },
+        )
+    }
+
+    fun showCastOverlay(
+        deviceName: String?,
+        onStopCast: () -> Unit,
+    ) {
+        isCastOverlayVisible = true
+        castOverlayView?.isVisible = true
+
+        val deviceLabel = deviceName ?: context.getString(R.string.player_cast_device_unknown)
+        castDeviceView?.text = context.getString(R.string.player_cast_device, deviceLabel)
+
+        castPlayPauseView?.setOnClickListener { toggleCastPlayback() }
+        castStopView?.setOnClickListener { onStopCast() }
+
+        refreshCastOverlay()
+    }
+
+    fun refreshCastOverlay() {
+        if (!isCastOverlayVisible) return
+        val player = activePlaybackPlayer ?: return
+
+        castPlayPauseView?.setImageResource(
+            if (player.isPlaying) R.drawable.ic_pause else R.drawable.ic_play,
+        )
+
+        val duration = player.duration
+        val position = player.currentPosition
+        val showSeek = duration > 0
+        castSeekBar?.isVisible = showSeek
+        castPositionView?.isVisible = showSeek
+        castDurationView?.isVisible = showSeek
+
+        if (showSeek) {
+            castPositionView?.text = formatPlayerTime(position)
+            castDurationView?.text = formatPlayerTime(duration)
+            isUpdatingCastSeekBar = true
+            castSeekBar?.progress = ((position.toFloat() / duration) * 1000).toInt().coerceIn(0, 1000)
+            isUpdatingCastSeekBar = false
+        }
+    }
+
+    fun hideCastOverlay() {
+        isCastOverlayVisible = false
+        castOverlayView?.isVisible = false
+        castPlayPauseView?.setOnClickListener(null)
+        castStopView?.setOnClickListener(null)
+    }
+
+    private fun toggleCastPlayback() {
+        val videoPlayer = kinescopePlayer ?: return
+        if (activePlaybackPlayer?.isPlaying == true) {
+            videoPlayer.pause()
+        } else {
+            videoPlayer.play()
+        }
+        refreshCastOverlay()
+    }
+
+    private fun syncPlaybackBufferingWatchdog(playbackState: Int) {
+        when (playbackState) {
+            Player.STATE_BUFFERING -> {
+                playbackBufferingWatchdog.onBufferingStarted(
+                    activePlaybackPlayer?.currentPosition?.coerceAtLeast(0L) ?: 0L,
+                )
+                removeCallbacks(bufferingWatchdogRunnable)
+                postDelayed(bufferingWatchdogRunnable, PlaybackBufferingWatchdog.POLL_MS)
+            }
+            else -> {
+                playbackBufferingWatchdog.onBufferingStopped()
+                removeCallbacks(bufferingWatchdogRunnable)
+            }
+        }
+    }
+
+    private fun evaluatePlaybackBufferingWatchdog() {
+        val player = activePlaybackPlayer ?: return
+        if (player.playbackState != Player.STATE_BUFFERING || playbackStallDispatched) return
+        val positionMs = if (isLiveState) {
+            player.currentPosition
+        } else {
+            currentWindowOffset + player.contentPosition
+        }
+        val message = playbackBufferingWatchdog.evaluate(
+            isBuffering = true,
+            positionMs = positionMs,
+            hasActiveError = false,
+        ) ?: return
+        playbackStallDispatched = true
+        kinescopePlayer?.pause()
+        val listener = onPlaybackStallListener
+        if (listener != null) {
+            listener(message)
+        } else {
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        }
     }
 
 }
