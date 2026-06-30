@@ -141,12 +141,8 @@
     <dimen name="kinescope_progress_enabled_thumb_size">10dp</dimen>
     <dimen name="kinescope_progress_dragged_thumb_size">14dp</dimen>
     <dimen name="kinescope_progress_layout_height">48dp</dimen>
-<<<<<<< HEAD
-    <dimen name="kinescope_scrub_chapter_title_gap">6dp</dimen>
-=======
     <dimen name="kinescope_scrub_chapter_title_gap">8dp</dimen>
     <dimen name="kinescope_scrub_chapter_title_offset_down">0dp</dimen>
->>>>>>> 9608062 (release 0.1.0)
     <dimen name="kinescope_progress_chapter_gap">2dp</dimen>
     <dimen name="kinescope_control_bar_height">52dp</dimen>
     <dimen name="kinescope_scrub_hint_margin_top">0dp</dimen>

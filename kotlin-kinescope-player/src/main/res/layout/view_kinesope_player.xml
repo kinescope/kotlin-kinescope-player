@@ -39,13 +39,6 @@
 
         </FrameLayout>
 
-        <ImageView
-            android:id="@+id/poster_iv"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:background="@android:color/black"
-            android:visibility="gone" />
-
         <androidx.media3.ui.SubtitleView
             android:id="@+id/kinescope_subtitle_view"
             android:layout_width="match_parent"
@@ -83,8 +76,6 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
-<<<<<<< HEAD
-=======
         <io.kinescope.sdk.view.KinescopeCaptionsSearchView
             android:id="@+id/captions_search_overlay"
             android:layout_width="match_parent"
@@ -92,7 +83,6 @@
             android:layout_gravity="bottom"
             android:visibility="gone" />
 
->>>>>>> 9608062 (release 0.1.0)
         <include
             android:id="@+id/view_buffering"
             layout="@layout/view_kinescope_buffering"
@@ -181,15 +171,12 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
-<<<<<<< HEAD
-=======
         <io.kinescope.sdk.playlist.KinescopePlaylistMenuView
             android:id="@+id/playlist_menu"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:layout_gravity="bottom" />
 
->>>>>>> 9608062 (release 0.1.0)
     </FrameLayout>
 
 </merge>

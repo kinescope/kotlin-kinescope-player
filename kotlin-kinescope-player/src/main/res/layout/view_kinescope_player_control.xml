@@ -180,29 +180,6 @@
                 app:scrubber_enabled_size="0dp"
                 app:touch_target_height="@dimen/kinescope_progress_touch_target_height" />
 
-<<<<<<< HEAD
-            <TextView
-                android:id="@+id/scrub_chapter_title"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="bottom|start"
-                android:elevation="4dp"
-                android:ellipsize="end"
-                android:includeFontPadding="false"
-                android:maxLines="1"
-                android:maxWidth="@dimen/kinescope_caption_max_width"
-                android:paddingLeft="@dimen/kinescope_caption_padding_horizontal"
-                android:paddingTop="@dimen/kinescope_caption_padding_vertical"
-                android:paddingRight="@dimen/kinescope_caption_padding_horizontal"
-                android:paddingBottom="@dimen/kinescope_caption_padding_vertical"
-                android:textColor="@color/white"
-                android:textSize="14sp"
-                android:visibility="gone"
-                tools:text="Chapter 1"
-                tools:visibility="visible" />
-
-=======
->>>>>>> 9608062 (release 0.1.0)
         </FrameLayout>
 
         <Space
@@ -256,8 +233,6 @@
                     </LinearLayout>
 
                     <ImageButton
-<<<<<<< HEAD
-=======
                         android:id="@+id/kinescope_picture_in_picture"
                         style="@style/KinescopeMediaButton"
                         android:contentDescription="@string/player_picture_in_picture"
@@ -282,7 +257,6 @@
                         android:visibility="gone" />
 
                     <ImageButton
->>>>>>> 9608062 (release 0.1.0)
                         android:id="@+id/kinescope_chapters"
                         style="@style/KinescopeMediaButton"
                         android:contentDescription="@string/player_chapters"

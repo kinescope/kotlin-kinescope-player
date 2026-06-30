@@ -23,13 +23,10 @@
 
     <string name="player_chapters">Главы</string>
     <string name="player_chapters_title">Главы</string>
-<<<<<<< HEAD
-=======
     <string name="player_playlist">Плейлист</string>
     <string name="player_playlist_title">Плейлист</string>
     <string name="player_playlist_count">%1$d видео</string>
     <string name="player_playlist_copy_link">Копировать ссылку</string>
->>>>>>> 9608062 (release 0.1.0)
 
     <string name="settings_parameter_playback_speed">Скорость</string>
     <string name="settings_parameter_video_quality">Качество</string>

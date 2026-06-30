@@ -26,13 +26,10 @@
 
     <string name="player_chapters">Chapters</string>
     <string name="player_chapters_title">Chapters</string>
-<<<<<<< HEAD
-=======
     <string name="player_playlist">Playlist</string>
     <string name="player_playlist_title">Playlist</string>
     <string name="player_playlist_count">%1$d videos</string>
     <string name="player_playlist_copy_link">Copy link</string>
->>>>>>> 9608062 (release 0.1.0)
 
     <string name="settings_parameter_playback_speed">Speed</string>
     <string name="settings_parameter_video_quality">Quality</string>

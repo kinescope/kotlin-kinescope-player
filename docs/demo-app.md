@@ -11,11 +11,7 @@ The demo is **not** published to JitPack; clone the repo and build locally.
 ```kotlin
 object KinescopeDemoConfig {
     const val API_KEY = "your-api-key"
-<<<<<<< HEAD
-    const val DEFAULT_VIDEO_ID = "..."      // Custom UI, Custom Player
-=======
     const val DEFAULT_VIDEO_ID = "..."      // Custom Player
->>>>>>> 9608062 (release 0.1.0)
     const val DRM_VIDEO_ID = "..."          // DRM viewing
     const val SUBTITLES_VIDEO_ID = "..."    // Subtitles test
     const val CHAPTERS_VIDEO_ID = "..."     // Chapters test (video with chapters in metadata)
