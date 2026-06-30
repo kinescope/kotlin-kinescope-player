@@ -92,14 +92,14 @@ class KinescopePlayPauseMorphView @JvmOverloads constructor(
     }
 
     private fun showMorphFrame(atEnd: Boolean) {
-        val morphRes = if (atEnd) {
-            R.drawable.ic_pause_play_morph
-        } else {
-            R.drawable.ic_play_pause_morph
-        }
-        val drawable = AnimatedVectorDrawableCompat.create(context, morphRes) ?: return
-        setImageDrawable(drawable)
+        morphAnimating = false
         applyGlyphInset(replay = false)
+        val glyphRes = if (atEnd) {
+            R.drawable.ic_center_pause_glyph
+        } else {
+            R.drawable.ic_center_play_glyph
+        }
+        setImageResource(glyphRes)
     }
 
     private fun startMorph(@DrawableRes morphRes: Int) {

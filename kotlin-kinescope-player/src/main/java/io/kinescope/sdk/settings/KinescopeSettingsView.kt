@@ -57,7 +57,12 @@ class KinescopeSettingsView(
 
     var onOptionSelected: ((parameter: Parameter, optionId: Int) -> Unit)? = null
     var onParameterAction: ((parameter: Parameter) -> Unit)? = null
+    var onCaptionsSearchClick: (() -> Unit)? = null
     var onSubtitleStyleChanged: ((SubtitleStyle) -> Unit)? = null
+    var onVideoScaleStep: ((Float) -> Unit)? = null
+    var onVideoScaleReset: (() -> Unit)? = null
+    var videoScalePercentProvider: (() -> String)? = null
+    var onNavigationChanged: (() -> Unit)? = null
 
     init {
         clipChildren = true
@@ -128,6 +133,27 @@ class KinescopeSettingsView(
 
         parameters.add(parameter)
         parameterMeta[parameter] = ParameterMeta(title, icon)
+    }
+
+    /**
+     * Registers an app-defined settings row. Use [Parameter.Custom] ids that are unique per menu.
+     */
+    fun addCustomParameter(
+        id: String,
+        title: String,
+        @DrawableRes icon: Int,
+        currentValue: String = "",
+        isAction: Boolean = false,
+    ): Parameter.Custom {
+        val parameter = Parameter.Custom(id)
+        addParameter(parameter, title, icon)
+        if (currentValue.isNotEmpty()) {
+            setParameterCurrentValue(parameter, currentValue)
+        }
+        if (isAction) {
+            setParameterAction(parameter, true)
+        }
+        return parameter
     }
 
     fun setParameterAction(parameter: Parameter, isAction: Boolean) {
@@ -223,6 +249,23 @@ class KinescopeSettingsView(
         }
     }
 
+    fun showParameterOptions(parameter: Parameter) {
+        checkParameterAddedOrException(parameter)
+        val title = parameterMeta[parameter]?.title ?: return
+        isHidingPopup = false
+        navigationStack.clear()
+        navigationStack.add(NavScreen.Main)
+        val screen = NavScreen.ParameterOptions(parameter, title)
+        navigationStack.add(screen)
+        isVisible = true
+        ensurePopupVisible()
+        post {
+            showScreen(screen, forward = true, animatePopup = false)
+            positionPopupWithinBounds()
+            notifyNavigationChanged()
+        }
+    }
+
     fun dismiss() {
         hide(animated = true)
     }
@@ -256,12 +299,37 @@ class KinescopeSettingsView(
         binding.settingsPopupContainer.scaleX = 1f
         binding.settingsPopupContainer.scaleY = 1f
         isVisible = false
+        notifyNavigationChanged()
+    }
+
+    fun refreshVideoScaleScreenIfVisible() {
+        if (navigationStack.lastOrNull() == NavScreen.VideoScale) {
+            refreshCurrentScreen(animated = false)
+        }
+    }
+
+    fun isVideoScaleScreenVisible(): Boolean =
+        binding.settingsPopupContainer.isVisible &&
+            navigationStack.lastOrNull() == NavScreen.VideoScale
+
+    private fun notifyNavigationChanged() {
+        onNavigationChanged?.invoke()
     }
 
     private fun onParameterClick(title: String, parameter: Parameter) {
         if (actionParameters.contains(parameter)) {
             hide(animated = true)
             onParameterAction?.invoke(parameter)
+            return
+        }
+
+        if (parameter == Parameter.Scale) {
+            val screen = NavScreen.VideoScale
+            if (navigationStack.lastOrNull() == screen) {
+                navigateBack()
+            } else {
+                navigateTo(screen)
+            }
             return
         }
 
@@ -281,6 +349,7 @@ class KinescopeSettingsView(
             forward = isForwardNavigation(from = from, to = screen),
             animatePopup = false,
         )
+        notifyNavigationChanged()
     }
 
     private fun navigateBack() {
@@ -295,6 +364,7 @@ class KinescopeSettingsView(
             forward = isForwardNavigation(from = from, to = to),
             animatePopup = false,
         )
+        notifyNavigationChanged()
     }
 
     private fun isForwardNavigation(from: NavScreen, to: NavScreen): Boolean {
@@ -592,6 +662,7 @@ class KinescopeSettingsView(
     private fun buildScreen(screen: NavScreen): View = when (screen) {
         NavScreen.Main -> buildMainScreen()
         is NavScreen.ParameterOptions -> buildParameterOptionsScreen(screen)
+        NavScreen.VideoScale -> buildVideoScaleScreen()
         NavScreen.SubtitleAppearance -> buildSubtitleAppearanceScreen()
         is NavScreen.SubtitleAppearanceDetail -> buildSubtitleAppearanceDetailScreen(screen.type)
     }
@@ -640,7 +711,11 @@ class KinescopeSettingsView(
         }
 
         val headerBinding = ViewSettingsSubmenuHeaderBinding.inflate(LayoutInflater.from(context))
-        headerBinding.titleTv.text = screen.title
+        headerBinding.titleTv.text = when (screen.parameter) {
+            Parameter.Subtitles -> context.getString(R.string.settings_subtitles_cc)
+            Parameter.AudioTracks -> context.getString(R.string.settings_audio_tracks_title)
+            else -> screen.title
+        }
         val navigateBackFromHeader = View.OnClickListener { navigateBack() }
         headerBinding.backIv.setOnClickListener(navigateBackFromHeader)
         headerBinding.titleTv.setOnClickListener(navigateBackFromHeader)
@@ -650,7 +725,7 @@ class KinescopeSettingsView(
             parameterOptions[Parameter.Subtitles].orEmpty().size > 1
         if (showSubtitleSettings) {
             headerBinding.actionTv.isVisible = true
-            headerBinding.actionTv.text = context.getString(R.string.settings_subtitles_appearance)
+            headerBinding.actionTv.text = context.getString(R.string.settings_subtitles_options)
             headerBinding.actionTv.setOnClickListener {
                 navigateTo(NavScreen.SubtitleAppearance)
             }
@@ -664,10 +739,32 @@ class KinescopeSettingsView(
             ),
         )
 
+        val showCaptionsSearch = screen.parameter == Parameter.Subtitles &&
+            parameterOptions[Parameter.Subtitles].orEmpty().any { option -> option.id >= 0 }
+        if (showCaptionsSearch) {
+            root.addView(
+                KinescopeSettingsCaptionsSearchRowView(context).apply {
+                    layoutParams = LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        resources.getDimensionPixelSize(R.dimen.kinescope_settings_row_height),
+                    ).apply {
+                        marginStart = resources.getDimensionPixelSize(R.dimen.kinescope_settings_captions_search_row_inset)
+                    }
+                    applyIconTint(iconTintColor)
+                    setOnClickListener {
+                        hide(animated = true)
+                        onCaptionsSearchClick?.invoke()
+                    }
+                },
+            )
+        }
+
         val options = parameterOptions[screen.parameter].orEmpty()
         val selectedIndex = options.indexOfFirst { it.isSelected }
         val scrollView = ScrollView(context).apply {
             overScrollMode = OVER_SCROLL_NEVER
+            clipChildren = false
+            clipToPadding = false
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 optionsScrollMaxHeight(options.size),
@@ -675,6 +772,8 @@ class KinescopeSettingsView(
         }
         val list = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
+            clipChildren = false
+            clipToPadding = false
         }
         options.forEach { option ->
             list.addView(
@@ -699,6 +798,56 @@ class KinescopeSettingsView(
                 val rowHeight = resources.getDimensionPixelSize(R.dimen.kinescope_settings_row_height)
                 scrollView.scrollTo(0, selectedIndex * rowHeight)
             }
+        }
+
+        return root
+    }
+
+    private fun buildVideoScaleScreen(): View {
+        val root = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            )
+        }
+
+        val headerBinding = ViewSettingsSubmenuHeaderBinding.inflate(LayoutInflater.from(context))
+        headerBinding.titleTv.text = context.getString(R.string.settings_parameter_scale)
+        headerBinding.actionTv.isVisible = true
+        headerBinding.actionTv.text = videoScalePercentProvider?.invoke().orEmpty()
+        val navigateBackFromHeader = View.OnClickListener { navigateBack() }
+        headerBinding.backIv.setOnClickListener(navigateBackFromHeader)
+        headerBinding.titleTv.setOnClickListener(navigateBackFromHeader)
+        tintHeader(headerBinding)
+
+        root.addView(
+            headerBinding.root,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                resources.getDimensionPixelSize(R.dimen.kinescope_settings_row_height),
+            ),
+        )
+
+        val rowHeight = resources.getDimensionPixelSize(R.dimen.kinescope_settings_row_height)
+        listOf(
+            context.getString(R.string.settings_video_scale_decrease) to { onVideoScaleStep?.invoke(SCALE_STEP_DOWN) },
+            context.getString(R.string.settings_video_scale_increase) to { onVideoScaleStep?.invoke(SCALE_STEP_UP) },
+            context.getString(R.string.settings_video_scale_reset) to { onVideoScaleReset?.invoke() },
+        ).forEach { (title, action) ->
+            root.addView(
+                KinescopeSettingsOptionView(context).apply {
+                    layoutParams = LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        rowHeight,
+                    )
+                    setTitle(title)
+                    setOnClickListener {
+                        action.invoke()
+                        headerBinding.actionTv.text = videoScalePercentProvider?.invoke().orEmpty()
+                    }
+                },
+            )
         }
 
         return root
@@ -1144,11 +1293,13 @@ class KinescopeSettingsView(
     private sealed class NavScreen {
         object Main : NavScreen()
         data class ParameterOptions(val parameter: Parameter, val title: String) : NavScreen()
+        object VideoScale : NavScreen()
         object SubtitleAppearance : NavScreen()
         data class SubtitleAppearanceDetail(val type: SubtitleAppearanceType) : NavScreen()
 
         fun depth(): Int = when (this) {
             Main -> 0
+            VideoScale -> 1
             is ParameterOptions -> when (parameter) {
                 Parameter.PlaybackSpeed -> 1
                 Parameter.VideoQuality -> 2
@@ -1175,10 +1326,14 @@ class KinescopeSettingsView(
     sealed class Parameter {
         object PlaybackSpeed : Parameter()
         object VideoQuality : Parameter()
+        object Scale : Parameter()
         object PictureInPicture : Parameter()
         object Subtitles : Parameter()
         object AudioTracks : Parameter()
         object Attachments : Parameter()
+
+        /** App-defined settings row; pair with [addCustomParameter]. */
+        data class Custom(val id: String) : Parameter()
     }
 
     private companion object {
@@ -1187,6 +1342,7 @@ class KinescopeSettingsView(
             Parameter.AudioTracks,
             Parameter.PlaybackSpeed,
             Parameter.VideoQuality,
+            Parameter.Scale,
             Parameter.Attachments,
             Parameter.PictureInPicture,
         )
@@ -1200,5 +1356,7 @@ class KinescopeSettingsView(
         private const val FADE_ANIMATION_DURATION_MS = 140L
         private const val NAV_ANIMATION_DURATION_MS = 200L
         private val NAV_INTERPOLATOR = FastOutSlowInInterpolator()
+        private const val SCALE_STEP_UP = 1.03f
+        private const val SCALE_STEP_DOWN = 0.97f
     }
 }

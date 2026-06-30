@@ -21,6 +21,9 @@ object KinescopeDemoConfig {
     const val SUBTITLES_VIDEO_ID = "mMLazQrkPgThuhB7kkzQ69"
     //"4CCHqgs4MkL33akyL7jJtS"
 
+    /** Video with chapters — Chapters test screen. */
+    const val CHAPTERS_VIDEO_ID = "mMLazQrkPgThuhB7kkzQ69"
+
     /** Default live stream ID when the Live test input is empty. */
     const val DEFAULT_LIVE_ID = "aLJgR9TJfe2EUBejpH5Fuo"
 

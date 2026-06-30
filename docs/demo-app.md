@@ -11,9 +11,14 @@ The demo is **not** published to JitPack; clone the repo and build locally.
 ```kotlin
 object KinescopeDemoConfig {
     const val API_KEY = "your-api-key"
+<<<<<<< HEAD
     const val DEFAULT_VIDEO_ID = "..."      // Custom UI, Custom Player
+=======
+    const val DEFAULT_VIDEO_ID = "..."      // Custom Player
+>>>>>>> 9608062 (release 0.1.0)
     const val DRM_VIDEO_ID = "..."          // DRM viewing
     const val SUBTITLES_VIDEO_ID = "..."    // Subtitles test
+    const val CHAPTERS_VIDEO_ID = "..."     // Chapters test (video with chapters in metadata)
     const val DEFAULT_LIVE_ID = "..."       // Live test (empty input fallback)
 }
 ```
@@ -49,9 +54,9 @@ Install on a connected device:
 | Screen | Activity | What it demonstrates | Related docs |
 |--------|----------|----------------------|--------------|
 | **Playlist test** | `PlaylistActivity` | Video list from Dashboard API, `KinescopePlayerView` with template options, fullscreen, PiP, Chromecast | [quick-start.md](quick-start.md), [chromecast.md](chromecast.md), [picture-in-picture.md](picture-in-picture.md) |
-| **Subtitles test** | `SubtitlesActivity` | Subtitle tracks, appearance settings, progressive line-by-line reveal, fullscreen, PiP | [subtitles-and-settings.md](subtitles-and-settings.md) |
+| **Subtitles test** | `SubtitlesActivity` | Subtitles, captions search, appearance | [subtitles-and-settings.md](subtitles-and-settings.md) |
+| **Chapters test** | `ChaptersActivity` | Chapters icon + seek markers | [player-chrome.md](player-chrome.md) · [settings-menu.md — Chapters](settings-menu.md) |
 | **DRM viewing** | `DrmViewingActivity` | Online Widevine-protected VOD playback | [offline-downloads.md](offline-downloads.md) |
-| **Custom UI test** | `CustomUIActivity` | `KinescopePlayerView` with built-in controls hidden — wire your own buttons | [customization.md](customization.md) |
 | **Custom Player test** | `CustomPlayerActivity` | `KinescopePlayerOptions` toggles, quality/preload, Dashboard API — list/create/update/delete player templates | [player-options.md](player-options.md), [dashboard-api.md](dashboard-api.md) |
 | **Live test** | `LiveActivity` | Live stream playback and live-specific UI | [live.md](live.md) |
 | **Shorts** | `ShortsActivity` | Vertical feed (`ViewPager2`), preloading, optional offline download from feed | [../kotlin-kinescope-shorts/LIBRARY_USAGE_GUIDE.md](../kotlin-kinescope-shorts/LIBRARY_USAGE_GUIDE.md) |
@@ -66,8 +71,8 @@ app/src/main/java/io/kinescope/demo/
 ├── application/                 # Application + KinescopeApiHelper
 ├── playlist/                    # playlist + Cast + PiP
 ├── subtitles/
+├── chapters/                    # chapters menu + seek markers
 ├── drm/
-├── customui/
 ├── customplayer/                # player options + Dashboard API
 ├── live/
 ├── shorts/

@@ -26,12 +26,33 @@
 
     <string name="player_chapters">Chapters</string>
     <string name="player_chapters_title">Chapters</string>
+<<<<<<< HEAD
+=======
+    <string name="player_playlist">Playlist</string>
+    <string name="player_playlist_title">Playlist</string>
+    <string name="player_playlist_count">%1$d videos</string>
+    <string name="player_playlist_copy_link">Copy link</string>
+>>>>>>> 9608062 (release 0.1.0)
 
     <string name="settings_parameter_playback_speed">Speed</string>
     <string name="settings_parameter_video_quality">Quality</string>
+    <string name="settings_parameter_scale">Scale</string>
+    <string name="settings_video_scale_decrease">− 3%</string>
+    <string name="settings_video_scale_increase">+ 3%</string>
+    <string name="settings_video_scale_reset">100%</string>
+    <string name="player_video_scale_reset">Reset video scale</string>
     <string name="settings_parameter_picture_in_picture">Picture in picture</string>
     <string name="settings_parameter_subtitles">Subtitles</string>
+    <string name="settings_subtitles_cc">Subtitles/CC</string>
+    <string name="settings_captions_search">Captions search</string>
+    <string name="settings_subtitles_options">Options</string>
+    <string name="settings_captions_search_close">Close captions search</string>
+    <string name="settings_captions_search_clear">Clear search</string>
+    <string name="settings_captions_search_prev">Previous match</string>
+    <string name="settings_captions_search_next">Next match</string>
+    <string name="settings_captions_search_counter">%1$d/%2$d</string>
     <string name="settings_parameter_audio_tracks">Audio</string>
+    <string name="settings_audio_tracks_title">Audio track</string>
     <string name="settings_parameter_attachments">Attachments</string>
     <string name="settings_subtitles_off">Off</string>
     <string name="settings_subtitles_appearance">Settings</string>
@@ -51,6 +72,7 @@
     <string name="settings_subtitles_color_custom">Custom</string>
     <string name="settings_video_quality_audio_only">Audio only</string>
     <string name="settings_audio_track_default">Track %1$d</string>
+    <string name="settings_audio_track_numbered">%1$s · %2$d</string>
 
     <string name="settings_playback_speed_0_25">0.25x</string>
     <string name="settings_playback_speed_0_5">0.5x</string>

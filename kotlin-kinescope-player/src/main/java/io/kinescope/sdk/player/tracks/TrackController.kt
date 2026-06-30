@@ -12,8 +12,6 @@ import io.kinescope.sdk.player.quality.KinescopeQualityManager
 import io.kinescope.sdk.player.quality.KinescopeQualityVariant
 import io.kinescope.sdk.player.quality.KinescopeQualityVariantUi
 import io.kinescope.sdk.settings.KinescopeSettingsOption
-import io.kinescope.sdk.R
-import java.util.Locale
 
 @UnstableApi
 class TrackController(
@@ -161,17 +159,22 @@ class TrackController(
     fun currentAudioLabel(): String {
         val override = audioTrackOverrides.getOrNull(selectedAudioIndex) ?: return ""
         val (_, trackIndex) = override
-        return audioTrackLabel(override.first.getTrackFormat(trackIndex), selectedAudioIndex)
+        return AudioTrackLabels.label(context, override.first.getTrackFormat(trackIndex), selectedAudioIndex)
     }
 
-    fun buildAudioOptions(): List<KinescopeSettingsOption> =
-        audioTrackOverrides.mapIndexed { index, (group, trackIndex) ->
+    fun buildAudioOptions(): List<KinescopeSettingsOption> {
+        val labels = audioTrackOverrides.mapIndexed { index, (group, trackIndex) ->
+            AudioTrackLabels.label(context, group.getTrackFormat(trackIndex), index)
+        }
+        val displayLabels = AudioTrackLabels.disambiguate(context, labels)
+        return audioTrackOverrides.mapIndexed { index, _ ->
             KinescopeSettingsOption(
                 id = index,
-                title = audioTrackLabel(group.getTrackFormat(trackIndex), index),
+                title = displayLabels[index],
                 isSelected = index == selectedAudioIndex,
             )
         }
+    }
 
     private fun syncSelectedAudioIndex() {
         if (audioTrackOverrides.isEmpty()) {
@@ -186,19 +189,6 @@ class TrackController(
             selectedAudioIndex in audioTrackOverrides.indices -> selectedAudioIndex
             else -> 0
         }
-    }
-
-    private fun audioTrackLabel(format: Format, fallbackIndex: Int): String {
-        format.label?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
-        format.language?.trim()
-            ?.takeIf { it.isNotEmpty() && !it.equals("und", ignoreCase = true) }
-            ?.let { code ->
-                Locale.forLanguageTag(code).displayName
-                    .takeIf { it.isNotEmpty() }
-                    ?.let { return it }
-                return code
-            }
-        return context.getString(R.string.settings_audio_track_default, fallbackIndex + 1)
     }
 
     companion object {

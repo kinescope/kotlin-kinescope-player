@@ -33,6 +33,8 @@ class KinescopePictureInPictureSession(
 
     private var stopPlaybackAfterPipExit = false
     private var receiverRegistered = false
+    private var pipEntryPending = false
+    private var pipEntryRecoveryRunnable: Runnable? = null
 
     private val pipReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -76,6 +78,8 @@ class KinescopePictureInPictureSession(
     }
 
     fun detach() {
+        cancelPictureInPictureEntryRecovery()
+        pipEntryPending = false
         unregisterPipReceiver()
         activity.lifecycle.removeObserver(lifecycleObserver)
         player().exoPlayer?.removeListener(playbackListener)
@@ -93,12 +97,16 @@ class KinescopePictureInPictureSession(
         val view = playerView()
         val videoPlayer = player()
         if (isInPictureInPictureMode) {
+            cancelPictureInPictureEntryRecovery()
+            pipEntryPending = false
             prepareAllPlayerViewsForPictureInPicture(true)
             videoPlayer.play()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 KinescopePictureInPicture.updateActions(activity, videoPlayer.exoPlayer)
             }
         } else {
+            cancelPictureInPictureEntryRecovery()
+            pipEntryPending = false
             onExitingPip?.invoke()
             prepareAllPlayerViewsForPictureInPicture(false)
             refreshPlayerChromeAfterPictureInPictureExit()
@@ -143,7 +151,7 @@ class KinescopePictureInPictureSession(
             videoPlayer.play()
         }
         onEnteringPip?.invoke()
-        prepareAllPlayerViewsForPictureInPicture(true)
+        pipEntryPending = true
         val anchorView = view.getPipAnchorView()
         view.doOnLayout {
             anchorView.doOnLayout {
@@ -155,14 +163,49 @@ class KinescopePictureInPictureSession(
                         exoPlayer = videoPlayer.exoPlayer,
                     )
                     if (!entered) {
+                        cancelPictureInPictureEntryRecovery()
+                        pipEntryPending = false
                         onExitingPip?.invoke()
                         prepareAllPlayerViewsForPictureInPicture(false)
                         refreshAllPlayerViewsChrome()
                         Toast.makeText(activity, R.string.player_pip_unavailable, Toast.LENGTH_SHORT).show()
+                    } else {
+                        schedulePictureInPictureEntryRecovery(view)
                     }
                 }
             }
         }
+    }
+
+    private fun schedulePictureInPictureEntryRecovery(view: KinescopePlayerView) {
+        cancelPictureInPictureEntryRecovery()
+        val recovery = Runnable {
+            pipEntryRecoveryRunnable = null
+            if (!pipEntryPending) {
+                return@Runnable
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && activity.isInPictureInPictureMode) {
+                pipEntryPending = false
+                return@Runnable
+            }
+            pipEntryPending = false
+            onExitingPip?.invoke()
+            prepareAllPlayerViewsForPictureInPicture(false)
+            refreshAllPlayerViewsChrome()
+        }
+        pipEntryRecoveryRunnable = recovery
+        view.postDelayed(recovery, PIP_ENTRY_RECOVERY_TIMEOUT_MS)
+    }
+
+    private fun cancelPictureInPictureEntryRecovery() {
+        pipEntryRecoveryRunnable?.let { runnable ->
+            playerView().removeCallbacks(runnable)
+        }
+        pipEntryRecoveryRunnable = null
+    }
+
+    private companion object {
+        private const val PIP_ENTRY_RECOVERY_TIMEOUT_MS = 2000L
     }
 
     private fun togglePlayback() {

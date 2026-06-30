@@ -40,6 +40,12 @@
             tools:text="Author text" />
     </LinearLayout>
 
+    <include
+        layout="@layout/view_scrub_top_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top" />
+
     <io.kinescope.sdk.view.KinescopePlayPauseMorphView
         android:id="@+id/kinescope_play_pause"
         android:layout_width="@dimen/kinescope_play_pause_size"
@@ -174,6 +180,7 @@
                 app:scrubber_enabled_size="0dp"
                 app:touch_target_height="@dimen/kinescope_progress_touch_target_height" />
 
+<<<<<<< HEAD
             <TextView
                 android:id="@+id/scrub_chapter_title"
                 android:layout_width="wrap_content"
@@ -194,6 +201,8 @@
                 tools:text="Chapter 1"
                 tools:visibility="visible" />
 
+=======
+>>>>>>> 9608062 (release 0.1.0)
         </FrameLayout>
 
         <Space
@@ -216,8 +225,8 @@
                 android:id="@+id/kinescope_options_expandable_strip"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:clipChildren="true"
-                android:clipToPadding="true"
+                android:clipChildren="false"
+                android:clipToPadding="false"
                 android:visibility="gone">
 
                 <LinearLayout
@@ -236,22 +245,44 @@
                         android:orientation="horizontal"
                         android:visibility="gone">
 
-                        <ImageButton
-                            android:id="@+id/custom_btn"
-                            style="@style/KinescopeMediaButton"
-                            android:importantForAccessibility="no"
-                            android:visibility="gone" />
-
-                        <ImageButton
-                            android:id="@+id/kinescope_picture_in_picture"
-                            style="@style/KinescopeMediaButton"
-                            android:contentDescription="@string/player_picture_in_picture"
-                            android:src="@drawable/ic_mini_player"
+                        <LinearLayout
+                            android:id="@+id/kinescope_custom_buttons_container"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal"
                             android:visibility="gone" />
 
                     </LinearLayout>
 
                     <ImageButton
+<<<<<<< HEAD
+=======
+                        android:id="@+id/kinescope_picture_in_picture"
+                        style="@style/KinescopeMediaButton"
+                        android:contentDescription="@string/player_picture_in_picture"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/ic_mini_player"
+                        android:visibility="gone" />
+
+                    <ImageButton
+                        android:id="@+id/kinescope_subtitles"
+                        style="@style/KinescopeMediaButton"
+                        android:contentDescription="@string/settings_subtitles_cc"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/ic_cc_off"
+                        android:visibility="gone" />
+
+                    <ImageButton
+                        android:id="@+id/kinescope_playlist"
+                        style="@style/KinescopeMediaButton"
+                        android:contentDescription="@string/player_playlist"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/ic_playlist_player"
+                        android:visibility="gone" />
+
+                    <ImageButton
+>>>>>>> 9608062 (release 0.1.0)
                         android:id="@+id/kinescope_chapters"
                         style="@style/KinescopeMediaButton"
                         android:contentDescription="@string/player_chapters"
@@ -263,6 +294,7 @@
                         android:id="@+id/kinescope_cast"
                         style="@style/KinescopeMediaButton"
                         android:contentDescription="@string/player_cast"
+                        android:scaleType="fitCenter"
                         android:src="@drawable/ic_cast"
                         android:visibility="gone" />
 
@@ -270,6 +302,7 @@
                         android:id="@+id/kinescope_settings"
                         style="@style/KinescopeMediaButton"
                         android:importantForAccessibility="no"
+                        android:scaleType="fitCenter"
                         android:src="@drawable/ic_settings" />
 
                 </LinearLayout>
@@ -283,11 +316,12 @@
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
-                <ImageButton
-                    android:id="@+id/kinescope_fullscreen"
-                    style="@style/KinescopeMediaButton"
-                    android:importantForAccessibility="no"
-                    android:src="@drawable/ic_fullscreen" />
+                    <ImageButton
+                        android:id="@+id/kinescope_fullscreen"
+                        style="@style/KinescopeMediaButton"
+                        android:importantForAccessibility="no"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/ic_fullscreen" />
 
                 <ImageButton
                     android:id="@+id/kinescope_options_dots"
@@ -301,5 +335,25 @@
         </LinearLayout>
 
     </LinearLayout>
+
+    <TextView
+        android:id="@+id/scrub_chapter_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|start"
+        android:elevation="12dp"
+        android:ellipsize="end"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:maxWidth="@dimen/kinescope_caption_max_width"
+        android:paddingLeft="@dimen/kinescope_caption_padding_horizontal"
+        android:paddingTop="@dimen/kinescope_caption_padding_vertical"
+        android:paddingRight="@dimen/kinescope_caption_padding_horizontal"
+        android:paddingBottom="@dimen/kinescope_caption_padding_vertical"
+        android:textColor="@color/white"
+        android:textSize="14sp"
+        android:visibility="gone"
+        tools:text="Chapter 1"
+        tools:visibility="visible" />
 
 </FrameLayout>

@@ -88,7 +88,7 @@ class KinescopeQualityManager(
 
     private fun updateUiVariants(variants: List<KinescopeQualityVariant>) {
         this.variants = variants
-            .sortedBy { variant -> variant.id }
+            .sortedByDescending { variant -> variant.id }
             .map { variant ->
                 KinescopeQualityVariantUi(
                     id = variant.id,

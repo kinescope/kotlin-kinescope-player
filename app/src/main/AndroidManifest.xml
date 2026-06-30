@@ -52,13 +52,14 @@
             android:supportsPictureInPicture="true" />
 
         <activity
-            android:name=".drm.DrmViewingActivity"
+            android:name=".chapters.ChaptersActivity"
             android:configChanges="orientation|screenSize|screenLayout|layoutDirection|smallestScreenSize"
             android:exported="true"
+            android:label="Chapters test"
             android:supportsPictureInPicture="true" />
 
         <activity
-            android:name=".customui.CustomUIActivity"
+            android:name=".drm.DrmViewingActivity"
             android:configChanges="orientation|screenSize|screenLayout|layoutDirection|smallestScreenSize"
             android:exported="true"
             android:supportsPictureInPicture="true" />

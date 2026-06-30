@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.AttributeSet
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.view.ViewGroup.MarginLayoutParams
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -20,10 +21,9 @@ class KinesopeSeekView(
     constructor(context: Context) : this(context, null, 0)
     constructor(context: Context, attrs: AttributeSet? = null) : this(context, attrs, 0)
 
-    private val scrubOverlay: View
-    private val scrubTopBar: LinearLayout
-    private val moveBackButton: SeekDirectionIconView
-    private val moveForwardButton: SeekDirectionIconView
+    private lateinit var scrubTopBar: ViewGroup
+    private lateinit var moveBackButton: SeekDirectionIconView
+    private lateinit var moveForwardButton: SeekDirectionIconView
 
     private val seekFeedbackBack: FrameLayout
     private val seekFeedbackForward: FrameLayout
@@ -40,18 +40,14 @@ class KinesopeSeekView(
 
 
     private var hideSeekFeedbackRunnable: Runnable? = null
+    private var seekFeedbackHiddenListener: (() -> Unit)? = null
+    private var scrubOverlayHiddenListener: (() -> Unit)? = null
     private var visibleEdgeForward: Boolean? = null
     private var isFullscreenMode = false
     private var isMobilePlayerChrome = false
 
     init {
         inflate(context, R.layout.view_kinescope_seek_view, this)
-        scrubOverlay = findViewById(R.id.scrub_overlay)
-        scrubTopBar = findViewById(R.id.scrub_top_bar)
-        moveBackButton = findViewById(R.id.btn_move_back)
-        moveForwardButton = findViewById(R.id.btn_move_forward)
-        moveBackButton.forward = false
-        moveForwardButton.forward = true
 
         seekFeedbackBack = findViewById(R.id.seek_feedback_back)
         seekFeedbackForward = findViewById(R.id.seek_feedback_forward)
@@ -68,6 +64,20 @@ class KinesopeSeekView(
         seekFeedbackBackContent = findViewById(R.id.seek_feedback_back_content)
         seekFeedbackForwardContent = findViewById(R.id.seek_feedback_forward_content)
         applyEdgeFeedbackStyle(fullscreen = false)
+    }
+
+    fun attachScrubHintBar(topBar: ViewGroup) {
+        scrubTopBar = topBar
+        moveBackButton = topBar.findViewById(R.id.btn_move_back)
+        moveForwardButton = topBar.findViewById(R.id.btn_move_forward)
+        moveBackButton.forward = false
+        moveForwardButton.forward = true
+    }
+
+    private fun ensureScrubHintBarAttached() {
+        check(::scrubTopBar.isInitialized) {
+            "Scrub hint bar is not attached. Call attachScrubHintBar() from KinescopePlayerView."
+        }
     }
 
     fun setFullscreenMode(fullscreen: Boolean) {
@@ -153,18 +163,14 @@ class KinesopeSeekView(
     }
 
     fun showScrubOverlay() {
-        if (scrubOverlay.isVisible) {
+        ensureScrubHintBarAttached()
+        cancelScrubOverlayHiddenListener()
+        if (scrubTopBar.isVisible && scrubTopBar.alpha >= 1f) {
             startScrubHintIconAnimations()
             return
         }
-        scrubOverlay.alpha = 0f
         scrubTopBar.alpha = 0f
-        scrubOverlay.isVisible = true
         scrubTopBar.isVisible = true
-        scrubOverlay.animate()
-            .alpha(1f)
-            .setDuration(SCRUB_OVERLAY_FADE_MS)
-            .start()
         scrubTopBar.animate()
             .alpha(1f)
             .setDuration(SCRUB_OVERLAY_FADE_MS)
@@ -172,28 +178,48 @@ class KinesopeSeekView(
         startScrubHintIconAnimations()
     }
 
-    fun hideScrubOverlay() {
-        if (!scrubOverlay.isVisible) {
+    fun hideScrubOverlay(onHidden: (() -> Unit)? = null) {
+        scrubOverlayHiddenListener = onHidden
+        if (!::scrubTopBar.isInitialized || !scrubTopBar.isVisible) {
+            notifyScrubOverlayHidden()
             return
         }
         stopScrubHintIconAnimations()
-        scrubOverlay.animate()
-            .alpha(0f)
-            .setDuration(SCRUB_OVERLAY_FADE_MS)
-            .start()
+        scrubTopBar.animate().cancel()
         scrubTopBar.animate()
             .alpha(0f)
             .setDuration(SCRUB_OVERLAY_FADE_MS)
             .withEndAction {
-                scrubOverlay.isVisible = false
                 scrubTopBar.isVisible = false
-                scrubOverlay.alpha = 1f
                 scrubTopBar.alpha = 1f
+                notifyScrubOverlayHidden()
             }
             .start()
     }
 
-    fun showSeekFeedback(forward: Boolean, totalSeconds: Int) {
+    private fun cancelScrubOverlayHiddenListener() {
+        scrubOverlayHiddenListener = null
+    }
+
+    private fun notifyScrubOverlayHidden() {
+        val listener = scrubOverlayHiddenListener
+        scrubOverlayHiddenListener = null
+        listener?.invoke()
+    }
+
+    fun hideSeekFeedback() {
+        hideSeekFeedbackRunnable?.let { removeCallbacks(it) }
+        hideSeekFeedbackRunnable = null
+        seekFeedbackHiddenListener = null
+        hideEdgePanel(animated = false)
+        visibleEdgeForward = null
+    }
+
+    fun showSeekFeedback(
+        forward: Boolean,
+        totalSeconds: Int,
+        onHidden: (() -> Unit)? = null,
+    ) {
         val container = if (forward) seekFeedbackForward else seekFeedbackBack
         val icon = if (forward) seekFeedbackForwardIcon else seekFeedbackBackIcon
         val secondsView = if (forward) seekFeedbackForwardSeconds else seekFeedbackBackSeconds
@@ -201,6 +227,7 @@ class KinesopeSeekView(
         val alreadyVisible = container.isVisible && container.alpha > 0.5f && visibleEdgeForward == forward
 
         hideSeekFeedbackRunnable?.let { removeCallbacks(it) }
+        seekFeedbackHiddenListener = onHidden
         otherContainer.animate().cancel()
         otherContainer.isVisible = false
 
@@ -221,9 +248,15 @@ class KinesopeSeekView(
         }
 
         hideSeekFeedbackRunnable = Runnable {
-            hideEdgePanel(animated = true)
-            visibleEdgeForward = null
-        }.also { postDelayed(it, DOUBLE_TAP_FEEDBACK_VISIBLE_MS) }
+            val listener = seekFeedbackHiddenListener
+            seekFeedbackHiddenListener = null
+            if (listener != null) {
+                listener.invoke()
+            } else {
+                hideEdgePanel(animated = true)
+                visibleEdgeForward = null
+            }
+        }.also { postDelayed(it, SEEK_FEEDBACK_VISIBLE_MS) }
     }
 
     private fun showEdgePanel(forward: Boolean, animated: Boolean) {
@@ -313,6 +346,9 @@ class KinesopeSeekView(
     }
 
     private fun startScrubHintIconAnimations() {
+        if (!::moveBackButton.isInitialized) {
+            return
+        }
         stopScrubHintIconAnimations()
         moveBackButton.startRippleAnimation()
         moveForwardButton.startRippleAnimation()
@@ -325,6 +361,8 @@ class KinesopeSeekView(
 
     override fun onDetachedFromWindow() {
         hideSeekFeedbackRunnable?.let { removeCallbacks(it) }
+        seekFeedbackHiddenListener = null
+        cancelScrubOverlayHiddenListener()
         stopScrubHintIconAnimations()
         stopFeedbackIconAnimation()
         super.onDetachedFromWindow()
@@ -335,7 +373,7 @@ class KinesopeSeekView(
         private const val SCRUB_OVERLAY_FADE_MS = 150L
         private const val FEEDBACK_SHOW_MS = 180L
         private const val FEEDBACK_HIDE_MS = 150L
-        private const val DOUBLE_TAP_FEEDBACK_VISIBLE_MS = 500L
+        const val SEEK_FEEDBACK_VISIBLE_MS = 500L
         private const val FEEDBACK_SCALE_COLLAPSED = 0.88f
     }
 }

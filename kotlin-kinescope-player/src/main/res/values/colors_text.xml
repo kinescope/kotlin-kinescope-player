@@ -9,4 +9,8 @@
     <color name="seekbar_background">#40FFFFFF</color>
     <color name="seekbar_progress">#6161FC</color>
     <color name="kinescope_caption_background">#111111</color>
+
+    <color name="kinescope_playlist_menu_background">#111111</color>
+    <color name="kinescope_playlist_menu_row_selected">#0AFFFFFF</color>
+    <color name="kinescope_playlist_menu_duration_background">#CC111111</color>
 </resources>

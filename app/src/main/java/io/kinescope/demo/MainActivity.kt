@@ -5,8 +5,8 @@ import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.view.WindowManager
 import com.google.android.material.button.MaterialButton
+import io.kinescope.demo.chapters.ChaptersActivity
 import io.kinescope.demo.customplayer.CustomPlayerActivity
-import io.kinescope.demo.customui.CustomUIActivity
 import io.kinescope.demo.live.LiveActivity
 import io.kinescope.demo.playlist.PlaylistActivity
 import io.kinescope.demo.subtitles.SubtitlesActivity
@@ -24,8 +24,8 @@ class MainActivity : AppCompatActivity() {
 
         val btnPlaylist = findViewById<MaterialButton>(R.id.btn_playlist)
         val btnSubtitles = findViewById<MaterialButton>(R.id.btn_subtitles)
+        val btnChapters = findViewById<MaterialButton>(R.id.btn_chapters)
         val btnDrmViewing = findViewById<MaterialButton>(R.id.btn_drm_viewing)
-        val btnCustomUI = findViewById<MaterialButton>(R.id.btn_custom_ui)
         val btnCustomPlayer = findViewById<MaterialButton>(R.id.btn_custom_player)
         val btnLive = findViewById<MaterialButton>(R.id.btn_live)
         val btnShorts = findViewById<MaterialButton>(R.id.btn_shorts)
@@ -40,13 +40,12 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, SubtitlesActivity::class.java))
         }
 
-        btnDrmViewing.setOnClickListener {
-            startActivity(Intent(this, DrmViewingActivity::class.java))
+        btnChapters.setOnClickListener {
+            startActivity(Intent(this, ChaptersActivity::class.java))
         }
 
-        btnCustomUI.setOnClickListener {
-            val intent =  Intent(this, CustomUIActivity::class.java)
-            startActivity(intent);
+        btnDrmViewing.setOnClickListener {
+            startActivity(Intent(this, DrmViewingActivity::class.java))
         }
 
         btnCustomPlayer.setOnClickListener {

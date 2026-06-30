@@ -18,6 +18,8 @@
     <string name="custom_player_pip_unavailable">PiP is not available on this device</string>
     <string name="custom_player_fullscreen">Fullscreen</string>
     <string name="custom_player_playback_rate">Playback speed</string>
+    <string name="custom_player_demo_action">Share (demo)</string>
+    <string name="custom_player_demo_action_toast">Custom chrome action</string>
     <string name="custom_player_color">Accent color (HEX)</string>
     <string name="custom_player_web_only_hint">playsinline, preload, keyboard shortcuts and PiP are stored in the API template; on Android, the other parameters are applied.</string>
     <string name="custom_player_save_dialog_title">Save template</string>

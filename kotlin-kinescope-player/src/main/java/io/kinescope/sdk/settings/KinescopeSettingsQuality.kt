@@ -1,5 +1,6 @@
 package io.kinescope.sdk.settings
 
+import io.kinescope.sdk.R
 import io.kinescope.sdk.player.quality.KinescopeQualityVariant
 
 fun qualityBadge(heightPx: Int): String? = when {
@@ -16,4 +17,14 @@ fun qualityBadgeForVariant(id: Int): String? {
         return null
     }
     return qualityBadge(id)
+}
+
+fun qualitySettingsIconRes(
+    isAudioOnlyQuality: Boolean,
+    playbackHeightPx: Int,
+): Int = when {
+    isAudioOnlyQuality || playbackHeightPx <= 0 -> R.drawable.ic_settings
+    playbackHeightPx >= 2160 -> R.drawable.ic_settings_4k
+    playbackHeightPx >= 1080 -> R.drawable.ic_settings_hd
+    else -> R.drawable.ic_settings
 }

@@ -7,54 +7,6 @@
     android:clickable="false"
     android:focusable="false">
 
-    <View
-        android:id="@+id/scrub_overlay"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="#99000000"
-        android:visibility="gone"
-        tools:visibility="visible" />
-
-    <LinearLayout
-        android:id="@+id/scrub_top_bar"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:orientation="horizontal"
-        android:paddingHorizontal="16dp"
-        android:paddingVertical="10dp"
-        android:visibility="gone"
-        tools:visibility="visible">
-
-        <io.kinescope.sdk.view.SeekDirectionIconView
-            android:id="@+id/btn_move_back"
-            android:layout_width="@dimen/kinescope_scrub_seek_icon_width"
-            android:layout_height="@dimen/kinescope_scrub_seek_icon_height"
-            android:contentDescription="@string/player_seek_back"
-            android:importantForAccessibility="no" />
-
-        <TextView
-            android:id="@+id/scrub_hint_tv"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginHorizontal="8dp"
-            android:ellipsize="end"
-            android:gravity="center"
-            android:includeFontPadding="false"
-            android:maxLines="1"
-            android:text="@string/player_scrub_double_tap_hint"
-            android:textColor="@color/white"
-            android:textSize="14sp" />
-
-        <io.kinescope.sdk.view.SeekDirectionIconView
-            android:id="@+id/btn_move_forward"
-            android:layout_width="@dimen/kinescope_scrub_seek_icon_width"
-            android:layout_height="@dimen/kinescope_scrub_seek_icon_height"
-            android:contentDescription="@string/player_seek_forward"
-            android:importantForAccessibility="no" />
-
-    </LinearLayout>
-
     <FrameLayout
         android:id="@+id/seek_feedback_back"
         android:layout_width="wrap_content"

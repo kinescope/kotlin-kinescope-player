@@ -45,6 +45,8 @@ playerView.onFullscreenButtonCallback = { toggleFullscreen() }
 
 `switchTargetView` preserves playback state, track selection, analytics, and subtitle overlay state across views.
 
+If you use [`useTextureSurface`](picture-in-picture.md) (Smooth PiP transition with TextureView) for smooth PiP, apply the same flag when creating both inline and fullscreen player views.
+
 Hide the fullscreen button via options:
 
 ```kotlin

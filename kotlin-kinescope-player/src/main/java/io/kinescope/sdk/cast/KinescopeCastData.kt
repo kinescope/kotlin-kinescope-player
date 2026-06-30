@@ -1,7 +1,6 @@
 package io.kinescope.sdk.cast
 
 /**
- * Payload for casting a Kinescope video to the custom receiver (app id `29646999`).
  * Stored in [androidx.media3.common.MediaItem] tag and converted to Cast [com.google.android.gms.cast.MediaInfo].
  */
 data class KinescopeCastData(

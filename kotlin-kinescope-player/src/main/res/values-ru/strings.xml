@@ -23,12 +23,33 @@
 
     <string name="player_chapters">Главы</string>
     <string name="player_chapters_title">Главы</string>
+<<<<<<< HEAD
+=======
+    <string name="player_playlist">Плейлист</string>
+    <string name="player_playlist_title">Плейлист</string>
+    <string name="player_playlist_count">%1$d видео</string>
+    <string name="player_playlist_copy_link">Копировать ссылку</string>
+>>>>>>> 9608062 (release 0.1.0)
 
     <string name="settings_parameter_playback_speed">Скорость</string>
     <string name="settings_parameter_video_quality">Качество</string>
+    <string name="settings_parameter_scale">Масштаб</string>
+    <string name="settings_video_scale_decrease">− 3%</string>
+    <string name="settings_video_scale_increase">+ 3%</string>
+    <string name="settings_video_scale_reset">100%</string>
+    <string name="player_video_scale_reset">Сбросить масштаб видео</string>
     <string name="settings_parameter_picture_in_picture">Картинка в картинке</string>
     <string name="settings_parameter_subtitles">Субтитры</string>
+    <string name="settings_subtitles_cc">Субтитры</string>
+    <string name="settings_captions_search">Поиск субтитров</string>
+    <string name="settings_subtitles_options">Параметры</string>
+    <string name="settings_captions_search_close">Закрыть поиск субтитров</string>
+    <string name="settings_captions_search_clear">Очистить поиск</string>
+    <string name="settings_captions_search_prev">Предыдущее совпадение</string>
+    <string name="settings_captions_search_next">Следующее совпадение</string>
+    <string name="settings_captions_search_counter">%1$d/%2$d</string>
     <string name="settings_parameter_audio_tracks">Аудио</string>
+    <string name="settings_audio_tracks_title">Аудиодорожка</string>
     <string name="settings_parameter_attachments">Вложения</string>
     <string name="settings_subtitles_off">Выкл.</string>
     <string name="settings_subtitles_appearance">Настройки</string>
@@ -48,6 +69,7 @@
     <string name="settings_subtitles_color_custom">Свой</string>
     <string name="settings_video_quality_audio_only">Только звук</string>
     <string name="settings_audio_track_default">Дорожка %1$d</string>
+    <string name="settings_audio_track_numbered">%1$s · %2$d</string>
 
     <string name="settings_playback_speed_0_25">0,25×</string>
     <string name="settings_playback_speed_0_5">0,5×</string>

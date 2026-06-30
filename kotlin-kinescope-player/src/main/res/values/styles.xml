@@ -56,7 +56,18 @@
         <item name="android:textColor">@color/white</item>
     </style>
 
+    <style name="Bold.10.White" parent="Bold">
+        <item name="android:textSize">10sp</item>
+        <item name="android:textColor">@color/white</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
     <style name="Regular.14.WhiteSecondary" parent="Regular.14">
         <item name="android:textColor">@color/white_secondary</item>
+    </style>
+
+    <style name="KinescopePlaylistThumbnailShape">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">4dp</item>
     </style>
 </resources>

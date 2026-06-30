@@ -50,9 +50,15 @@ When `autoplay = true`, playback starts automatically after `loadVideo` succeeds
 
 ## Related docs
 
-- [Player options](player-options.md)
+- [Player options](player-options.md) — all `KinescopePlayerOptions` flags
+- [Player chrome](player-chrome.md) — icons, seek bar, gestures on the video
+- [Settings menu](settings-menu.md) — Quality, Speed, Audio, Subtitles (gear popup)
+- [Subtitles](subtitles-and-settings.md) — tracks, appearance, captions search
 - [Customization](customization.md) — accent colour, poster, custom button
+<<<<<<< HEAD
 - [Subtitles & settings](subtitles-and-settings.md)
+=======
+>>>>>>> 9608062 (release 0.1.0)
 - [Demo app](demo-app.md)
 - [Picture-in-Picture](picture-in-picture.md)
 - [Chromecast](chromecast.md)

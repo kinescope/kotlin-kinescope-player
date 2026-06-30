@@ -27,7 +27,13 @@ Android SDK for [Kinescope](https://kinescope.io/) video: player, vertical Short
 | Fullscreen | [docs/fullscreen.md](docs/fullscreen.md) |
 | Picture-in-Picture | [docs/picture-in-picture.md](docs/picture-in-picture.md) |
 | Chromecast | [docs/chromecast.md](docs/chromecast.md) |
+<<<<<<< HEAD
 | Subtitles & settings | [docs/subtitles-and-settings.md](docs/subtitles-and-settings.md) |
+=======
+| **Player chrome** (icons, seek bar, gestures) | [docs/player-chrome.md](docs/player-chrome.md) |
+| **Settings menu** (gear → Quality, Speed, Audio…) | [docs/settings-menu.md](docs/settings-menu.md) |
+| Subtitles & captions search | [docs/subtitles-and-settings.md](docs/subtitles-and-settings.md) |
+>>>>>>> 9608062 (release 0.1.0)
 | Analytics | [docs/analytics.md](docs/analytics.md) |
 
 ### Dashboard API
