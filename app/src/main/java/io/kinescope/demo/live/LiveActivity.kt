@@ -2,9 +2,7 @@ package io.kinescope.demo.live
 
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
-import android.graphics.Color
 import android.os.Bundle
-import android.os.Handler
 import android.view.View
 import android.view.WindowManager
 import android.widget.Button
@@ -15,6 +13,7 @@ import androidx.core.view.isVisible
 import androidx.media3.common.util.UnstableApi
 import io.kinescope.demo.KinescopeDemoConfig
 import io.kinescope.demo.R
+import io.kinescope.sdk.player.KinescopeCastSession
 import io.kinescope.sdk.player.KinescopePictureInPictureSession
 import io.kinescope.sdk.player.KinescopeVideoPlayer
 import io.kinescope.sdk.view.KinescopePlayerView
@@ -32,6 +31,7 @@ class LiveActivity : AppCompatActivity() {
 
     private var isFullscreen = false
     private lateinit var pipSession: KinescopePictureInPictureSession
+    private lateinit var castSession: KinescopeCastSession
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -52,57 +52,27 @@ class LiveActivity : AppCompatActivity() {
 
         kinescopePlayer = KinescopeVideoPlayer(this)
         kinescopePlayerView.setPlayer(kinescopePlayer)
+        kinescopePlayerView.applyTemplateOptions()
+        kinescopePlayerFullscreenView.applyTemplateOptions()
+
         pipSession = KinescopePictureInPictureSession(
             activity = this,
             playerView = { kinescopePlayerView },
             player = { kinescopePlayer },
             additionalPlayerViews = { listOf(kinescopePlayerFullscreenView) },
         )
+        castSession = KinescopeCastSession(
+            activity = this,
+            playerView = { kinescopePlayerView },
+            player = { kinescopePlayer },
+            additionalPlayerViews = { listOf(kinescopePlayerFullscreenView) },
+        )
         pipSession.attach()
+        castSession.attach()
 
         watchLiveBtnView.setOnClickListener {
             tryLoadVideo(watchLiveIdInputView.text.toString())
         }
-
-        with(kinescopePlayerView) {
-            showCustomButton(
-                iconRes = R.drawable.ic_chromecats,
-                onClick = {}
-            )
-            setColors(
-                buttonColor = Color.YELLOW
-            )
-            setAnalyticsCallback { event, data ->
-                println("Analytics event fired! Event: $event; data: $data")
-            }
-        }
-        with(kinescopePlayerFullscreenView) {
-            showCustomButton(
-                iconRes = R.drawable.ic_chromecats,
-                onClick = {}
-            )
-            setColors(
-                buttonColor = Color.YELLOW
-            )
-            setAnalyticsCallback { event, data ->
-                println("Analytics event fired! Event: $event; data: $data")
-            }
-        }
-
-        Handler().postDelayed({
-            with(kinescopePlayerView) {
-                hideCustomButton()
-                setColors(
-                    buttonColor = Color.GREEN
-                )
-            }
-            with(kinescopePlayerFullscreenView) {
-                hideCustomButton()
-                setColors(
-                    buttonColor = Color.GREEN
-                )
-            }
-        }, 15000)
     }
 
     override fun onStop() {
@@ -121,17 +91,22 @@ class LiveActivity : AppCompatActivity() {
         watchLiveContainerView.isVisible = false
         kinescopePlayer.loadVideo(liveId, { video ->
             video?.let { data ->
-                data.poster?.url?.let {
-                    kinescopePlayerView.showPoster(
-                        url = it,
-                        onLoadFinished = { println("Poster loaded") }
-                    )
-                }
                 if (data.isLive) {
                     data.live?.startsAt?.let {
                         kinescopePlayerView.showLiveStartDate(startDate = it)
+                        kinescopePlayerFullscreenView.showLiveStartDate(startDate = it)
                     }
                     kinescopePlayerView.setLiveState()
+                    kinescopePlayerFullscreenView.setLiveState()
+                    kinescopePlayerView.showLiveAwaitingCover()
+                    kinescopePlayerFullscreenView.showLiveAwaitingCover()
+                } else {
+                    data.poster?.url?.let {
+                        kinescopePlayerView.showPoster(
+                            url = it,
+                            onLoadFinished = { println("Poster loaded") }
+                        )
+                    }
                 }
             }
             kinescopePlayer.play()

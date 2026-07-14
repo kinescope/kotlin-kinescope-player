@@ -90,7 +90,7 @@ import io.kinescope.sdk.settings.SubtitleStyle
 import io.kinescope.sdk.settings.qualityBadgeForVariant
 import io.kinescope.sdk.settings.qualitySettingsIconRes
 import io.kinescope.sdk.player.state.PlaybackBufferingWatchdog
-import io.kinescope.sdk.utils.formatLiveStartDate
+import io.kinescope.sdk.utils.LiveInformerFormatter
 import io.kinescope.sdk.utils.formatPlayerTime
 import kotlin.math.roundToInt
 
@@ -144,18 +144,16 @@ class KinescopePlayerView @JvmOverloads constructor(
                 it.updateBuffering()
 
                 it.posterView?.isVisible = oldPlayerView.posterView?.isVisible ?: false
-                it.liveStartDateContainerView?.isVisible =
-                    oldPlayerView.liveStartDateContainerView?.isVisible ?: false
+                it.scheduledLiveStartDate = oldPlayerView.scheduledLiveStartDate
 
                 if (oldPlayerView.isLiveState) {
                     it.isLiveState = true
+                    it.isLiveStateExplicit = oldPlayerView.isLiveStateExplicit
                     it.isLiveSynced = oldPlayerView.isLiveSynced
-
-                    it.positionView?.isVisible = false
-                    it.durationView?.isVisible = false
-                    it.timeDurationSuffixClip?.isVisible = false
-                    it.liveDataView?.isVisible = true
+                    it.isLiveBroadcastStarted = oldPlayerView.isLiveBroadcastStarted
+                    it.syncLiveTimeChrome()
                 }
+                it.syncLiveInformer()
             }
 
             oldPlayerView.detachForViewSwitch()
@@ -195,6 +193,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         private const val SETTINGS_MENU_ELEVATION_DP = 24f
         private const val SCRUB_SEEKBAR_SCALE = 1.85f
         private const val SCRUB_SEEKBAR_SCALE_DURATION_MS = 150L
+        private const val LIVE_INFORMER_COUNTDOWN_INTERVAL_MS = 1_000L
         private const val DOUBLE_TAP_SEEK_SECONDS = 10
         private const val DOUBLE_TAP_SEEK_STREAK_WINDOW_MS = 1500L
         private const val MOBILE_TEXT_SHADOW_RADIUS = 2f
@@ -204,6 +203,8 @@ class KinescopePlayerView @JvmOverloads constructor(
         private const val MOBILE_BACKGROUND_GRADIENT_HEIGHT_PX = 120f
         private const val MOBILE_BACKGROUND_REFERENCE_HEIGHT_PX = 432f
         private const val OPTIONS_BAR_ANIMATION_DURATION_MS = 150L
+        private const val LIVE_BADGE_PULSE_DURATION_MS = 800L
+        private const val LIVE_BADGE_PULSE_MIN_ALPHA = 0f
         private const val VIEW_SWITCH_PLAY_PAUSE_OVERRIDE_MS = 500L
         private const val SUBTITLE_PROGRESS_UPDATE_INTERVAL_MS = 16
         private const val SUBTITLE_SIZE_FRACTION_OF_HEIGHT = 0.062f
@@ -353,9 +354,21 @@ class KinescopePlayerView @JvmOverloads constructor(
     private var liveDataView: View? = null
     private var liveBadgeCircleView: View? = null
     private var liveBadgeTextView: View? = null
-    private var liveTimeOffsetTextView: TextView? = null
+    private var liveBadgePulseAnimator: ValueAnimator? = null
     private var liveStartDateContainerView: View? = null
+    private var liveInformerTitleTextView: TextView? = null
     private var liveStartDateTextView: TextView? = null
+    private var scheduledLiveStartDate: String? = null
+    private val liveInformerUpdateRunnable = object : Runnable {
+        override fun run() {
+            syncLiveInformerContent()
+            if (shouldShowLiveInformer() &&
+                LiveInformerFormatter.needsCountdownUpdates(scheduledLiveStartDate.orEmpty())
+            ) {
+                postDelayed(this, LIVE_INFORMER_COUNTDOWN_INTERVAL_MS)
+            }
+        }
+    }
 
     private var castOverlayView: View? = null
     private var castDeviceView: TextView? = null
@@ -420,10 +433,12 @@ class KinescopePlayerView @JvmOverloads constructor(
     private val timeBarMinUpdateIntervalMs = DEFAULT_TIME_BAR_MIN_UPDATE_INTERVAL_MS
 
     private var isLiveState = false
+    private var isLiveStateExplicit = false
+    private var isLiveBroadcastStarted = false
     private var isLiveSynced = false
         private set(value) {
-            setLiveBadgeState(value)
             field = value
+            updateLiveBadgeVisuals()
         }
 
     private var analyticsCallback: ((event: String, data: String) -> Unit)? = null
@@ -621,7 +636,10 @@ class KinescopePlayerView @JvmOverloads constructor(
 
                     Player.STATE_BUFFERING -> {
                         analyticsManager.buffering()
-                        if (!hasStartedPlayback && activePlaybackPlayer?.playWhenReady == true) {
+                        if (!hasStartedPlayback &&
+                            activePlaybackPlayer?.playWhenReady == true &&
+                            !isLiveState
+                        ) {
                             hidePoster()
                         }
                     }
@@ -629,8 +647,10 @@ class KinescopePlayerView @JvmOverloads constructor(
                     Player.STATE_READY -> {
                         analyticsManager.ready(args = args)
                         if (isLiveState) {
+                            isLiveBroadcastStarted = true
                             hidePoster()
                             hideLiveStartDate()
+                            syncLiveTimeChrome()
                         } else {
                             applyVideoPoster()
                         }
@@ -655,7 +675,13 @@ class KinescopePlayerView @JvmOverloads constructor(
             super.onIsPlayingChanged(isPlaying)
             if (isPlaying) {
                 hasStartedPlayback = true
-                hidePoster()
+                if (isLiveState) {
+                    isLiveBroadcastStarted = true
+                }
+                if (!isLiveState || isLiveOnAir()) {
+                    hidePoster()
+                }
+                syncLiveTimeChrome()
             }
             if (isCastOverlayVisible) {
                 refreshCastOverlay()
@@ -701,10 +727,8 @@ class KinescopePlayerView @JvmOverloads constructor(
 
             if (isLiveState) {
                 scrubbingLiveDurationCached = activePlaybackPlayer?.duration ?: 0
-                showLiveTimeOffset(
-                    isShown = true,
-                    position = position
-                )
+                isLiveSynced = position == scrubbingLiveDurationCached
+                showLiveScrubBadge()
                 return
             }
 
@@ -719,10 +743,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         override fun onScrubMove(timeBar: TimeBar, position: Long) {
             if (isLiveState) {
                 isLiveSynced = position == scrubbingLiveDurationCached
-                showLiveTimeOffset(
-                    isShown = true,
-                    position = position
-                )
+                showLiveScrubBadge()
                 return
             }
 
@@ -758,10 +779,7 @@ class KinescopePlayerView @JvmOverloads constructor(
 
             if (isLiveState) {
                 isLiveSynced = position == scrubbingLiveDurationCached
-                showLiveTimeOffset(
-                    isShown = false,
-                    position = position
-                )
+                updateLiveBadgeVisuals()
             }
         }
 
@@ -870,9 +888,11 @@ class KinescopePlayerView @JvmOverloads constructor(
         liveDataView = controlView?.findViewById(R.id.live_data_ll)
         liveBadgeCircleView = controlView?.findViewById(R.id.live_badge_circle_view)
         liveBadgeTextView = controlView?.findViewById(R.id.live_badge_tv)
-        liveTimeOffsetTextView = controlView?.findViewById(R.id.live_time_offset)
         liveStartDateContainerView = findViewById(R.id.live_start_date_ll)
-        liveStartDateTextView = findViewById(R.id.live_start_date_tv)
+        liveInformerTitleTextView = liveStartDateContainerView?.findViewById(R.id.live_informer_title_tv)
+            ?: findViewById(R.id.live_informer_title_tv)
+        liveStartDateTextView = liveStartDateContainerView?.findViewById(R.id.live_start_date_tv)
+            ?: findViewById(R.id.live_start_date_tv)
 
         castOverlayView = findViewById(R.id.kinescope_cast_overlay)
         castDeviceView = findViewById(R.id.kinescope_cast_device_tv)
@@ -1063,6 +1083,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         isOptionsBarExpanded = false
         ensureControlBarProgressChromeVisible()
         removeCallbacks(bufferingWatchdogRunnable)
+        removeCallbacks(liveInformerUpdateRunnable)
         detachPlayerBindings(clearHostCallback = false)
         exoPlayerView?.player = null
         kinescopePlayer = null
@@ -1136,6 +1157,7 @@ class KinescopePlayerView @JvmOverloads constructor(
     fun setPlayer(kinescopePlayer: KinescopeVideoPlayer?) {
         Assertions.checkState(Looper.myLooper() == Looper.getMainLooper())
         if (this.kinescopePlayer === kinescopePlayer) return
+        resetLiveModeState()
         detachPlayerBindings()
         removeCallbacks(bufferingWatchdogRunnable)
         playbackBufferingWatchdog.reset()
@@ -1236,18 +1258,117 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
     }
 
+    private fun resetLiveModeState() {
+        stopLiveBadgePulse()
+        isLiveState = false
+        isLiveStateExplicit = false
+        isLiveBroadcastStarted = false
+        isLiveSynced = false
+    }
+
+    private fun applyLiveModeFromVideo() {
+        val video = getVideo()
+        if (video != null) {
+            val isLiveVideo = video.isLive || video.live != null
+            if (isLiveVideo) {
+                if (!isLiveState) {
+                    isLiveState = true
+                    isLiveSynced = true
+                }
+            } else if (!isLiveStateExplicit) {
+                isLiveState = false
+                isLiveBroadcastStarted = false
+                isLiveSynced = false
+            }
+        }
+
+        if (!isLiveState) {
+            return
+        }
+
+        val player = activePlaybackPlayer
+        if (player?.playbackState == Player.STATE_READY ||
+            player?.isPlaying == true ||
+            hasStartedPlayback
+        ) {
+            isLiveBroadcastStarted = true
+        }
+    }
+
     /**
      * Enables the live stream mode for the video player,
      * making the progress bar infinitive and adding the Live badge.
      */
     fun setLiveState() {
+        isLiveStateExplicit = true
         isLiveState = true
+        isLiveBroadcastStarted = activePlaybackPlayer?.playbackState == Player.STATE_READY ||
+            activePlaybackPlayer?.isPlaying == true ||
+            hasStartedPlayback
         isLiveSynced = true
+        resetPlaybackStallWatchdog()
+        syncLiveTimeChrome()
+        syncLiveInformer()
+    }
+
+    /**
+     * Shows the default cover while a live broadcast has not started yet.
+     * Respects [KinescopePlayerOptions.showLiveAwaitingCover]; no-op when disabled.
+     */
+    fun showLiveAwaitingCover(
+        @DrawableRes coverRes: Int = R.drawable.live_awaiting_cover,
+    ) {
+        if (kinescopePlayer?.kinescopePlayerOptions?.showLiveAwaitingCover == false) {
+            return
+        }
+        showDefaultPoster(drawableRes = coverRes)
+    }
+
+    private fun isLiveOnAir(): Boolean {
+        return isLiveState && isLiveBroadcastStarted
+    }
+
+    private fun shouldKeepLiveAwaitingCover(): Boolean {
+        return isLiveState &&
+            kinescopePlayer?.kinescopePlayerOptions?.showLiveAwaitingCover == true &&
+            !isLiveBroadcastStarted
+    }
+
+    private fun shouldShowLiveBadge(): Boolean {
+        return isLiveState && !shouldKeepLiveAwaitingCover()
+    }
+
+    private fun syncLiveTimeChrome() {
+        if (!isLiveState) {
+            return
+        }
+        val showControls = kinescopePlayer?.kinescopePlayerOptions?.controls != false
+        val showTimeContainer = showControls && shouldShowTimeContainerInBar()
+        val showBadge = shouldShowLiveBadge()
 
         positionView?.isVisible = false
         durationView?.isVisible = false
         timeDurationSuffixClip?.isVisible = false
-        liveDataView?.isVisible = true
+        liveDataView?.isVisible = showBadge && showTimeContainer
+        if (showBadge && showTimeContainer) {
+            liveBadgeTextView?.isVisible = true
+            liveBadgeCircleView?.isVisible = true
+            updateLiveBadgeVisuals()
+        }
+        applyControlBarLayout(usesMobilePlayerChrome())
+        restoreTimeBarFlexibleWidth()
+        progressContainer?.requestLayout()
+    }
+
+    private fun enforceLiveTimeChromeIfNeeded() {
+        applyLiveModeFromVideo()
+        if (isLiveStateExplicit && !isLiveState) {
+            isLiveState = true
+            isLiveSynced = true
+        }
+        if (isLiveState) {
+            syncLiveTimeChrome()
+        }
     }
 
     /**
@@ -1308,27 +1429,84 @@ class KinescopePlayerView @JvmOverloads constructor(
      * @param startDate ISO8601 date string
      */
     fun showLiveStartDate(startDate: String) {
-        with(activePlaybackPlayer?.playbackState) {
-            if ((!isLiveState && this == Player.STATE_BUFFERING) ||
-                (isLiveState && this == Player.STATE_READY)
-            ) {
-                return
-            }
-        }
-        formatLiveStartDate(startDate)
-            .takeIf { startDate.isNotEmpty() }
-            ?.let { formattedDate ->
-                liveStartDateContainerView?.isVisible = true
-                liveStartDateTextView?.text = formattedDate
-            }
+        scheduledLiveStartDate = startDate.takeIf { it.isNotEmpty() }
+        syncLiveInformer()
     }
 
     /**
      * Hides the live stream starting date.
-     * If video buffering has started, calling this method will do nothing.
      */
     fun hideLiveStartDate() {
+        scheduledLiveStartDate = null
+        removeCallbacks(liveInformerUpdateRunnable)
         liveStartDateContainerView?.isVisible = false
+    }
+
+    private fun shouldShowLiveInformer(): Boolean {
+        return !scheduledLiveStartDate.isNullOrBlank() &&
+            !isLiveBroadcastStarted &&
+            !isPictureInPictureActive
+    }
+
+    private fun isLiveAwaitingBroadcast(): Boolean {
+        return isLiveState && !isLiveBroadcastStarted
+    }
+
+    private fun shouldSuppressPlaybackStallWatchdog(): Boolean {
+        return isLiveAwaitingBroadcast()
+    }
+
+    private fun resetPlaybackStallWatchdog() {
+        playbackBufferingWatchdog.reset()
+        playbackStallDispatched = false
+        removeCallbacks(bufferingWatchdogRunnable)
+    }
+
+    private fun syncLiveInformerContent() {
+        val startDate = scheduledLiveStartDate ?: return
+        var title = LiveInformerFormatter.formatTitle(resources, startDate)
+        var subtitle = LiveInformerFormatter.formatSubtitle(startDate)
+        if (title.isEmpty()) {
+            title = resources.getString(R.string.live_its_starting_soon)
+        }
+        if (subtitle.isEmpty()) {
+            subtitle = startDate
+        }
+        liveInformerTitleTextView?.text = title
+        liveInformerTitleTextView?.isVisible = true
+        liveStartDateTextView?.text = subtitle
+        liveStartDateTextView?.isVisible = true
+    }
+
+    private fun syncLiveInformer() {
+        removeCallbacks(liveInformerUpdateRunnable)
+        val show = shouldShowLiveInformer()
+        liveStartDateContainerView?.isVisible = show
+        if (!show) {
+            return
+        }
+        resetPlaybackStallWatchdog()
+        syncLiveInformerContent()
+        liveStartDateContainerView?.let { informer ->
+            (informer.parent as? ViewGroup)?.bringChildToFront(informer)
+        }
+        if (LiveInformerFormatter.needsCountdownUpdates(scheduledLiveStartDate.orEmpty())) {
+            postDelayed(liveInformerUpdateRunnable, LIVE_INFORMER_COUNTDOWN_INTERVAL_MS)
+        }
+    }
+
+    private fun maybeShowLiveInformerFromVideo() {
+        if (!scheduledLiveStartDate.isNullOrBlank()) {
+            return
+        }
+        val video = getVideo() ?: return
+        if (!video.isLive && video.live == null) {
+            return
+        }
+        video.live?.startsAt?.takeIf { it.isNotEmpty() }?.let { startsAt ->
+            scheduledLiveStartDate = startsAt
+            syncLiveInformer()
+        }
     }
 
     /**
@@ -1508,6 +1686,9 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     private fun isBufferingSpinnerVisible(): Boolean {
+        if (shouldShowLiveInformer()) {
+            return false
+        }
         val player = localExoPlayer ?: return false
         if (!hasStartedPlayback && player.playbackState == Player.STATE_BUFFERING) {
             return true
@@ -1522,6 +1703,9 @@ class KinescopePlayerView @JvmOverloads constructor(
 
     private fun postVideoLoadedChromeUpdate() {
         val update = {
+            enforceLiveTimeChromeIfNeeded()
+            maybeShowLiveInformerFromVideo()
+            syncLiveInformer()
             applyVideoPoster()
             ensureInitialSubtitlesIfNeeded()
             updateChaptersMenuContent()
@@ -1535,14 +1719,14 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     private fun shouldSuppressPosterDisplay(): Boolean {
-        if (hasStartedPlayback) {
+        if (hasStartedPlayback && !shouldKeepLiveAwaitingCover()) {
             return true
         }
         val player = activePlaybackPlayer ?: return false
         return if (!isLiveState) {
             player.playbackState == Player.STATE_BUFFERING && player.playWhenReady
         } else {
-            player.playbackState == Player.STATE_READY
+            isLiveOnAir()
         }
     }
 
@@ -1613,6 +1797,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         } else if (kinescopePlayer == null) {
             hidePoster()
         }
+        syncLiveInformer()
     }
 
     private fun updateAll() {
@@ -1818,10 +2003,14 @@ class KinescopePlayerView @JvmOverloads constructor(
                 R.dimen.kinescope_control_section_gap
             },
         )
-        val progressLeadingGap = if (mobile) {
-            0
-        } else {
-            resources.getDimensionPixelSize(R.dimen.kinescope_control_progress_leading_gap)
+        val showLiveBadge = shouldShowLiveBadge()
+        val liveProgressOverlap = resources.getDimensionPixelSize(
+            R.dimen.kinescope_live_progress_text_overlap,
+        )
+        val progressLeadingGap = when {
+            showLiveBadge -> 0
+            mobile -> resources.getDimensionPixelSize(R.dimen.kinescope_mobile_progress_leading_gap)
+            else -> resources.getDimensionPixelSize(R.dimen.kinescope_control_progress_leading_gap)
         }
         val mobileRowHeight = resources.getDimensionPixelSize(R.dimen.kinescope_mobile_media_button_size)
         val progressHeight = resources.getDimensionPixelSize(R.dimen.kinescope_progress_control_height)
@@ -1830,9 +2019,18 @@ class KinescopePlayerView @JvmOverloads constructor(
         timeContainer?.minimumHeight = if (mobile) controlRowHeight else 0
 
         (timeContainer?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
-            params.marginEnd = sectionGap
+            params.marginEnd = if (showLiveBadge) {
+                resources.getDimensionPixelSize(R.dimen.kinescope_live_badge_progress_gap)
+            } else {
+                sectionGap
+            }
+            if (params is LinearLayout.LayoutParams) {
+                params.gravity = android.view.Gravity.CENTER_VERTICAL
+            }
             timeContainer?.layoutParams = params
         }
+
+        (controlBar as? android.widget.LinearLayout)?.gravity = android.view.Gravity.CENTER_VERTICAL
 
         (progressContainer?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
             params.marginStart = progressLeadingGap
@@ -1845,6 +2043,12 @@ class KinescopePlayerView @JvmOverloads constructor(
             }
             progressContainer?.layoutParams = params
         }
+        progressContainer?.translationX = if (showLiveBadge) {
+            -liveProgressOverlap.toFloat()
+        } else {
+            0f
+        }
+        timeBar?.translationY = 0f
 
         (buttonsContainer?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
             params.marginStart = 0
@@ -2671,6 +2875,10 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     private fun syncPositionViewWithTimeChrome() {
+        if (isLiveState) {
+            syncLiveTimeChrome()
+            return
+        }
         val options = kinescopePlayer?.kinescopePlayerOptions
         val showControls = options?.controls != false
         val showTime = shouldShowTimeContainerInBar()
@@ -2695,6 +2903,13 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     private fun updateTotalDurationVisibility(animated: Boolean = false) {
+        if (isLiveState) {
+            cancelTimeDurationSuffixAnimation()
+            durationView?.isVisible = false
+            timeDurationSuffixClip?.isVisible = false
+            updateTimeDurationSuffixClipWidth(0)
+            return
+        }
         val show = shouldShowTotalDurationInBar()
         val label = durationView ?: return
         val clip = timeDurationSuffixClip ?: return
@@ -2879,6 +3094,7 @@ class KinescopePlayerView @JvmOverloads constructor(
             progressContainer?.isVisible = showProgress
             timeContainer?.isVisible = showTimeContainer
             syncPositionViewWithTimeChrome()
+            syncLiveTimeChrome()
             controlBarEndSpacer?.isVisible = pinButtonsToEnd && !showProgress
             updateTotalDurationVisibility(animated = false)
             return
@@ -3103,6 +3319,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         if (isPictureInPictureActive) {
             return
         }
+        enforceLiveTimeChromeIfNeeded()
         val options = kinescopePlayer?.kinescopePlayerOptions
         if (options != null) {
             val showControls = options.controls
@@ -3130,6 +3347,7 @@ class KinescopePlayerView @JvmOverloads constructor(
                 !isLiveState &&
                 (isMobilePlayerChrome || options.showDuration) &&
                 shouldShowTimeContainerInBar()
+            syncLiveTimeChrome()
             updateTotalDurationVisibility(animated = false)
             progressContainer?.isVisible = showControls && options.showSeekBar && shouldShowProgressControlsInBar()
             timeContainer?.isVisible = showControls && shouldShowTimeContainerInBar()
@@ -3248,6 +3466,7 @@ class KinescopePlayerView @JvmOverloads constructor(
                 text = video.subtitle
                 isVisible = !video.subtitle.isNullOrEmpty()
             }
+            enforceLiveTimeChromeIfNeeded()
             applyVideoPoster()
             updateChaptersMenuContent()
         }
@@ -3722,6 +3941,7 @@ class KinescopePlayerView @JvmOverloads constructor(
             !isLiveState &&
             (isMobilePlayerChrome || options?.showDuration == true) &&
             shouldShowTimeContainerInBar()
+        syncLiveTimeChrome()
         updateTotalDurationVisibility(animated = false)
     }
 
@@ -4138,6 +4358,7 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     private fun updateTimeline() {
+        enforceLiveTimeChromeIfNeeded()
         val player: Player = activePlaybackPlayer ?: return
 
         currentWindowOffset = 0
@@ -4160,8 +4381,10 @@ class KinescopePlayerView @JvmOverloads constructor(
             }
         }
         val durationMs = Util.usToMs(durationUs)
-        durationView?.text = durationLabelText(durationMs)
-        syncTimeDurationSuffixLayoutIfExpanded()
+        if (!isLiveState) {
+            durationView?.text = durationLabelText(durationMs)
+            syncTimeDurationSuffixLayoutIfExpanded()
+        }
         timeBar?.setDuration(durationMs)
         updateProgress()
     }
@@ -4170,9 +4393,11 @@ class KinescopePlayerView @JvmOverloads constructor(
         if (!isAttachedToWindow) {
             return
         }
+        enforceLiveTimeChromeIfNeeded()
         val player: Player? = activePlaybackPlayer
 
         if (isLiveState) {
+            syncLiveTimeChrome()
             timeBar?.let { bar ->
                 player?.let {
                     when (isLiveSynced) {
@@ -4585,27 +4810,60 @@ class KinescopePlayerView @JvmOverloads constructor(
         )
     }
 
-    private fun setLiveBadgeState(isLiveSynced: Boolean) {
+    private fun showLiveScrubBadge() {
+        liveBadgeTextView?.isVisible = true
+        liveBadgeCircleView?.isVisible = true
+        updateLiveBadgeVisuals()
+    }
+
+    private fun updateLiveBadgeVisuals() {
+        if (!isLiveState) {
+            stopLiveBadgePulse()
+            return
+        }
+        if (scrubbing && !isLiveSynced) {
+            startLiveBadgePulse()
+            return
+        }
+        stopLiveBadgePulse()
+        setLiveBadgeCircleDrawable(isLiveSynced)
+    }
+
+    private fun setLiveBadgeCircleDrawable(isLiveSynced: Boolean) {
         liveBadgeCircleView?.background = ContextCompat.getDrawable(
             context,
             when (isLiveSynced) {
                 true -> R.drawable.ic_live_synced
                 else -> R.drawable.ic_live_not_synced
-            }
+            },
         )
     }
 
-    private fun showLiveTimeOffset(isShown: Boolean, position: Long) {
-        liveBadgeCircleView?.isVisible = !isShown
-        liveBadgeTextView?.isVisible = !isShown
-
-        liveTimeOffsetTextView?.apply {
-            isVisible = isShown
-            text = resources.getString(
-                R.string.live_time_offset,
-                formatPlayerTime(scrubbingLiveDurationCached - position),
-            )
+    private fun startLiveBadgePulse() {
+        val circle = liveBadgeCircleView ?: return
+        if (liveBadgePulseAnimator?.isRunning == true) {
+            circle.background = ContextCompat.getDrawable(context, R.drawable.ic_live_synced)
+            return
         }
+        stopLiveBadgePulse()
+        circle.background = ContextCompat.getDrawable(context, R.drawable.ic_live_synced)
+        circle.alpha = 1f
+        liveBadgePulseAnimator = ValueAnimator.ofFloat(1f, LIVE_BADGE_PULSE_MIN_ALPHA).apply {
+            duration = LIVE_BADGE_PULSE_DURATION_MS
+            repeatMode = ValueAnimator.REVERSE
+            repeatCount = ValueAnimator.INFINITE
+            interpolator = android.view.animation.AccelerateDecelerateInterpolator()
+            addUpdateListener { animator ->
+                circle.alpha = animator.animatedValue as Float
+            }
+            start()
+        }
+    }
+
+    private fun stopLiveBadgePulse() {
+        liveBadgePulseAnimator?.cancel()
+        liveBadgePulseAnimator = null
+        liveBadgeCircleView?.alpha = 1f
     }
 
     private fun getAnalyticsArguments() =
@@ -4823,6 +5081,10 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     private fun syncPlaybackBufferingWatchdog(playbackState: Int) {
+        if (shouldSuppressPlaybackStallWatchdog()) {
+            resetPlaybackStallWatchdog()
+            return
+        }
         when (playbackState) {
             Player.STATE_BUFFERING -> {
                 playbackBufferingWatchdog.onBufferingStarted(
@@ -4839,6 +5101,9 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     private fun evaluatePlaybackBufferingWatchdog() {
+        if (shouldSuppressPlaybackStallWatchdog()) {
+            return
+        }
         val player = activePlaybackPlayer ?: return
         if (player.playbackState != Player.STATE_BUFFERING || playbackStallDispatched) return
         val positionMs = if (isLiveState) {

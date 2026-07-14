@@ -32,4 +32,6 @@ data class KinescopePlayerOptions(
     var videoScale: Boolean = true,
     var hdrToneMapping: Boolean = true,
     var backgroundPlaybackAllowed: Boolean = false,
+    /** Default cover shown for live streams until the broadcast is ready. Set to false to skip it. */
+    var showLiveAwaitingCover: Boolean = true,
 )

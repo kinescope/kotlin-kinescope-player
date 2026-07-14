@@ -19,7 +19,7 @@
 
     <string name="live">В эфире</string>
     <string name="live_time_offset">-%s</string>
-    <string name="live_its_starting_soon">Скоро начнётся</string>
+    <string name="live_informer_awaiting_broadcast">В ожидании эфира</string>
 
     <string name="player_chapters">Главы</string>
     <string name="player_chapters_title">Главы</string>

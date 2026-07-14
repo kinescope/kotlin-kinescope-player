@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/live_start_date_ll"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_gravity="bottom|start"
+    android:layout_marginStart="@dimen/kinescope_live_informer_margin_horizontal"
+    android:layout_marginBottom="@dimen/kinescope_live_informer_margin_bottom"
+    android:background="@drawable/bg_live_informer"
+    android:elevation="18dp"
+    android:gravity="center_vertical"
+    android:maxWidth="@dimen/kinescope_live_informer_max_width"
+    android:orientation="horizontal"
+    android:paddingHorizontal="@dimen/kinescope_live_informer_padding_horizontal"
+    android:paddingVertical="@dimen/kinescope_live_informer_padding_vertical"
+    android:visibility="gone"
+    tools:visibility="visible">
+
+    <ImageView
+        android:layout_width="@dimen/kinescope_live_informer_icon_size"
+        android:layout_height="@dimen/kinescope_live_informer_icon_size"
+        android:contentDescription="@null"
+        android:importantForAccessibility="no"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_live" />
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/kinescope_live_informer_content_gap"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/live_informer_title_tv"
+            style="@style/Medium.14.White"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            tools:text="Waiting for live host" />
+
+        <TextView
+            android:id="@+id/live_start_date_tv"
+            style="@style/Regular.14.White"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            tools:text="February 23, 12:00 PM" />
+
+    </LinearLayout>
+
+</LinearLayout>
