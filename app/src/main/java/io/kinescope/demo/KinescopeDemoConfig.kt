@@ -18,7 +18,7 @@ object KinescopeDemoConfig {
     const val DRM_VIDEO_ID = "eNWM8F6wbVTVa8fBeR66y6"
 
     /** Video with subtitles — Subtitles test screen. */
-    const val SUBTITLES_VIDEO_ID = "mMLazQrkPgThuhB7kkzQ69"
+    const val SUBTITLES_VIDEO_ID = "4CCHqgs4MkL33akyL7jJtS"
     //"4CCHqgs4MkL33akyL7jJtS"
 
     /** Video with chapters — Chapters test screen. */

@@ -73,8 +73,8 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center_vertical"
             android:clickable="true"
-            android:clipChildren="true"
-            android:clipToPadding="true"
+            android:clipChildren="false"
+            android:clipToPadding="false"
             android:focusable="true"
             android:gravity="center_vertical"
             android:minHeight="@dimen/kinescope_mobile_control_time_height"
@@ -83,9 +83,9 @@
             <LinearLayout
                 android:id="@+id/live_data_ll"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="8dp"
-                android:gravity="center"
+                android:layout_height="@dimen/kinescope_mobile_control_time_height"
+                android:layout_marginEnd="16dp"
+                android:gravity="center_vertical"
                 android:orientation="horizontal"
                 android:visibility="gone">
 
@@ -93,43 +93,31 @@
                     android:id="@+id/live_badge_circle_view"
                     android:layout_width="8dp"
                     android:layout_height="8dp"
-                    android:layout_marginTop="1dp"
                     android:layout_marginEnd="4dp"
                     android:background="@drawable/ic_live_synced" />
 
                 <TextView
                     android:id="@+id/live_badge_tv"
+                    style="@style/Regular.14.White"
                     android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:text="@string/live"
-                    android:textColor="#FFFFFF"
-                    android:textSize="14sp"
-                    android:textStyle="normal" />
-
-                <TextView
-                    android:id="@+id/live_time_offset"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:textColor="#FFFFFF"
-                    android:textSize="14sp"
-                    android:textStyle="normal"
-                    android:visibility="gone" />
+                    android:layout_height="match_parent"
+                    android:gravity="center_vertical"
+                    android:includeFontPadding="false"
+                    android:text="@string/live" />
 
             </LinearLayout>
 
             <TextView
                 android:id="@+id/kinescope_position"
+                style="@style/Regular.14.White"
                 android:layout_width="wrap_content"
                 android:layout_height="@dimen/kinescope_mobile_control_time_height"
                 android:gravity="center_vertical"
                 android:includeFontPadding="false"
                 android:minEms="2"
-                android:textColor="#FFFFFF"
-                android:textSize="14sp"
-                android:textStyle="normal"
-                tools:text="12:49" />
+                android:visibility="gone"
+                tools:text="12:49"
+                tools:visibility="visible" />
 
             <FrameLayout
                 android:id="@+id/kinescope_time_duration_suffix_clip"
@@ -141,6 +129,7 @@
 
                 <TextView
                     android:id="@+id/kinescope_duration"
+                    style="@style/Regular.14.WhiteSecondary"
                     android:layout_width="wrap_content"
                     android:layout_height="match_parent"
                     android:layout_gravity="start|center_vertical"
@@ -149,9 +138,6 @@
                     android:includeFontPadding="false"
                     android:maxLines="1"
                     android:singleLine="true"
-                    android:textColor="@color/white_secondary"
-                    android:textSize="14sp"
-                    android:textStyle="normal"
                     tools:text=" / 0:00" />
 
             </FrameLayout>

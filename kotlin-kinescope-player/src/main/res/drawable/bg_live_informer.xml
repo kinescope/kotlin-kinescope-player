@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="@color/kinescope_live_informer_bg_color" />
+    <corners android:radius="@dimen/kinescope_live_informer_corner_radius" />
+</shape>

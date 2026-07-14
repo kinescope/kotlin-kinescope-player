@@ -47,6 +47,7 @@
     <color name="kinescope_live_synced_color">#EF4F63</color>
     <color name="kinescope_live_not_synced_color">#52FFFFFF</color>
     <color name="kinescope_live_stream_start_bg_color">#CC222222</color>
+    <color name="kinescope_live_informer_bg_color">#CC111111</color>
 
     <color name="kinescope_control_overlay_scrim">#BF000000</color>
 
@@ -115,6 +116,14 @@
         <item name="android:windowExitAnimation">@anim/slide_out_right</item>
     </style>
 
+    <dimen name="kinescope_live_informer_max_width">256dp</dimen>
+    <dimen name="kinescope_live_informer_margin_horizontal">16dp</dimen>
+    <dimen name="kinescope_live_informer_margin_bottom">16dp</dimen>
+    <dimen name="kinescope_live_informer_padding_horizontal">16dp</dimen>
+    <dimen name="kinescope_live_informer_padding_vertical">7dp</dimen>
+    <dimen name="kinescope_live_informer_icon_size">32dp</dimen>
+    <dimen name="kinescope_live_informer_content_gap">16dp</dimen>
+    <dimen name="kinescope_live_informer_corner_radius">6dp</dimen>
     <dimen name="kinescope_mobile_layout_max_width">480dp</dimen>
     <dimen name="kinescope_mobile_control_margin_horizontal">16dp</dimen>
     <dimen name="kinescope_mobile_control_margin_bottom">8dp</dimen>
@@ -123,6 +132,9 @@
     <dimen name="kinescope_control_section_gap">12dp</dimen>
     <dimen name="kinescope_control_trailing_gap">16dp</dimen>
     <dimen name="kinescope_control_progress_leading_gap">4dp</dimen>
+    <dimen name="kinescope_mobile_progress_leading_gap">8dp</dimen>
+    <dimen name="kinescope_live_badge_progress_gap">8dp</dimen>
+    <dimen name="kinescope_live_progress_text_overlap">6dp</dimen>
     <dimen name="kinescope_mobile_media_button_size">@dimen/kinescope_media_button_height</dimen>
     <dimen name="kinescope_mobile_title_text_size">14sp</dimen>
     <dimen name="kinescope_mobile_author_text_size">12sp</dimen>

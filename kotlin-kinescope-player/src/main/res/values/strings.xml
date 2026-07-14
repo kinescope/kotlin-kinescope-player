@@ -20,6 +20,7 @@
     <string name="live">Live</string>
     <string name="live_time_offset">-%s</string>
     <string name="live_its_starting_soon">It\'s starting soon</string>
+    <string name="live_informer_awaiting_broadcast">Awaiting broadcast</string>
 
     <string name="player_background_playback_channel">Background playback</string>
     <string name="player_background_playback_title">Kinescope playback</string>
