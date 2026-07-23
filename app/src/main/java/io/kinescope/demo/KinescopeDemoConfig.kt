@@ -19,7 +19,6 @@ object KinescopeDemoConfig {
 
     /** Video with subtitles — Subtitles test screen. */
     const val SUBTITLES_VIDEO_ID = "4CCHqgs4MkL33akyL7jJtS"
-    //"4CCHqgs4MkL33akyL7jJtS"
 
     /** Video with chapters — Chapters test screen. */
     const val CHAPTERS_VIDEO_ID = "mMLazQrkPgThuhB7kkzQ69"
