@@ -1,21 +1,21 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <plurals name="live_informer_in_minutes">
-        <item quantity="one">Прямой эфир через %d мин</item>
-        <item quantity="few">Прямой эфир через %d мин</item>
-        <item quantity="many">Прямой эфир через %d мин</item>
-        <item quantity="other">Прямой эфир через %d мин</item>
-    </plurals>
-    <plurals name="live_informer_in_hours">
-        <item quantity="one">Прямой эфир через %d ч</item>
-        <item quantity="few">Прямой эфир через %d ч</item>
-        <item quantity="many">Прямой эфир через %d ч</item>
-        <item quantity="other">Прямой эфир через %d ч</item>
-    </plurals>
-    <plurals name="live_informer_in_days">
-        <item quantity="one">Прямой эфир через %d день</item>
-        <item quantity="few">Прямой эфир через %d дня</item>
-        <item quantity="many">Прямой эфир через %d дней</item>
-        <item quantity="other">Прямой эфир через %d дней</item>
-    </plurals>
-</resources>
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="live_informer_in_minutes">
+        <item quantity="one">Прямой эфир через %d мин</item>
+        <item quantity="few">Прямой эфир через %d мин</item>
+        <item quantity="many">Прямой эфир через %d мин</item>
+        <item quantity="other">Прямой эфир через %d мин</item>
+    </plurals>
+    <plurals name="live_informer_in_hours">
+        <item quantity="one">Прямой эфир через %d ч</item>
+        <item quantity="few">Прямой эфир через %d ч</item>
+        <item quantity="many">Прямой эфир через %d ч</item>
+        <item quantity="other">Прямой эфир через %d ч</item>
+    </plurals>
+    <plurals name="live_informer_in_days">
+        <item quantity="one">Прямой эфир через %d день</item>
+        <item quantity="few">Прямой эфир через %d дня</item>
+        <item quantity="many">Прямой эфир через %d дней</item>
+        <item quantity="other">Прямой эфир через %d дней</item>
+    </plurals>
+</resources>

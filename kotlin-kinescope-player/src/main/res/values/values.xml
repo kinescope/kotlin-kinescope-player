@@ -28,11 +28,14 @@
     <dimen name="kinescope_caption_padding_vertical">4dp</dimen>
     <dimen name="kinescope_caption_margin_start">12dp</dimen>
     <dimen name="kinescope_caption_margin_end">12dp</dimen>
+    <dimen name="kinescope_caption_margin_start_fullscreen">48dp</dimen>
+    <dimen name="kinescope_caption_margin_end_fullscreen">48dp</dimen>
     <dimen name="kinescope_caption_max_width">280dp</dimen>
     <dimen name="kinescope_caption_line_height">28sp</dimen>
     <dimen name="kinescope_captions_search_indicator_height">20dp</dimen>
     <dimen name="kinescope_captions_search_indicator_height_multiline">38dp</dimen>
     <dimen name="kinescope_captions_search_panel_max_height">280dp</dimen>
+    <dimen name="kinescope_captions_search_fullscreen_side_inset">120dp</dimen>
     <dimen name="kinescope_playlist_menu_max_height">420dp</dimen>
 
     <dimen name="kinescope_settings_quality_badge_rise">5dp</dimen>

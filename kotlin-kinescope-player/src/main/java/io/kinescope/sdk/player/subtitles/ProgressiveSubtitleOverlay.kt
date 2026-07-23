@@ -1,12 +1,14 @@
 package io.kinescope.sdk.player.subtitles
 
 import android.animation.ValueAnimator
+import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.text.TextPaint
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -33,6 +35,7 @@ internal class ProgressiveSubtitleOverlay(
     private var lastBottomPaddingPx = -1
     private var bottomMarginAnimator: ValueAnimator? = null
     private var appliedStyle = SubtitleStyle()
+    private var isFullscreenMode = false
 
     private val measurePaint = TextPaint(TextPaint.ANTI_ALIAS_FLAG)
 
@@ -45,11 +48,18 @@ internal class ProgressiveSubtitleOverlay(
         bottomView.ellipsize = null
     }
 
-    fun applyStyle(style: SubtitleStyle, textSizePx: Float, bottomPaddingPx: Int) {
+    fun applyStyle(
+        style: SubtitleStyle,
+        textSizePx: Float,
+        bottomPaddingPx: Int,
+        isFullscreen: Boolean = false,
+    ) {
         appliedStyle = style
         val roboto = ResourcesCompat.getFont(container.context, R.font.roboto_regular)
         val textSizeChanged = styledTextSizePx <= 0f ||
             kotlin.math.abs(textSizePx - styledTextSizePx) > TEXT_SIZE_CHANGE_EPSILON_PX
+        val fullscreenChanged = isFullscreenMode != isFullscreen
+        isFullscreenMode = isFullscreen
 
         styledTextSizePx = textSizePx
         styledTypeface = roboto ?: Typeface.DEFAULT
@@ -62,17 +72,33 @@ internal class ProgressiveSubtitleOverlay(
         applyTextStyle(topView, style, textSizePx)
         applyTextStyle(bottomView, style, textSizePx)
 
-        if (textSizeChanged) {
+        if (textSizeChanged || fullscreenChanged) {
             textMaxWidthPx = 0
             lastResolvedParentWidthPx = 0
         }
 
         val resources = container.resources
-        val startMarginPx = resources.getDimensionPixelSize(R.dimen.kinescope_caption_margin_start)
-        val endMarginPx = resources.getDimensionPixelSize(R.dimen.kinescope_caption_margin_end)
+        val startMarginPx = resources.getDimensionPixelSize(
+            if (isFullscreen) {
+                R.dimen.kinescope_caption_margin_start_fullscreen
+            } else {
+                R.dimen.kinescope_caption_margin_start
+            },
+        )
+        val endMarginPx = resources.getDimensionPixelSize(
+            if (isFullscreen) {
+                R.dimen.kinescope_caption_margin_end_fullscreen
+            } else {
+                R.dimen.kinescope_caption_margin_end
+            },
+        )
 
         (container.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
-            params.width = FrameLayout.LayoutParams.WRAP_CONTENT
+            // Keep current width when content is already laid out — resetting to WRAP_CONTENT
+            // while controls animate causes a one-frame caption flash.
+            if (!hasVisibleContent()) {
+                params.width = FrameLayout.LayoutParams.WRAP_CONTENT
+            }
             params.height = FrameLayout.LayoutParams.WRAP_CONTENT
             params.marginStart = startMarginPx
             params.leftMargin = startMarginPx
@@ -86,11 +112,9 @@ internal class ProgressiveSubtitleOverlay(
         lastBottomPaddingPx = bottomPaddingPx
         setBottomMargin(bottomPaddingPx, animate = animateBottomMargin)
 
-        if (textSizeChanged && lastVisibleWordCount > 0 && isLayoutReady()) {
+        if ((textSizeChanged || fullscreenChanged) && lastVisibleWordCount > 0 && isLayoutReady()) {
             updateTextMaxWidth()
             relayoutFromWordCount(lastVisibleWordCount)
-            applyCachedLayout()
-        } else if (hasVisibleContent()) {
             applyCachedLayout()
         }
     }
@@ -142,6 +166,21 @@ internal class ProgressiveSubtitleOverlay(
     }
 
     fun hasVisibleContent(): Boolean = cachedTopLine.isNotBlank() || cachedBottomLine.isNotBlank()
+
+    fun containsTouch(root: ViewGroup, x: Float, y: Float): Boolean {
+        if (container.visibility != View.VISIBLE || linesContainer.visibility != View.VISIBLE) {
+            return false
+        }
+        if (!hasVisibleContent() || linesContainer.width <= 0 || linesContainer.height <= 0) {
+            return false
+        }
+        val rect = Rect()
+        rect.set(0, 0, linesContainer.width, linesContainer.height)
+        root.offsetDescendantRectToMyCoords(linesContainer, rect)
+        val slop = (8f * linesContainer.resources.displayMetrics.density).toInt()
+        rect.inset(-slop, -slop)
+        return rect.contains(x.toInt(), y.toInt())
+    }
 
     fun isDisplayComplete(): Boolean = cueWords.isEmpty() || lastVisibleWordCount >= cueWords.size
 

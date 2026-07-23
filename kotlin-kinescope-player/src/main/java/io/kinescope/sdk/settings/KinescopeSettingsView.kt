@@ -761,13 +761,21 @@ class KinescopeSettingsView(
 
         val options = parameterOptions[screen.parameter].orEmpty()
         val selectedIndex = options.indexOfFirst { it.isSelected }
+        val captionsSearchReservedHeight = if (showCaptionsSearch) {
+            resources.getDimensionPixelSize(R.dimen.kinescope_settings_row_height)
+        } else {
+            0
+        }
         val scrollView = ScrollView(context).apply {
             overScrollMode = OVER_SCROLL_NEVER
             clipChildren = false
             clipToPadding = false
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                optionsScrollMaxHeight(options.size),
+                optionsScrollMaxHeight(
+                    optionCount = options.size,
+                    extraReservedHeight = captionsSearchReservedHeight,
+                ),
             )
         }
         val list = LinearLayout(context).apply {
@@ -1145,7 +1153,10 @@ class KinescopeSettingsView(
         binding.settingsPopupContainer.scaleY = 1f
     }
 
-    private fun optionsScrollMaxHeight(optionCount: Int): Int {
+    private fun optionsScrollMaxHeight(
+        optionCount: Int,
+        extraReservedHeight: Int = 0,
+    ): Int {
         val rowHeight = resources.getDimensionPixelSize(R.dimen.kinescope_settings_row_height)
         val optionsContentHeight = optionCount.coerceAtLeast(1) * rowHeight
         val hardMax = resources.getDimensionPixelSize(R.dimen.kinescope_settings_options_max_height)
@@ -1153,7 +1164,9 @@ class KinescopeSettingsView(
         val verticalPadding = binding.settingsPopupContainer.paddingTop +
             binding.settingsPopupContainer.paddingBottom
         val headerHeight = resources.getDimensionPixelSize(R.dimen.kinescope_settings_row_height)
-        val availableInPopup = (maxPopupHeight - verticalPadding - headerHeight).coerceAtLeast(rowHeight)
+        val availableInPopup = (
+            maxPopupHeight - verticalPadding - headerHeight - extraReservedHeight
+        ).coerceAtLeast(rowHeight)
         return optionsContentHeight.coerceAtMost(hardMax).coerceAtMost(availableInPopup)
     }
 

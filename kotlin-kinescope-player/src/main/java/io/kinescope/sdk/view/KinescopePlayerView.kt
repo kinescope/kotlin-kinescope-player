@@ -208,6 +208,8 @@ class KinescopePlayerView @JvmOverloads constructor(
         private const val VIEW_SWITCH_PLAY_PAUSE_OVERRIDE_MS = 500L
         private const val SUBTITLE_PROGRESS_UPDATE_INTERVAL_MS = 16
         private const val SUBTITLE_SIZE_FRACTION_OF_HEIGHT = 0.062f
+        /** Slightly smaller than inline so fullscreen captions do not dominate the frame. */
+        private const val SUBTITLE_SIZE_FRACTION_OF_HEIGHT_FULLSCREEN = 0.048f
         private const val LEGACY_CUSTOM_BUTTON_ID = "legacy_custom"
         private val optionsBarAnimationInterpolator = DecelerateInterpolator()
         private val timeDurationToggleInterpolator = FastOutSlowInInterpolator()
@@ -263,6 +265,9 @@ class KinescopePlayerView @JvmOverloads constructor(
 
         override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
             KinescopeLogger.log(KinescopeLoggerLevel.PLAYER_VIEW, "single tap confirmed")
+            if (tryOpenCaptionsSearchAt(e.x, e.y)) {
+                return true
+            }
             toggleControlUI()
             return true
         }
@@ -966,6 +971,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         settingsMenuView?.setFullscreenMode(isVideoFullscreen)
 
         captionsSearchView = findViewById(R.id.captions_search_overlay)
+        captionsSearchView?.setFullscreenMode(isVideoFullscreen)
         captionsSearchView?.onSeekToMs = { positionMs ->
             kinescopePlayer?.seekToPosition(positionMs)
             if (isCaptionsSearchActive()) {
@@ -1680,9 +1686,14 @@ class KinescopePlayerView @JvmOverloads constructor(
         seekView?.setFullscreenMode(value)
         settingsMenuView?.setFullscreenMode(value)
         chaptersMenuView?.setFullscreenMode(value)
+        captionsSearchView?.setFullscreenMode(value)
         applyPlayerChromeLayout()
         updateFullscreenButton()
         updatePlayPauseButton()
+        applySubtitleStyle()
+        if (isCaptionsSearchActive()) {
+            updateCaptionsSearchInsets()
+        }
     }
 
     private fun isBufferingSpinnerVisible(): Boolean {
@@ -4078,6 +4089,27 @@ class KinescopePlayerView @JvmOverloads constructor(
         updateProgressControlsVisibility()
     }
 
+    private fun tryOpenCaptionsSearchAt(x: Float, y: Float): Boolean {
+        if (isCaptionsSearchActive() || isPictureInPictureActive) {
+            return false
+        }
+        if (progressiveSubtitleOverlay?.containsTouch(this, x, y) != true) {
+            return false
+        }
+        if (resolveCaptionsSearchSubtitleUrl() == null) {
+            return false
+        }
+        openCaptionsSearch()
+        return true
+    }
+
+    private fun subtitleSizeFractionOfHeight(): Float =
+        if (isVideoFullscreen) {
+            SUBTITLE_SIZE_FRACTION_OF_HEIGHT_FULLSCREEN
+        } else {
+            SUBTITLE_SIZE_FRACTION_OF_HEIGHT
+        }
+
     private fun restoreControlOverlayAfterCaptionsSearch() {
         descriptionBlock?.isVisible = true
         updateTitles()
@@ -4099,8 +4131,22 @@ class KinescopePlayerView @JvmOverloads constructor(
                 return@post
             }
             val layoutParams = searchView.layoutParams as? FrameLayout.LayoutParams ?: return@post
-            layoutParams.gravity = Gravity.BOTTOM
+            val fullscreen = searchView.isFullscreenLayout()
+            layoutParams.width = ViewGroup.LayoutParams.MATCH_PARENT
+            layoutParams.height = if (fullscreen) {
+                ViewGroup.LayoutParams.MATCH_PARENT
+            } else {
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            }
+            layoutParams.gravity = if (fullscreen) {
+                Gravity.FILL_HORIZONTAL or Gravity.TOP
+            } else {
+                Gravity.BOTTOM
+            }
             layoutParams.bottomMargin = barHeight + bar.paddingBottom
+            layoutParams.topMargin = 0
+            layoutParams.marginStart = 0
+            layoutParams.marginEnd = 0
             searchView.layoutParams = layoutParams
         }
     }
@@ -4618,10 +4664,11 @@ class KinescopePlayerView @JvmOverloads constructor(
             height > 1 -> height.toFloat()
             else -> 0f
         }
+        val sizeFraction = subtitleSizeFractionOfHeight()
         if (viewHeight > 1f) {
             subtitleView.setFixedTextSize(
                 TypedValue.COMPLEX_UNIT_PX,
-                SUBTITLE_SIZE_FRACTION_OF_HEIGHT * viewHeight * subtitleStyle.fontSizePercent / 100f,
+                sizeFraction * viewHeight * subtitleStyle.fontSizePercent / 100f,
             )
         } else {
             subtitleView.setFixedTextSize(
@@ -4631,7 +4678,46 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
 
         val density = resources.displayMetrics.density
-        val bottomPx = if (controlsVisible) {
+        val bottomPx = resolveSubtitleBottomPaddingPx(
+            controlsVisible = controlsVisible,
+            viewHeight = viewHeight,
+            density = density,
+        )
+        if (subtitleView.paddingBottom != bottomPx) {
+            subtitleView.setPadding(0, 0, 0, bottomPx)
+        }
+        subtitleView.setBottomPaddingFraction(0f)
+
+        val textSizePx = if (viewHeight > 1f) {
+            sizeFraction * viewHeight * subtitleStyle.fontSizePercent / 100f
+        } else {
+            15f * subtitleStyle.fontSizePercent / 100f * resources.displayMetrics.scaledDensity
+        }
+        progressiveSubtitleOverlay?.applyStyle(
+            style = subtitleStyle,
+            textSizePx = textSizePx,
+            bottomPaddingPx = bottomPx,
+            isFullscreen = isVideoFullscreen,
+        )
+
+        // Progressive overlay owns rendering; flashing cues onto SubtitleView when the control
+        // chrome appears causes a brief double-draw of the next caption.
+        if (shouldApplyProgressiveSubtitles()) {
+            subtitleView.setCues(emptyList())
+        } else {
+            pendingCueGroup?.let { cueGroup ->
+                subtitleView.setCues(cueGroup.cues)
+            }
+        }
+        applyScrubChapterTitleStyle()
+    }
+
+    private fun resolveSubtitleBottomPaddingPx(
+        controlsVisible: Boolean,
+        viewHeight: Float,
+        density: Float,
+    ): Int {
+        val basePx = if (controlsVisible) {
             if (viewHeight > 1f) {
                 (0.2f * viewHeight + 4f * density).toInt()
             } else {
@@ -4640,26 +4726,13 @@ class KinescopePlayerView @JvmOverloads constructor(
         } else {
             (12f * density).toInt()
         }
-        if (subtitleView.paddingBottom != bottomPx) {
-            subtitleView.setPadding(0, 0, 0, bottomPx)
-        }
-        subtitleView.setBottomPaddingFraction(0f)
-
-        val textSizePx = if (viewHeight > 1f) {
-            SUBTITLE_SIZE_FRACTION_OF_HEIGHT * viewHeight * subtitleStyle.fontSizePercent / 100f
+        // Sit captions a bit closer to the bottom; fullscreen gets a slightly larger nudge.
+        val lowerByPx = if (isVideoFullscreen) {
+            (24f * density).toInt()
         } else {
-            15f * subtitleStyle.fontSizePercent / 100f * resources.displayMetrics.scaledDensity
+            (16f * density).toInt()
         }
-        progressiveSubtitleOverlay?.applyStyle(
-            style = subtitleStyle,
-            textSizePx = textSizePx,
-            bottomPaddingPx = bottomPx,
-        )
-
-        pendingCueGroup?.let { cueGroup ->
-            subtitleView.setCues(cueGroup.cues)
-        }
-        applyScrubChapterTitleStyle()
+        return (basePx - lowerByPx).coerceAtLeast((4f * density).toInt())
     }
 
     private fun applyScrubChapterTitleStyle() {

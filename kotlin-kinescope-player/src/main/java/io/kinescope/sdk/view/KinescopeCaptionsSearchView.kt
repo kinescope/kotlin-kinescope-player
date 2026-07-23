@@ -3,8 +3,10 @@ package io.kinescope.sdk.view
 import android.content.Context
 import android.graphics.PorterDuff
 import android.util.AttributeSet
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
+import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
@@ -15,6 +17,7 @@ import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.view.doOnLayout
 import androidx.core.view.isVisible
+import androidx.core.view.updateLayoutParams
 import androidx.core.widget.doAfterTextChanged
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -55,6 +58,7 @@ class KinescopeCaptionsSearchView @JvmOverloads constructor(
     private var focusedEntryIndex: Int = -1
     private var playingEntryIndex: Int = -1
     private var autoFollowPlayback: Boolean = true
+    private var isFullscreenMode = false
 
     var onDismiss: (() -> Unit)? = null
     var onSeekToMs: ((Long) -> Unit)? = null
@@ -70,11 +74,7 @@ class KinescopeCaptionsSearchView @JvmOverloads constructor(
         nextButton = findViewById(R.id.captions_search_next_btn)
         closeButton = findViewById(R.id.captions_search_close_btn)
         listView = findViewById(R.id.captions_search_list)
-
-        val maxPanelHeight = resources.getDimensionPixelSize(R.dimen.kinescope_captions_search_panel_max_height)
-        listView.layoutParams = listView.layoutParams.apply {
-            height = maxPanelHeight
-        }
+        applyModeLayout()
 
         adapter = CaptionsSearchAdapter { entry, entryIndex ->
             onSeekToMs?.invoke(entry.startTimeMs)
@@ -122,7 +122,92 @@ class KinescopeCaptionsSearchView @JvmOverloads constructor(
         }
     }
 
+    fun setFullscreenMode(fullscreen: Boolean) {
+        if (isFullscreenMode == fullscreen) {
+            return
+        }
+        isFullscreenMode = fullscreen
+        applyModeLayout()
+    }
+
+    fun isFullscreenLayout(): Boolean = isFullscreenMode
+
+    private fun applyModeLayout() {
+        val sideInset = if (isFullscreenMode) {
+            resources.getDimensionPixelSize(R.dimen.kinescope_captions_search_fullscreen_side_inset)
+        } else {
+            resources.getDimensionPixelSize(R.dimen.kinescope_mobile_control_margin_horizontal)
+        }
+
+        if (layoutParams is FrameLayout.LayoutParams) {
+            updateLayoutParams<FrameLayout.LayoutParams> {
+                width = ViewGroup.LayoutParams.MATCH_PARENT
+                height = if (isFullscreenMode) {
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                } else {
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                }
+                gravity = if (isFullscreenMode) {
+                    Gravity.FILL_HORIZONTAL or Gravity.TOP
+                } else {
+                    Gravity.BOTTOM
+                }
+                marginStart = 0
+                marginEnd = 0
+                leftMargin = 0
+                rightMargin = 0
+            }
+        }
+
+        (panel.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
+            params.width = ViewGroup.LayoutParams.MATCH_PARENT
+            params.height = if (isFullscreenMode) {
+                ViewGroup.LayoutParams.MATCH_PARENT
+            } else {
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            }
+            params.gravity = if (isFullscreenMode) {
+                Gravity.FILL
+            } else {
+                Gravity.BOTTOM
+            }
+            params.marginStart = 0
+            params.marginEnd = 0
+            params.leftMargin = 0
+            params.rightMargin = 0
+            params.topMargin = 0
+            params.bottomMargin = 0
+            panel.layoutParams = params
+        }
+
+        panel.setPaddingRelative(
+            sideInset,
+            panel.paddingTop,
+            sideInset,
+            panel.paddingBottom,
+        )
+
+        val listParams = listView.layoutParams as? LinearLayout.LayoutParams ?: return
+        if (isFullscreenMode) {
+            listParams.width = ViewGroup.LayoutParams.MATCH_PARENT
+            listParams.height = 0
+            listParams.weight = 1f
+        } else {
+            listParams.width = ViewGroup.LayoutParams.MATCH_PARENT
+            listParams.height = resources.getDimensionPixelSize(
+                R.dimen.kinescope_captions_search_panel_max_height,
+            )
+            listParams.weight = 0f
+        }
+        listView.layoutParams = listParams
+
+        if (isVisible) {
+            requestLayout()
+        }
+    }
+
     fun show(subtitleUrl: String) {
+        applyModeLayout()
         isVisible = true
         onVisibilityChanged?.invoke(true)
         entries = emptyList()
@@ -251,7 +336,6 @@ class KinescopeCaptionsSearchView @JvmOverloads constructor(
     }
 
     private fun updateNavigationUi() {
-        val hasQuery = queryInput.text?.isNotBlank() == true
         val hasMatches = matches.isNotEmpty()
         counterView.isVisible = hasMatches
         prevButton.isVisible = hasMatches
