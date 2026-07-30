@@ -136,6 +136,24 @@ class KinescopeVideoPlayer(
         exoPlayer?.prepare()
     }
 
+    /**
+     * Plays a local or progressive media URI (for example `content://`, `file://`, or a
+     * progressive HTTP URL) without loading a Kinescope media id.
+     *
+     * Clears [getVideo] metadata (no quality/subtitle/chapter menus from Kinescope).
+     * Hide unused chrome on the call site with `setShow*` / settings visibility if needed.
+     *
+     * Invokes [onSourceChanged] with `uri.toString()` and `metricUrl = null`.
+     */
+    fun setLocalSource(uri: Uri, autoplay: Boolean = false) {
+        currentKinescopeVideo = null
+        onSourceChanged?.invoke(uri.toString(), null)
+        exoPlayer?.setMediaItem(MediaItem.fromUri(uri))
+        applyPlaybackOptions()
+        exoPlayer?.playWhenReady = autoplay
+        exoPlayer?.prepare()
+    }
+
     fun applyPlaybackOptions() {
         exoPlayer?.let { player ->
             player.volume = if (kinescopePlayerOptions.muted) 0f else 1f

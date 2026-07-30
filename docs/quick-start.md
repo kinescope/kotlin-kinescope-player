@@ -48,12 +48,23 @@ kinescopePlayer.loadVideo(videoId, onSuccess = { video ->
 
 When `autoplay = true`, playback starts automatically after `loadVideo` succeeds.
 
+## Local / progressive file
+
+To play a local or progressive URI (`content://`, `file://`, progressive HTTP) without a Kinescope media id:
+
+```kotlin
+kinescopePlayer.setLocalSource(uri, autoplay = false)
+```
+
+See [Local / progressive playback](local-playback.md) for limitations (no quality/subtitle metadata) and how to hide unused menus.
+
 ## Related docs
 
 - [Player options](player-options.md) — all `KinescopePlayerOptions` flags
 - [Player chrome](player-chrome.md) — icons, seek bar, gestures on the video
 - [Settings menu](settings-menu.md) — Quality, Speed, Audio, Subtitles (gear popup)
 - [Subtitles](subtitles-and-settings.md) — tracks, appearance, captions search
+- [Local / progressive playback](local-playback.md) — `setLocalSource(uri)`
 - [Customization](customization.md) — accent colour, poster, custom button
 - [Demo app](demo-app.md)
 - [Picture-in-Picture](picture-in-picture.md)

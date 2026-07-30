@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.3] — 30.07.2026
+
+### Added
+- **`setLocalSource(uri, autoplay)`** — play a local/progressive URI (`content://`, `file://`, progressive HTTP) through `KinescopeVideoPlayer` without a Kinescope media id; see [docs/local-playback.md](docs/local-playback.md)
+
 ## [0.1.2] — 23.07.2026
 
 ### Added
