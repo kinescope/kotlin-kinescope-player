@@ -69,6 +69,7 @@ class VideoDownloadService : DownloadService(
         private const val JOB_ID = 1
 
         fun startDownload(context: Context, downloadRequest: androidx.media3.exoplayer.offline.DownloadRequest) {
+            VideoDownloadManager.initialize(context)
             DownloadService.sendAddDownload(
                 context,
                 com.kotlin.kinescope.shorts.download.VideoDownloadService::class.java,

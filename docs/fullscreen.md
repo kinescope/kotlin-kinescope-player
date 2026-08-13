@@ -6,7 +6,7 @@ Fullscreen is implemented on the app side by switching the active `KinescopePlay
 
 ```xml
 <activity android:name=".YourActivity"
-    android:configChanges="orientation|screenSize|screenLayout|layoutDirection" />
+    android:configChanges="orientation|screenSize|screenLayout|layoutDirection|smallestScreenSize" />
 ```
 
 **2.** Switch target view and window flags:
@@ -37,13 +37,24 @@ private fun setFullscreen(fullscreen: Boolean) {
 }
 ```
 
-**3.** Wire the fullscreen button:
+**3.** Wire the fullscreen button and content-aware screen orientation:
 
 ```kotlin
-playerView.onFullscreenButtonCallback = { toggleFullscreen() }
+val orientationController = KinescopeContentOrientationController(
+    activity = this,
+    playerViews = { listOf(playerView, fullscreenPlayerView) },
+)
+orientationController.attach()
+
+playerView.onFullscreenButtonCallback = {
+    // … toggle fullscreen UI …
+    orientationController.setFullscreen(isVideoFullscreen)
+}
 ```
 
-`switchTargetView` preserves playback state, track selection, analytics, and subtitle overlay state across views.
+Portrait / vertical videos stay in portrait (including fullscreen). Landscape videos still rotate to landscape when fullscreen. Prefer this over hard-coding `SCREEN_ORIENTATION_LANDSCAPE`.
+
+`switchTargetView` preserves playback state, track selection, analytics, subtitle overlay state, and content orientation across views.
 
 If you use [`useTextureSurface`](picture-in-picture.md) (Smooth PiP transition with TextureView) for smooth PiP, apply the same flag when creating both inline and fullscreen player views.
 

@@ -18,7 +18,7 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles "consumer-rules.pro"
 
-        versionName "0.1.2"
+        versionName "0.1.4"
     }
 
     buildTypes {
@@ -78,7 +78,7 @@ afterEvaluate {
             release(MavenPublication) {
                 groupId = 'com.github.kinescope'
                 artifactId = 'kotlin-kinescope-player'
-                version = findProperty('kinescopeSdkVersion') ?: '0.1.2'
+                version = findProperty('kinescopeSdkVersion') ?: '0.1.4'
                 
                 from components.release
             }

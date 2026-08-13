@@ -69,7 +69,7 @@
             android:id="@+id/btn_offline_drm"
             style="@style/DemoAccentButton"
             android:layout_marginTop="25dp"
-            android:text="Offline viewing" />
+            android:text="Saved videos" />
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

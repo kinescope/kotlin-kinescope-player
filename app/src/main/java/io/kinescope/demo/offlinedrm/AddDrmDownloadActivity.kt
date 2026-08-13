@@ -2,56 +2,62 @@
 
 package io.kinescope.demo.offlinedrm
 
+import android.content.Intent
 import android.os.Bundle
 import android.util.Base64
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.net.toUri
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.offline.Download
 import androidx.media3.exoplayer.offline.DownloadManager
-import androidx.media3.exoplayer.offline.DownloadRequest
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import io.kinescope.demo.KinescopeDemoConfig
 import io.kinescope.demo.R
 import io.kinescope.demo.application.KinescopeSDKDemoApplication
 import io.kinescope.sdk.api.KinescopeApiHelper
-import io.kinescope.sdk.models.videos.KinescopeVideoApi
+import io.kinescope.sdk.download.DownloadVideoOffline
+import io.kinescope.sdk.player.KinescopeSecureDecoderWorkaround
 import io.kinescope.sdk.player.KinescopeVideoPlayer
 import io.kinescope.sdk.shorts.AppJson
+import io.kinescope.sdk.shorts.download.OfflineDownloadQualityHelper
+import io.kinescope.sdk.shorts.download.VideoDownloadManager
 import io.kinescope.sdk.shorts.drm.DrmConfigurator
 import io.kinescope.sdk.shorts.drm.DrmContentProtection
 import io.kinescope.sdk.shorts.drm.DrmHelper
-import io.kinescope.sdk.shorts.download.VideoDownloadManager
-import io.kinescope.sdk.shorts.download.VideoDownloadService
 import io.kinescope.sdk.shorts.models.DrmInfo
 import io.kinescope.sdk.shorts.models.VideoData
+import io.kinescope.sdk.shorts.models.VideoQualityMapEntry
 import io.kinescope.sdk.shorts.models.WidevineInfo
-import androidx.media3.common.Player
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.Tracks
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.isActive
-import kotlin.coroutines.resume
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util.UUID
+import kotlin.coroutines.resume
 
 @UnstableApi
 class AddDrmDownloadActivity : AppCompatActivity() {
@@ -65,18 +71,47 @@ class AddDrmDownloadActivity : AppCompatActivity() {
     private lateinit var kinescopeVideoPlayer: KinescopeVideoPlayer
     private var drmTimeoutJob: Job? = null
     private var progressUpdateJob: Job? = null
+    private var pendingQualityHeight: Int? = null
+    private var pendingQualityLabel: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_add_drm_download)
 
         findViewById<ImageButton>(R.id.btnBack).setOnClickListener {
-            finish()
+            onBackPressedDispatcher.onBackPressed()
         }
 
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    startActivity(
+                        Intent(this@AddDrmDownloadActivity, OfflineDrmDemoActivity::class.java).apply {
+                            addFlags(
+                                Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                                    Intent.FLAG_ACTIVITY_SINGLE_TOP,
+                            )
+                        },
+                    )
+                    finish()
+                }
+            },
+        )
+
         VideoDownloadManager.initialize(this)
+        DownloadVideoOffline.initialize(this)
         apiHelper = (application as KinescopeSDKDemoApplication).apiHelper
-        kinescopeVideoPlayer = KinescopeVideoPlayer(this.applicationContext)
+        kinescopeVideoPlayer = KinescopeVideoPlayer(applicationContext)
+
+        findViewById<Button>(R.id.btnDownloadById).setOnClickListener {
+            val videoId = findViewById<EditText>(R.id.etVideoId).text?.toString()?.trim().orEmpty()
+            if (videoId.isEmpty()) {
+                Toast.makeText(this, "Введите Video ID", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            downloadByVideoId(videoId)
+        }
 
         recycler = findViewById(R.id.recyclerAddDrm)
         recycler?.layoutManager = LinearLayoutManager(this)
@@ -84,7 +119,7 @@ class AddDrmDownloadActivity : AppCompatActivity() {
         startProgressUpdates()
         loadVideosFromApi()
     }
-    
+
     private fun startProgressUpdates() {
         progressUpdateJob = CoroutineScope(Dispatchers.Main).launch {
             while (isActive) {
@@ -93,32 +128,26 @@ class AddDrmDownloadActivity : AppCompatActivity() {
             }
         }
     }
-    
+
     private val downloadProgressListener = object : DownloadManager.Listener {
         override fun onDownloadChanged(
             downloadManager: DownloadManager,
             download: Download,
-            finalException: Exception?
+            finalException: Exception?,
         ) {
             runOnUiThread {
-                // Проверяем, завершена ли загрузка
                 if (download.state == Download.STATE_COMPLETED) {
-                    // Получаем название видео из данных загрузки
                     try {
                         val videoDataJson = String(download.request.data, StandardCharsets.UTF_8)
                         val videoData = AppJson.decodeFromString(VideoData.serializer(), videoDataJson)
+                        val quality = videoData.selectedQualityLabel?.let { " ($it)" }.orEmpty()
                         Toast.makeText(
                             this@AddDrmDownloadActivity,
-                            "Видео \"${videoData.title}\" скачано",
-                            Toast.LENGTH_LONG
+                            "Видео \"${videoData.title}\"$quality скачано",
+                            Toast.LENGTH_LONG,
                         ).show()
-                    } catch (e: Exception) {
-                        // Если не удалось получить название, показываем общее сообщение
-                        Toast.makeText(
-                            this@AddDrmDownloadActivity,
-                            "Видео скачано",
-                            Toast.LENGTH_LONG
-                        ).show()
+                    } catch (_: Exception) {
+                        Toast.makeText(this@AddDrmDownloadActivity, "Видео скачано", Toast.LENGTH_LONG).show()
                     }
                 }
                 adapter?.notifyItemChangedForDownload(download)
@@ -126,9 +155,7 @@ class AddDrmDownloadActivity : AppCompatActivity() {
         }
 
         override fun onDownloadRemoved(downloadManager: DownloadManager, download: Download) {
-            runOnUiThread {
-                adapter?.notifyItemChangedForDownload(download)
-            }
+            runOnUiThread { adapter?.notifyItemChangedForDownload(download) }
         }
     }
 
@@ -136,138 +163,360 @@ class AddDrmDownloadActivity : AppCompatActivity() {
         CoroutineScope(Dispatchers.Main).launch {
             try {
                 val videoList = mutableListOf<VideoData>()
-
                 apiHelper.getAllVideos().collect { response ->
-                    val videos = response.data
-                    
-
-                    for (videoApi in videos) {
+                    for (videoApi in response.data) {
                         try {
                             val videoData = loadVideoDetails(videoApi.id)
                             if (videoData != null && videoData.hlsLink.isNotBlank()) {
                                 videoList.add(videoData)
                             }
-                        } catch (e: Exception) {
+                        } catch (_: Exception) {
                         }
                     }
-
-                    adapter = Adapter(videoList, downloadingIds, { videoData -> startDrmDownload(videoData) }, this@AddDrmDownloadActivity)
+                    adapter = Adapter(
+                        videoList,
+                        downloadingIds,
+                        { videoData -> promptQualityAndDownload(videoData) },
+                        this@AddDrmDownloadActivity,
+                    )
                     recycler?.adapter = adapter
-                    
                     if (videoList.isEmpty()) {
                         Toast.makeText(this@AddDrmDownloadActivity, "Нет видео для скачивания", Toast.LENGTH_SHORT).show()
                     }
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 Toast.makeText(this@AddDrmDownloadActivity, "Ошибка загрузки видео", Toast.LENGTH_SHORT).show()
             }
+        }
+    }
+
+    private fun downloadByVideoId(videoId: String) {
+        Toast.makeText(this, "Загрузка метаданных…", Toast.LENGTH_SHORT).show()
+        CoroutineScope(Dispatchers.Main).launch {
+            val videoData = loadVideoDetails(videoId)
+            if (videoData == null || videoData.hlsLink.isBlank()) {
+                Toast.makeText(this@AddDrmDownloadActivity, "Не удалось загрузить видео", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            promptQualityAndDownload(videoData)
         }
     }
 
     private suspend fun loadVideoDetails(videoId: String): VideoData? {
         return suspendCancellableCoroutine { continuation ->
             var resumed = false
-            kinescopeVideoPlayer.loadVideo(videoId,
+            kinescopeVideoPlayer.loadVideo(
+                videoId,
                 onSuccess = { kinescopeVideo ->
-                    if (!resumed && kinescopeVideo != null && !kinescopeVideo.hlsLink.isNullOrBlank()) {
-                        resumed = true
-
-                        val videoData = VideoData(
+                    if (resumed) return@loadVideo
+                    resumed = true
+                    if (kinescopeVideo == null || kinescopeVideo.hlsLink.isNullOrBlank()) {
+                        continuation.resume(null)
+                        return@loadVideo
+                    }
+                    // API catalog videos are usually clear; only attach DRM when embed JSON has it.
+                    val licenseFromApi = kinescopeVideo.drm?.widevine?.licenseUrl
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() }
+                        ?.let { url ->
+                            when {
+                                url.endsWith("token=") -> url + KinescopeDemoConfig.API_KEY
+                                url.contains("token=") -> url
+                                else -> url
+                            }
+                        }
+                    val qualityMap = kinescopeVideo.qualityMap?.map { entry ->
+                        VideoQualityMapEntry(
+                            label = entry.label,
+                            name = entry.name,
+                            height = entry.height,
+                        )
+                    }
+                    continuation.resume(
+                        VideoData(
                             hlsLink = kinescopeVideo.hlsLink!!,
-                            drm = null,
+                            drm = licenseFromApi?.let { DrmInfo(widevine = WidevineInfo(licenseUrl = it)) },
                             title = kinescopeVideo.title,
                             subtitle = kinescopeVideo.subtitle,
-                            description = kinescopeVideo.description
-                        )
-                        continuation.resume(videoData)
-                    } else if (!resumed) {
-                        resumed = true
-                        continuation.resume(null)
-                    }
+                            description = kinescopeVideo.description,
+                            videoId = kinescopeVideo.id,
+                            qualityMap = qualityMap,
+                            posterUrl = kinescopeVideo.poster?.url,
+                        ),
+                    )
                 },
                 onFailed = {
                     if (!resumed) {
                         resumed = true
                         continuation.resume(null)
                     }
-                }
+                },
             )
         }
     }
 
-    override fun onPause() {
-        super.onPause()
+    private fun promptQualityAndDownload(videoData: VideoData) {
+        if (currentTempPlayer != null) {
+            Toast.makeText(this, "Дождитесь окончания", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val hints = videoData.qualityMap?.map { entry ->
+            OfflineDownloadQualityHelper.QualityMapHint(
+                height = entry.height,
+                name = entry.name,
+                label = entry.label,
+            )
+        }
+        val licenseUrl = videoData.drm?.widevine?.licenseUrl?.takeIf { it.isNotBlank() }
+
+        // DRM: quality_map from embed JSON is enough for the picker (manifest often has no
+        // clear tracks until a Widevine session is open).
+        val fromMap = OfflineDownloadQualityHelper.qualitiesFromQualityMap(hints)
+        if (!licenseUrl.isNullOrBlank() && fromMap.isNotEmpty()) {
+            showQualityPicker(videoData, fromMap)
+            return
+        }
+
+        Toast.makeText(this, "Читаем качества…", Toast.LENGTH_SHORT).show()
+        DownloadVideoOffline.listDownloadQualities(
+            context = this,
+            manifestUri = videoData.hlsLink,
+            qualityMap = hints,
+            drmLicenseUrl = licenseUrl,
+        ) { result ->
+            result.onSuccess { qualities ->
+                if (qualities.isEmpty()) {
+                    Toast.makeText(this, "Нет доступных качеств", Toast.LENGTH_SHORT).show()
+                    return@onSuccess
+                }
+                showQualityPicker(videoData, qualities)
+            }.onFailure {
+                if (fromMap.isNotEmpty()) {
+                    showQualityPicker(videoData, fromMap)
+                } else {
+                    Toast.makeText(this, "Ошибка чтения качеств", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
-    
+
+    private fun showQualityPicker(
+        videoData: VideoData,
+        qualities: List<OfflineDownloadQualityHelper.QualityOption>,
+    ) {
+        val labels = qualities.map { it.label }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Качество: ${videoData.title}")
+            .setItems(labels) { _, which ->
+                val selected = qualities[which]
+                pendingQualityHeight = selected.height
+                pendingQualityLabel = selected.label
+                val withLabel = videoData.copy(selectedQualityLabel = selected.label)
+                if (withLabel.drm?.widevine?.licenseUrl.isNullOrBlank()) {
+                    startClearDownload(withLabel, selected.height, selected.width)
+                } else {
+                    startDrmDownload(withLabel, selected.height, selected.width)
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
     override fun onDestroy() {
         drmTimeoutJob?.cancel()
         drmTimeoutJob = null
         progressUpdateJob?.cancel()
         progressUpdateJob = null
-        currentTempPlayer?.release()
-        currentTempPlayer = null
+        releaseTempPlayer()
         VideoDownloadManager.removeDownloadListener(downloadProgressListener)
         super.onDestroy()
     }
 
-    private fun startDrmDownload(videoData: VideoData) {
-        val contentId = generateStableContentId(videoData.hlsLink)
+    private fun releaseTempPlayer() {
+        val player = currentTempPlayer ?: return
+        currentTempPlayer = null
+        try {
+            player.stop()
+            player.clearMediaItems()
+        } catch (_: Exception) {
+        }
+        try {
+            player.release()
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun startClearDownload(videoData: VideoData, videoHeightPx: Int, videoWidthPx: Int) {
+        val contentId = generateStableContentId(videoData.hlsLink, videoHeightPx)
         if (currentTempPlayer != null) {
             Toast.makeText(this, "Дождитесь окончания", Toast.LENGTH_SHORT).show()
             return
         }
         val existing = VideoDownloadManager.getDownloadById(contentId)
         if (existing != null && existing.state == Download.STATE_COMPLETED) {
-            Toast.makeText(this, "Видео уже скачано", Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                this,
+                "Видео уже скачано (${videoData.selectedQualityLabel ?: "${videoHeightPx}p"})",
+                Toast.LENGTH_SHORT,
+            ).show()
             return
         }
-        
+        downloadingIds.add(contentId)
+        adapter?.notifyDataSetChanged()
+        Toast.makeText(this, "Скачиваем ${videoData.selectedQualityLabel ?: ""}…", Toast.LENGTH_SHORT).show()
+        startOfflineDownload(videoData, null, videoHeightPx, videoWidthPx) {
+            downloadingIds.remove(contentId)
+            adapter?.notifyDataSetChanged()
+        }
+    }
+
+    private fun startDrmDownload(videoData: VideoData, videoHeightPx: Int, videoWidthPx: Int = C.LENGTH_UNSET) {
+        val contentId = generateStableContentId(videoData.hlsLink, videoHeightPx)
+        if (currentTempPlayer != null) {
+            Toast.makeText(this, "Дождитесь окончания", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val existing = VideoDownloadManager.getDownloadById(contentId)
+        if (existing != null && existing.state == Download.STATE_COMPLETED) {
+            Toast.makeText(this, "Видео уже скачано (${videoData.selectedQualityLabel ?: "${videoHeightPx}p"})", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         downloadingIds.add(contentId)
         adapter?.notifyDataSetChanged()
 
-        val videoId = generateVideoIdFromUrl(videoData.hlsLink)
-        val standardLicenseUrl = KinescopeDemoConfig.widevineLicenseUrl(videoId)
-        
-        Toast.makeText(this, "Скачиваем... Не покидайте страницу, пока видео не скачается", Toast.LENGTH_LONG).show()
+        val licenseUrl = videoData.drm?.widevine?.licenseUrl?.takeIf { it.isNotBlank() }
+        if (licenseUrl.isNullOrBlank()) {
+            startClearDownload(videoData, videoHeightPx, videoWidthPx)
+            return
+        }
+
+        Toast.makeText(this, "Скачиваем… Не покидайте страницу", Toast.LENGTH_LONG).show()
 
         var psshReceived = false
         val cId = contentId
+
+        fun finishWithKey(keySetId: ByteArray?) {
+            releaseTempPlayer()
+            if (keySetId == null) {
+                downloadingIds.remove(cId)
+                adapter?.notifyDataSetChanged()
+                Toast.makeText(
+                    this,
+                    "Не удалось получить DRM-ключ. Скачивание отменено.",
+                    Toast.LENGTH_LONG,
+                ).show()
+                return
+            }
+            val withDrm = videoData.copy(
+                drm = DrmInfo(widevine = WidevineInfo(licenseUrl = licenseUrl)),
+            )
+            startOfflineDownload(withDrm, keySetId, videoHeightPx, videoWidthPx) {
+                downloadingIds.remove(cId)
+                adapter?.notifyDataSetChanged()
+            }
+            Toast.makeText(
+                this,
+                "Скачивание с DRM запущено (${videoData.selectedQualityLabel})",
+                Toast.LENGTH_SHORT,
+            ).show()
+        }
+
+        fun finishDrmFailed(message: String) {
+            if (psshReceived) return
+            psshReceived = true
+            drmTimeoutJob?.cancel()
+            runOnUiThread {
+                releaseTempPlayer()
+                downloadingIds.remove(cId)
+                adapter?.notifyDataSetChanged()
+                Toast.makeText(this@AddDrmDownloadActivity, message, Toast.LENGTH_LONG).show()
+            }
+        }
 
         val drmHelper = DrmHelper(this, drmConfigurator) { vd, pssh ->
             if (psshReceived) return@DrmHelper
             psshReceived = true
             drmTimeoutJob?.cancel()
+            // Free secure codec before offline license / download continues.
+            releaseTempPlayer()
             val prot = DrmContentProtection(
                 schemeUri = C.WIDEVINE_UUID.toString(),
-                licenseUrl = standardLicenseUrl,
-                schemeUuid = C.WIDEVINE_UUID
+                licenseUrl = licenseUrl,
+                schemeUuid = C.WIDEVINE_UUID,
             )
             drmConfigurator.downloadOfflineLicense(
                 videoUrl = vd.hlsLink,
                 drmContentProtection = prot,
                 contentId = cId,
-                psshData = pssh
+                psshData = pssh,
             ) { keySetId ->
-                runOnUiThread {
-                    currentTempPlayer?.release()
-                    currentTempPlayer = null
-                    if (keySetId != null) {
-                        val videoDataWithDrm = vd.copy(
-                            drm = DrmInfo(widevine = WidevineInfo(licenseUrl = standardLicenseUrl))
-                        )
-                        startOfflineDownload(videoDataWithDrm, keySetId)
-                        Toast.makeText(this, "Скачивание с DRM запущено", Toast.LENGTH_SHORT).show()
-                    } else {
-                        startOfflineDownload(vd, null)
-                    }
-                    downloadingIds.remove(cId)
-                    adapter?.notifyDataSetChanged()
-                }
+                runOnUiThread { finishWithKey(keySetId) }
             }
         }
 
-        val player = ExoPlayer.Builder(this).build()
+        // Prefer Shorts-style secure-decoder workaround: probe player often leaves
+        // c2.qti.avc.decoder.secure held, so later offline playback fails to re-init.
+        val renderersFactory = KinescopeSecureDecoderWorkaround.applyTo(
+            DefaultRenderersFactory(this),
+        )
+        val player = ExoPlayer.Builder(this)
+            .setRenderersFactory(renderersFactory)
+            .build()
         currentTempPlayer = player
+
+        fun tryExtractPssh(tracks: Tracks? = null): ByteArray? {
+            drmHelper.psshData?.let { return it }
+            try {
+                val groups = tracks?.groups ?: player.currentTracks.groups
+                groups.forEach { group ->
+                    if (group.mediaTrackGroup.length > 0) {
+                        group.mediaTrackGroup.getFormat(0).drmInitData?.let { drmInitData ->
+                            for (i in 0 until drmInitData.schemeDataCount) {
+                                val schemeData = drmInitData.get(i)
+                                if (schemeData.matches(C.WIDEVINE_UUID) && schemeData.hasData()) {
+                                    return schemeData.data
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+            }
+            try {
+                player.videoFormat?.drmInitData?.let { drmInitData ->
+                    for (i in 0 until drmInitData.schemeDataCount) {
+                        val schemeData = drmInitData.get(i)
+                        if (schemeData.matches(C.WIDEVINE_UUID) && schemeData.hasData()) {
+                            return schemeData.data
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+            }
+            return null
+        }
+
+        fun acquireLicense(pssh: ByteArray) {
+            if (psshReceived) return
+            psshReceived = true
+            drmTimeoutJob?.cancel()
+            // Free secure codec before offline license / download continues.
+            releaseTempPlayer()
+            val prot = DrmContentProtection(
+                schemeUri = C.WIDEVINE_UUID.toString(),
+                licenseUrl = licenseUrl,
+                schemeUuid = C.WIDEVINE_UUID,
+            )
+            drmConfigurator.downloadOfflineLicense(
+                videoUrl = videoData.hlsLink,
+                drmContentProtection = prot,
+                contentId = cId,
+                psshData = pssh,
+            ) { keySetId ->
+                runOnUiThread { finishWithKey(keySetId) }
+            }
+        }
 
         var errorCount = 0
         player.addListener(object : Player.Listener {
@@ -276,17 +525,7 @@ class AddDrmDownloadActivity : AppCompatActivity() {
                 if (!psshReceived && errorCount >= 2) {
                     CoroutineScope(Dispatchers.Main).launch {
                         delay(1000)
-                        if (!psshReceived) {
-                            psshReceived = true
-                            drmTimeoutJob?.cancel()
-                            runOnUiThread {
-                                currentTempPlayer?.release()
-                                currentTempPlayer = null
-                                startOfflineDownload(videoData, null)
-                                downloadingIds.remove(cId)
-                                adapter?.notifyDataSetChanged()
-                            }
-                        }
+                        finishDrmFailed("Ошибка DRM при получении ключа")
                     }
                 }
             }
@@ -296,163 +535,34 @@ class AddDrmDownloadActivity : AppCompatActivity() {
                     CoroutineScope(Dispatchers.Main).launch {
                         delay(2000)
                         if (psshReceived) return@launch
-
-                        var existingPssh = drmHelper.psshData
-
-                        if (existingPssh == null) {
-                            try {
-                                player.currentTracks.groups.forEach { group ->
-                                    if (group.mediaTrackGroup.length > 0) {
-                                        group.mediaTrackGroup.getFormat(0).drmInitData?.let { drmInitData ->
-                                            for (i in 0 until drmInitData.schemeDataCount) {
-                                                val schemeData = drmInitData.get(i)
-                                                if (schemeData.matches(C.WIDEVINE_UUID) && schemeData.hasData()) {
-                                                    existingPssh = schemeData.data
-
-                                                    return@forEach
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            } catch (e: Exception) {
-
-                            }
-                        }
-                        if (existingPssh == null) {
-                            try {
-                                player.videoFormat?.drmInitData?.let { drmInitData ->
-                                    for (i in 0 until drmInitData.schemeDataCount) {
-                                        val schemeData = drmInitData.get(i)
-                                        if (schemeData.matches(C.WIDEVINE_UUID) && schemeData.hasData()) {
-                                            existingPssh = schemeData.data
-                                        }
-                                    }
-                                }
-                            } catch (e: Exception) {
-
-                            }
-                        }
-
-                        if (existingPssh != null && !psshReceived) {
-                            psshReceived = true
-                            drmTimeoutJob?.cancel()
-                            val prot = DrmContentProtection(
-                                schemeUri = C.WIDEVINE_UUID.toString(),
-                                licenseUrl = standardLicenseUrl,
-                                schemeUuid = C.WIDEVINE_UUID
-                            )
-                            drmConfigurator.downloadOfflineLicense(
-                                videoUrl = videoData.hlsLink,
-                                drmContentProtection = prot,
-                                contentId = cId,
-                                psshData = existingPssh
-                            ) { keySetId ->
-                                runOnUiThread {
-                                    currentTempPlayer?.release()
-                                    currentTempPlayer = null
-                                    if (keySetId != null) {
-                                        val videoDataWithDrm = videoData.copy(
-                                            drm = DrmInfo(widevine = WidevineInfo(licenseUrl = standardLicenseUrl))
-                                        )
-                                        startOfflineDownload(videoDataWithDrm, keySetId)
-                                        Toast.makeText(this@AddDrmDownloadActivity, "Скачивание с DRM запущено", Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        startOfflineDownload(videoData, null)
-                                    }
-                                    downloadingIds.remove(cId)
-                                    adapter?.notifyDataSetChanged()
-                                }
-                            }
-                        }
+                        tryExtractPssh()?.let { acquireLicense(it) }
                     }
                 }
             }
 
             override fun onTracksChanged(tracks: Tracks) {
-
-                if (!psshReceived) {
-                    CoroutineScope(Dispatchers.Main).launch {
-                        delay(1000)
-                        if (psshReceived) return@launch
-
-                        var foundPssh: ByteArray? = null
-                        try {
-                            tracks.groups.forEach { group ->
-                                if (group.mediaTrackGroup.length > 0) {
-                                    group.mediaTrackGroup.getFormat(0).drmInitData?.let { drmInitData ->
-                                        for (i in 0 until drmInitData.schemeDataCount) {
-                                            val schemeData = drmInitData.get(i)
-                                            if (schemeData.matches(C.WIDEVINE_UUID) && schemeData.hasData()) {
-                                                foundPssh = schemeData.data
-                                                return@forEach
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        } catch (e: Exception) {
-                        }
-
-                        if (foundPssh != null && !psshReceived) {
-                            psshReceived = true
-                            drmTimeoutJob?.cancel()
-                            val prot = DrmContentProtection(
-                                schemeUri = C.WIDEVINE_UUID.toString(),
-                                licenseUrl = standardLicenseUrl,
-                                schemeUuid = C.WIDEVINE_UUID
-                            )
-                            drmConfigurator.downloadOfflineLicense(
-                                videoUrl = videoData.hlsLink,
-                                drmContentProtection = prot,
-                                contentId = cId,
-                                psshData = foundPssh
-                            ) { keySetId ->
-                                runOnUiThread {
-                                    currentTempPlayer?.release()
-                                    currentTempPlayer = null
-                                    if (keySetId != null) {
-                                        val videoDataWithDrm = videoData.copy(
-                                            drm = DrmInfo(widevine = WidevineInfo(licenseUrl = standardLicenseUrl))
-                                        )
-                                        startOfflineDownload(videoDataWithDrm, keySetId)
-                                        Toast.makeText(this@AddDrmDownloadActivity, "Скачивание с DRM запущено", Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        startOfflineDownload(videoData, null)
-                                    }
-                                    downloadingIds.remove(cId)
-                                    adapter?.notifyDataSetChanged()
-                                }
-                            }
-                        }
-                    }
+                if (psshReceived) return
+                CoroutineScope(Dispatchers.Main).launch {
+                    delay(1000)
+                    if (psshReceived) return@launch
+                    tryExtractPssh(tracks)?.let { acquireLicense(it) }
                 }
             }
         })
 
         drmTimeoutJob = CoroutineScope(Dispatchers.Main).launch {
-            delay(5000)
-            if (!psshReceived) {
-                psshReceived = true
-                runOnUiThread {
-                    currentTempPlayer?.release()
-                    currentTempPlayer = null
-                    startOfflineDownload(videoData, null)
-                    downloadingIds.remove(cId)
-                    adapter?.notifyDataSetChanged()
-                }
-            }
+            delay(15000)
+            finishDrmFailed("Таймаут DRM-ключа. Попробуйте ещё раз.")
         }
 
         val testVideoData = videoData.copy(
-            drm = DrmInfo(widevine = WidevineInfo(licenseUrl = standardLicenseUrl))
+            drm = DrmInfo(widevine = WidevineInfo(licenseUrl = licenseUrl)),
         )
-        
         drmHelper.setOfflineDownloadPending(testVideoData)
         val mediaItem = MediaItem.Builder()
             .setUri(videoData.hlsLink)
             .setDrmUuid(C.WIDEVINE_UUID)
-            .setDrmLicenseUri(standardLicenseUrl)
+            .setDrmLicenseUri(licenseUrl)
             .setDrmMultiSession(true)
             .build()
         player.setMediaItem(mediaItem)
@@ -460,51 +570,64 @@ class AddDrmDownloadActivity : AppCompatActivity() {
         player.prepare()
     }
 
-    private fun startOfflineDownload(videoData: VideoData, keySetId: ByteArray?) {
-        if (videoData.hlsLink.isBlank()) return
-        val contentId = generateStableContentId(videoData.hlsLink)
-        val existing = VideoDownloadManager.getDownloadById(contentId)
-        if (existing != null && existing.state == Download.STATE_COMPLETED) return
-        try {
-            val videoDataJson = try {
-                AppJson.encodeToString(VideoData.serializer(), videoData)
-            } catch (e: Exception) {
-                "{}"
-            }
-            val reqBuilder = DownloadRequest.Builder(contentId, videoData.hlsLink.toUri())
-                .setMimeType(MimeTypes.APPLICATION_M3U8)
-                .setData(videoDataJson.toByteArray(StandardCharsets.UTF_8))
-            
-            // Добавляем keySetId только если есть DRM
-            if (keySetId != null) {
-                reqBuilder.setKeySetId(keySetId)
-            }
-            
-            val req = reqBuilder.build()
-            VideoDownloadService.startDownload(this.applicationContext, req)
-        } catch (e: Exception) {
-            Toast.makeText(this, "Ошибка начала загрузки", Toast.LENGTH_SHORT).show()
+    private fun startOfflineDownload(
+        videoData: VideoData,
+        keySetId: ByteArray?,
+        videoHeightPx: Int,
+        videoWidthPx: Int = C.LENGTH_UNSET,
+        onStarted: (() -> Unit)? = null,
+    ) {
+        if (videoData.hlsLink.isBlank()) {
+            onStarted?.invoke()
+            return
         }
+        val contentId = generateStableContentId(videoData.hlsLink, videoHeightPx)
+        val existing = VideoDownloadManager.getDownloadById(contentId)
+        if (existing != null && existing.state == Download.STATE_COMPLETED) {
+            onStarted?.invoke()
+            return
+        }
+        val videoDataJson = try {
+            AppJson.encodeToString(VideoData.serializer(), videoData)
+        } catch (_: Exception) {
+            "{}"
+        }
+        DownloadVideoOffline.startDownloadWithQuality(
+            context = this,
+            contentId = contentId,
+            manifestUri = videoData.hlsLink,
+            videoHeightPx = videoHeightPx,
+            videoWidthPx = videoWidthPx,
+            mimeType = MimeTypes.APPLICATION_M3U8,
+            data = videoDataJson.toByteArray(StandardCharsets.UTF_8),
+            keySetId = keySetId,
+            drmLicenseUrl = videoData.drm?.widevine?.licenseUrl,
+            qualityHint = videoData.selectedQualityLabel,
+            onError = {
+                Toast.makeText(this, "Ошибка начала загрузки", Toast.LENGTH_SHORT).show()
+                onStarted?.invoke()
+            },
+        )
+        // Request build is async; clear "preparing" state shortly after kickoff.
+        window.decorView.postDelayed({ onStarted?.invoke() }, 300)
     }
 
-    private fun generateStableContentId(url: String?): String {
+    private fun generateStableContentId(url: String?, heightPx: Int): String {
         if (url.isNullOrBlank()) return UUID.randomUUID().toString()
         return try {
-            val stable = url.substringBefore("?")
+            val stable = "${url.substringBefore("?")}#$heightPx"
             val digest = MessageDigest.getInstance("SHA-256").digest(stable.toByteArray())
             Base64.encodeToString(digest, Base64.NO_WRAP or Base64.NO_PADDING)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             UUID.randomUUID().toString()
         }
     }
-    
+
     private fun generateVideoIdFromUrl(url: String): String {
-        // Извлекаем video ID из URL, если возможно
-        // Формат: https://kinescope.io/{videoId}/master.m3u8
         return try {
             val parts = url.substringBefore("?").split("/")
             parts.getOrNull(parts.size - 2) ?: UUID.randomUUID().toString()
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             UUID.randomUUID().toString()
         }
     }
@@ -513,7 +636,7 @@ class AddDrmDownloadActivity : AppCompatActivity() {
         private val items: List<VideoData>,
         private val downloadingIds: Set<String>,
         private val onDownloadClick: (VideoData) -> Unit,
-        private val context: android.content.Context
+        private val context: android.content.Context,
     ) : RecyclerView.Adapter<Adapter.VH>() {
 
         class VH(view: View) : RecyclerView.ViewHolder(view) {
@@ -533,99 +656,102 @@ class AddDrmDownloadActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: VH, position: Int) {
             val v = items[position]
             holder.title.text = v.title
-            // Показываем DRM badge только если видео действительно имеет DRM
-            // Так как мы не знаем заранее, есть ли DRM, не показываем badge
-            holder.drmBadge.visibility = View.GONE
-            
-            val contentId = try {
-                val stable = v.hlsLink.substringBefore("?")
-                val digest = MessageDigest.getInstance("SHA-256").digest(stable.toByteArray())
-                Base64.encodeToString(digest, Base64.NO_WRAP or Base64.NO_PADDING)
-            } catch (_: Exception) {
-                ""
-            }
-            
-            // Проверяем статус скачивания
-            val download = VideoDownloadManager.getDownloadById(contentId)
-            val isDownloading = contentId in downloadingIds || 
-                               (download != null && download.state == Download.STATE_DOWNLOADING)
-            val isCompleted = download != null && download.state == Download.STATE_COMPLETED
-            
-            // Обновляем UI в зависимости от статуса
-            if (isDownloading && download != null) {
-                // Показываем прогресс скачивания
-                val (percent, bytesDownloaded) = VideoDownloadManager.getDownloadProgress(download)
-                val totalBytes = download.contentLength
-                
-                holder.progressBar.visibility = View.VISIBLE
-                holder.progressText.visibility = View.VISIBLE
-                holder.progressBar.progress = percent
-                
-                val downloadedMB = bytesDownloaded / (1024 * 1024)
-                val totalMB = if (totalBytes > 0) totalBytes / (1024 * 1024) else 0
-                
-                if (totalMB > 0) {
-                    holder.progressText.text = "Скачивается: ${downloadedMB}MB / ${totalMB}MB ($percent%)"
-                } else {
-                    holder.progressText.text = "Скачивается: ${downloadedMB}MB ($percent%)"
+            holder.drmBadge.visibility =
+                if (v.drm?.widevine?.licenseUrl.isNullOrBlank()) View.GONE else View.VISIBLE
+
+            val anyDownloading = downloadingIds.any { id ->
+                VideoDownloadManager.getDownloadById(id)?.let { download ->
+                    try {
+                        val json = String(download.request.data, StandardCharsets.UTF_8)
+                        val data = AppJson.decodeFromString(VideoData.serializer(), json)
+                        data.hlsLink.substringBefore("?") == v.hlsLink.substringBefore("?")
+                    } catch (_: Exception) {
+                        false
+                    }
+                } == true
+            } || run {
+                val downloads = VideoDownloadManager.getDownloadManager(context).currentDownloads
+                downloads.any { download ->
+                    download.state == Download.STATE_DOWNLOADING &&
+                        downloadMatchesVideo(download, v)
                 }
-                
-                holder.btnDownload.isEnabled = false
-                holder.btnDownload.text = "Скачивается..."
-            } else if (isCompleted) {
-                // Скачивание завершено
-                holder.progressBar.visibility = View.GONE
-                holder.progressText.visibility = View.GONE
-                holder.btnDownload.isEnabled = false
-                holder.btnDownload.text = "Скачано"
-            } else {
-                // Не скачивается
-                holder.progressBar.visibility = View.GONE
-                holder.progressText.visibility = View.GONE
-                holder.btnDownload.isEnabled = true
-                holder.btnDownload.text = "Скачать"
             }
-            
+
+            val completed = VideoDownloadManager.getAllCompletedDownloads(context).any { download ->
+                downloadMatchesVideo(download, v)
+            }
+
+            val downloadingDownload = VideoDownloadManager.getDownloadManager(context).currentDownloads
+                .firstOrNull { it.state == Download.STATE_DOWNLOADING && downloadMatchesVideo(it, v) }
+
+            when {
+                downloadingDownload != null || anyDownloading -> {
+                    val download = downloadingDownload
+                    holder.progressBar.visibility = View.VISIBLE
+                    holder.progressText.visibility = View.VISIBLE
+                    if (download != null) {
+                        val (percent, bytesDownloaded) = VideoDownloadManager.getDownloadProgress(download)
+                        holder.progressBar.progress = percent
+                        val downloadedMB = bytesDownloaded / (1024 * 1024)
+                        val totalBytes = download.contentLength
+                        val totalMB = if (totalBytes > 0) totalBytes / (1024 * 1024) else 0
+                        holder.progressText.text = if (totalMB > 0) {
+                            "Скачивается: ${downloadedMB}MB / ${totalMB}MB ($percent%)"
+                        } else {
+                            "Скачивается: ${downloadedMB}MB ($percent%)"
+                        }
+                    } else {
+                        holder.progressBar.isIndeterminate = true
+                        holder.progressText.text = "Скачивается…"
+                    }
+                    holder.btnDownload.isEnabled = false
+                    holder.btnDownload.text = "Скачивается…"
+                }
+                completed -> {
+                    holder.progressBar.visibility = View.GONE
+                    holder.progressText.visibility = View.GONE
+                    holder.btnDownload.isEnabled = true
+                    holder.btnDownload.text = "Скачать ещё"
+                }
+                else -> {
+                    holder.progressBar.visibility = View.GONE
+                    holder.progressText.visibility = View.GONE
+                    holder.btnDownload.isEnabled = true
+                    holder.btnDownload.text = "Скачать"
+                }
+            }
+
             holder.btnDownload.setOnClickListener { onDownloadClick(v) }
         }
-        
+
         fun notifyItemChangedForDownload(download: Download) {
-            // Находим позицию элемента по contentId
-            val contentId = download.request.id
             for (i in items.indices) {
-                val item = items[i]
-                val itemContentId = try {
-                    val stable = item.hlsLink.substringBefore("?")
-                    val digest = MessageDigest.getInstance("SHA-256").digest(stable.toByteArray())
-                    Base64.encodeToString(digest, Base64.NO_WRAP or Base64.NO_PADDING)
-                } catch (_: Exception) {
-                    ""
-                }
-                if (itemContentId == contentId) {
+                if (downloadMatchesVideo(download, items[i])) {
                     notifyItemChanged(i)
                     break
                 }
             }
         }
-        
+
         fun notifyProgressUpdate() {
-            // Обновляем все элементы, которые скачиваются
             for (i in items.indices) {
-                val item = items[i]
-                val itemContentId = try {
-                    val stable = item.hlsLink.substringBefore("?")
-                    val digest = MessageDigest.getInstance("SHA-256").digest(stable.toByteArray())
-                    Base64.encodeToString(digest, Base64.NO_WRAP or Base64.NO_PADDING)
-                } catch (_: Exception) {
-                    ""
-                }
-                val download = VideoDownloadManager.getDownloadById(itemContentId)
-                if (download != null && download.state == Download.STATE_DOWNLOADING) {
-                    notifyItemChanged(i)
-                }
+                val download = VideoDownloadManager.getDownloadManager(context).currentDownloads
+                    .firstOrNull { it.state == Download.STATE_DOWNLOADING && downloadMatchesVideo(it, items[i]) }
+                if (download != null) notifyItemChanged(i)
             }
         }
 
         override fun getItemCount(): Int = items.size
+
+        private fun downloadMatchesVideo(download: Download, video: VideoData): Boolean {
+            return try {
+                val json = String(download.request.data, StandardCharsets.UTF_8)
+                val data = AppJson.decodeFromString(VideoData.serializer(), json)
+                data.hlsLink.substringBefore("?") == video.hlsLink.substringBefore("?")
+            } catch (_: Exception) {
+                download.request.uri.toString().substringBefore("?") ==
+                    video.hlsLink.substringBefore("?")
+            }
+        }
     }
 }

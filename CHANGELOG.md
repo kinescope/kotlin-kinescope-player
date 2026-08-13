@@ -1,5 +1,29 @@
 # Changelog
 
+## [Unreleased]
+
+## [0.1.4] — 13.08.2026
+
+### Added
+- **Offline download quality picker** — before caching, choose a single HLS/DASH quality (`DownloadVideoOffline.listDownloadQualities` / `startDownloadWithQuality`)
+- Quality labels from embed `quality_map.name` in settings and the download picker
+- **`KinescopeContentOrientationController`** — screen orientation follows video aspect (portrait stays portrait, including fullscreen) for any `KinescopePlayerView`
+
+### Changed
+- Offline download cache uses `NoOpCacheEvictor` (Media3 requirement) instead of a 300 MB LRU limit
+- Offline quality selection uses an explicit `TrackSelectionOverride` / filtered HLS master so the chosen height is what gets cached
+- Demo activities use content-aware orientation instead of always forcing landscape in fullscreen
+- Fullscreen captions sit lower (just above the control bar) when the control overlay is shown
+- Inline (non-fullscreen) captions also sit just above the control bar when chrome is shown
+- Paused playback no longer keeps top/bottom gradient overlays stuck after a tap to dismiss chrome
+- Offline fullscreen no longer flashes the play icon after `switchTargetView` (removed premature `setPlayer`)
+
+
+### Fixed
+- **Decoder / playback after re-download** — probing qualities (or downloading the same video again) no longer leaves the OEM secure AVC decoder stuck (`c2.qti.avc.decoder.secure`); offline playback uses the secure-decoder workaround + fallback so the video plays after download
+- Download progress no longer rolls back mid-download when the cache hit the old 300 MB LRU cap
+- Intermittent offline Source error from holey completed downloads after LRU eviction; offline `CacheDataSource` no longer sets `FLAG_IGNORE_CACHE_ON_ERROR` with a null upstream
+
 ## [0.1.2] — 23.07.2026
 
 ### Added

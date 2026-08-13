@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Slightly taller inline player so 16:9 video reads wider on tablets. -->
+    <dimen name="demo_player_inline_height">360dp</dimen>
+    <dimen name="demo_player_inline_height_compact">320dp</dimen>
+    <dimen name="demo_player_inline_height_playlist">300dp</dimen>
+</resources>

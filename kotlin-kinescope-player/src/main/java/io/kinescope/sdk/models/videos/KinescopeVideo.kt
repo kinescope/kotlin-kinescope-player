@@ -23,6 +23,8 @@ data class KinescopeVideo(
     @Json(name = "hls_link") val hlsLink: String?,
     @Json(name = "dash_link") val dashLink: String?,
     @Json(name = "sdk") val sdk: KinescopeSdk?,
+    @Json(name = "quality_map") val qualityMap: List<KinescopeQualityMapEntry>? = null,
+    @Json(name = "drm") val drm: KinescopeVideoDrm? = null,
 ) : Serializable {
 
     val isLive: Boolean

@@ -88,33 +88,39 @@ class PlayerFactory(private val context: Context) {
 
     private fun createRenderersFactory(context: Context): RenderersFactory {
         return DefaultRenderersFactory(context).apply {
-            if (isProblemMediaTekDevice() || isWeakDevice()) {
-                setMediaCodecSelector(object : MediaCodecSelector {
-                    override fun getDecoderInfos(mimeType: String, requiresSecureDecoder: Boolean, requiresTunnelingDecoder: Boolean): List<MediaCodecInfo> {
-                        if (mimeType.startsWith("video/")) {
-                            return MediaCodecSelector.DEFAULT.getDecoderInfos(mimeType, false, false)
-                        }
-                        return MediaCodecSelector.DEFAULT.getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder)
+            // Same OEM secure-decoder workaround as main SDK (QTI/MediaTek Widevine).
+            setMediaCodecSelector(object : MediaCodecSelector {
+                override fun getDecoderInfos(
+                    mimeType: String,
+                    requiresSecureDecoder: Boolean,
+                    requiresTunnelingDecoder: Boolean,
+                ): List<MediaCodecInfo> {
+                    if (!mimeType.startsWith("video/")) {
+                        return MediaCodecSelector.DEFAULT.getDecoderInfos(
+                            mimeType,
+                            requiresSecureDecoder,
+                            requiresTunnelingDecoder,
+                        )
                     }
-                })
-                setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
-                setEnableDecoderFallback(true)
-            }
+                    val clear = MediaCodecSelector.DEFAULT.getDecoderInfos(
+                        mimeType,
+                        /* requiresSecureDecoder= */ false,
+                        /* requiresTunnelingDecoder= */ false,
+                    )
+                    if (!requiresSecureDecoder) return clear
+                    val secure = MediaCodecSelector.DEFAULT.getDecoderInfos(
+                        mimeType,
+                        true,
+                        requiresTunnelingDecoder,
+                    )
+                    if (clear.isEmpty()) return secure
+                    if (secure.isEmpty()) return clear
+                    val names = clear.mapTo(HashSet()) { it.name }
+                    return clear + secure.filter { it.name !in names }
+                }
+            })
+            setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
+            setEnableDecoderFallback(true)
         }
-    }
-
-    private fun isProblemMediaTekDevice(): Boolean {
-        return Build.MANUFACTURER.equals("mediatek", ignoreCase = true) ||
-                Build.HARDWARE.contains("mt") ||
-                Build.BRAND.equals("redmi", ignoreCase = true) ||
-                Build.BRAND.equals("oppo", ignoreCase = true) ||
-                Build.BRAND.equals("honor", ignoreCase = true) ||
-                Build.BRAND.equals("samsung", ignoreCase = true) ||
-                Build.BRAND.equals("google", ignoreCase = true) ||
-                Build.BRAND.equals("oneplus", ignoreCase = true) ||
-                Build.BRAND.equals("motorola", ignoreCase = true) ||
-                Build.BRAND.equals("vivo", ignoreCase = true) ||
-                Build.BRAND.equals("huawei", ignoreCase = true) ||
-                Build.BRAND.equals("realme", ignoreCase = true)
     }
 }

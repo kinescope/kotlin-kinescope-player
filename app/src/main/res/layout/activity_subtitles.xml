@@ -10,7 +10,7 @@
     <io.kinescope.sdk.view.KinescopePlayerView
         android:id="@+id/kinescope_player"
         android:layout_width="match_parent"
-        android:layout_height="260dp"
+        android:layout_height="@dimen/demo_player_inline_height"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"

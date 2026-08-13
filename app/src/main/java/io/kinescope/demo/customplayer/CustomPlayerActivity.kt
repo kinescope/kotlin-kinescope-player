@@ -38,6 +38,7 @@ import io.kinescope.sdk.models.players.toPlayerSettings
 import io.kinescope.demo.KinescopeDemoConfig
 import io.kinescope.demo.KinescopeViewModel
 import io.kinescope.sdk.playlist.KinescopePlaylistItem
+import io.kinescope.sdk.player.KinescopeContentOrientationController
 import io.kinescope.sdk.player.KinescopePictureInPictureSession
 import io.kinescope.sdk.player.KinescopePlayerOptions
 import io.kinescope.sdk.player.KinescopeVideoPlayer
@@ -63,6 +64,7 @@ class CustomPlayerActivity : AppCompatActivity() {
     private var settingsScrollView: View? = null
     private var playerLayoutParamsBackup: ConstraintLayout.LayoutParams? = null
     private lateinit var pipSession: KinescopePictureInPictureSession
+    private lateinit var orientationController: KinescopeContentOrientationController
     private var suppressUiCallbacks = false
     private var selectedTemplate: KinescopePlayerTemplate? = null
     private var hasRequestedVideo = false
@@ -112,6 +114,11 @@ class CustomPlayerActivity : AppCompatActivity() {
         playerView.setPlayer(player)
         playerView.onFullscreenButtonCallback = { toggleFullscreen() }
         fullscreenPlayerView.onFullscreenButtonCallback = { toggleFullscreen() }
+        orientationController = KinescopeContentOrientationController(
+            activity = this,
+            playerViews = { listOf(playerView, fullscreenPlayerView) },
+        )
+        orientationController.attach()
         player.kinescopePlayerOptions.showPlaylistButton = true
         playerView.onPlaylistItemSelected = { item ->
             playPlaylistVideo(item.id)
@@ -661,16 +668,15 @@ class CustomPlayerActivity : AppCompatActivity() {
         if (isVideoFullscreen) {
             setFullscreen(false)
             supportActionBar?.show()
-            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             isVideoFullscreen = false
         } else {
             setFullscreen(true)
             supportActionBar?.hide()
-            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             isVideoFullscreen = true
         }
         fullscreenPlayerView.isVisible = isVideoFullscreen
         settingsScrollView?.isVisible = !isVideoFullscreen
+        orientationController.setFullscreen(isVideoFullscreen)
     }
 
     private fun setFullscreen(fullscreen: Boolean) {

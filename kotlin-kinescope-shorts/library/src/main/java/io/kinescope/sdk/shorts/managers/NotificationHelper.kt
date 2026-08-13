@@ -87,7 +87,10 @@ class NotificationHelper(
             val offlineIntent = activityProvider?.getOfflinePlayerActivityIntent(
                 videoData,
                 download.request.id
-            )
+            )?.apply {
+                // PendingIntent may run without a foreground task.
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
 
             val offlinePendingIntent = offlineIntent?.let { intent ->
                 PendingIntent.getActivity(

@@ -1,15 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="kinescope_primary_color">#6161FC</color>
+    <color name="kinescope_play_pause_button_bg">#A36161FC</color>
 
     <dimen name="kinescope_media_button_height">24dp</dimen>
     <dimen name="kinescope_media_button_width">24dp</dimen>
     <dimen name="kinescope_fullscreen_icon_inset">3dp</dimen>
-    <dimen name="kinescope_play_pause_size">56dp</dimen>
-    <!-- Inset so morph glyph matches visual weight of ic_play/ic_pause (70dp, viewport 32). -->
-    <dimen name="kinescope_play_pause_glyph_inset">11dp</dimen>
+    <dimen name="kinescope_play_pause_size">72dp</dimen>
+    <!-- Larger inset = smaller play/pause glyph inside the 72dp circle -->
+    <dimen name="kinescope_play_pause_glyph_inset">22dp</dimen>
     <!-- Rewind has more viewport margin than morph paths; use a smaller inset. -->
-    <dimen name="kinescope_play_pause_rewind_glyph_inset">5dp</dimen>
+    <dimen name="kinescope_play_pause_rewind_glyph_inset">10dp</dimen>
     <dimen name="kinescope_settings_row_height">36dp</dimen>
     <dimen name="kinescope_settings_popup_width">280dp</dimen>
     <dimen name="kinescope_settings_popup_max_height">368dp</dimen>
@@ -28,14 +29,19 @@
     <dimen name="kinescope_caption_padding_vertical">4dp</dimen>
     <dimen name="kinescope_caption_margin_start">12dp</dimen>
     <dimen name="kinescope_caption_margin_end">12dp</dimen>
+    <dimen name="kinescope_caption_margin_start_portrait_inline">6dp</dimen>
+    <dimen name="kinescope_caption_margin_end_portrait_inline">6dp</dimen>
     <dimen name="kinescope_caption_margin_start_fullscreen">48dp</dimen>
     <dimen name="kinescope_caption_margin_end_fullscreen">48dp</dimen>
+    <dimen name="kinescope_caption_margin_start_fullscreen_landscape">12dp</dimen>
+    <dimen name="kinescope_caption_margin_end_fullscreen_landscape">12dp</dimen>
     <dimen name="kinescope_caption_max_width">280dp</dimen>
     <dimen name="kinescope_caption_line_height">28sp</dimen>
     <dimen name="kinescope_captions_search_indicator_height">20dp</dimen>
     <dimen name="kinescope_captions_search_indicator_height_multiline">38dp</dimen>
     <dimen name="kinescope_captions_search_panel_max_height">280dp</dimen>
     <dimen name="kinescope_captions_search_fullscreen_side_inset">120dp</dimen>
+    <dimen name="kinescope_captions_search_fullscreen_side_inset_portrait">16dp</dimen>
     <dimen name="kinescope_playlist_menu_max_height">420dp</dimen>
 
     <dimen name="kinescope_settings_quality_badge_rise">5dp</dimen>
@@ -166,7 +172,7 @@
     <dimen name="kinescope_scrub_hint_padding_bottom">4dp</dimen>
     <dimen name="kinescope_scrub_seek_icon_width">28dp</dimen>
     <dimen name="kinescope_scrub_seek_icon_height">18dp</dimen>
-    <dimen name="kinescope_seek_feedback_circle_diameter">280dp</dimen>
-    <dimen name="kinescope_seek_feedback_circle_diameter_fullscreen">360dp</dimen>
+    <dimen name="kinescope_seek_feedback_circle_diameter">340dp</dimen>
+    <dimen name="kinescope_seek_feedback_circle_diameter_fullscreen">440dp</dimen>
 
 </resources>

@@ -10,6 +10,7 @@ import android.view.WindowManager
 import androidx.core.view.isVisible
 import androidx.media3.common.util.UnstableApi
 import io.kinescope.demo.KinescopeDemoConfig
+import io.kinescope.sdk.player.KinescopeContentOrientationController
 import io.kinescope.sdk.player.KinescopePictureInPictureSession
 import io.kinescope.sdk.player.KinescopeVideoPlayer
 import io.kinescope.sdk.view.KinescopePlayerView
@@ -18,6 +19,7 @@ import io.kinescope.sdk.view.KinescopePlayerView
 class SubtitlesActivity : AppCompatActivity() {
     private var isVideoFullscreen = false
     private lateinit var pipSession: KinescopePictureInPictureSession
+    private lateinit var orientationController: KinescopeContentOrientationController
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,6 +49,11 @@ class SubtitlesActivity : AppCompatActivity() {
         playerView.setPlayer(kinescopePlayer)
         playerView.onFullscreenButtonCallback = { toggleFullscreen() }
         fullscreenPlayerView.onFullscreenButtonCallback = { toggleFullscreen() }
+        orientationController = KinescopeContentOrientationController(
+            activity = this,
+            playerViews = { listOf(playerView, fullscreenPlayerView) },
+        )
+        orientationController.attach()
         pipSession.attach()
 
         kinescopePlayer.loadVideo(KinescopeDemoConfig.SUBTITLES_VIDEO_ID, onSuccess = {
@@ -101,17 +108,16 @@ class SubtitlesActivity : AppCompatActivity() {
             if (supportActionBar != null) {
                 supportActionBar?.show()
             }
-            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             isVideoFullscreen = false
         } else {
             setFullscreen(true)
             if (supportActionBar != null) {
                 supportActionBar?.hide()
             }
-            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
             isVideoFullscreen = true
         }
         fullscreenPlayerView.isVisible = isVideoFullscreen
+        orientationController.setFullscreen(isVideoFullscreen)
     }
 
     override fun onBackPressed() {

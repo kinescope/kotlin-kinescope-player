@@ -4,11 +4,10 @@ import android.content.Context
 import android.util.Base64
 import android.widget.Toast
 import androidx.annotation.OptIn
-import androidx.core.net.toUri
 import androidx.media3.common.C
-import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.FileDataSource
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -25,7 +24,7 @@ import java.security.MessageDigest
 import java.util.UUID
 
 @InternalSerializationApi
-@OptIn(androidx.media3.common.util.UnstableApi::class)
+@OptIn(UnstableApi::class)
 class OfflinePlayer(
     private val context: Context,
     private val drmConfigurator: DrmConfigurator
@@ -45,8 +44,13 @@ class OfflinePlayer(
             return
         }
 
-        val contentId = generateContentId(videoData.hlsLink)
-        val hasDrm = !videoData.drm?.widevine?.licenseUrl.isNullOrBlank()
+        val contentIdWithHeight = generateContentId(
+            videoData.hlsLink,
+            qualityHeightHint(videoData),
+        )
+        val contentIdPlain = generateContentId(videoData.hlsLink)
+        val licenseUrl = videoData.drm?.widevine?.licenseUrl?.takeIf { it.isNotBlank() }
+        val hasDrm = !licenseUrl.isNullOrBlank() || download.request.keySetId != null
 
         try {
             val playerView = when (binding) {
@@ -55,32 +59,39 @@ class OfflinePlayer(
                 else -> throw IllegalArgumentException("Unsupported binding type")
             }
 
+            val keySetId = if (hasDrm) {
+                download.request.keySetId
+                    ?: drmConfigurator.loadOfflineLicenseFromStorage(contentIdWithHeight)
+                    ?: drmConfigurator.loadOfflineLicenseFromStorage(contentIdPlain)
+            } else {
+                null
+            }
+            if (hasDrm && keySetId == null) {
+                Toast.makeText(context, "Ошибка DRM лицензии", Toast.LENGTH_SHORT).show()
+                onFallback()
+                return
+            }
+
+            // Offline-only: do not set FLAG_IGNORE_CACHE_ON_ERROR (upstream is null).
             val cacheDataSourceFactory = CacheDataSource.Factory()
                 .setCache(VideoDownloadManager.getDownloadCache(context))
                 .setUpstreamDataSourceFactory(null)
                 .setCacheReadDataSourceFactory(FileDataSource.Factory())
-                .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
 
-            val mediaItemBuilder = MediaItem.Builder()
-                .setUri(videoData.hlsLink.toUri())
-
-            if (hasDrm) {
-                val keySetId = download.request.keySetId ?: drmConfigurator.loadOfflineLicenseFromStorage(contentId)
-                if (keySetId == null) {
-                    Toast.makeText(context, "Ошибка DRM лицензии", Toast.LENGTH_SHORT).show()
-                    onFallback()
-                    return
-                }
+            // Prefer DownloadRequest.toMediaItem() so streamKeys + mimeType are preserved.
+            val mediaItemBuilder = download.request.toMediaItem().buildUpon()
+            if (keySetId != null) {
                 mediaItemBuilder
                     .setDrmUuid(C.WIDEVINE_UUID)
-                    .setDrmLicenseUri(videoData.drm?.widevine?.licenseUrl)
+                    .setDrmLicenseUri(licenseUrl ?: "https://license.kinescope.io/")
                     .setDrmMultiSession(true)
                     .setDrmKeySetId(keySetId)
             }
 
-            val mediaItem = mediaItemBuilder.build()
             playerView.player = player
-            player.setMediaSource(HlsMediaSource.Factory(cacheDataSourceFactory).createMediaSource(mediaItem))
+            player.setMediaSource(
+                HlsMediaSource.Factory(cacheDataSourceFactory).createMediaSource(mediaItemBuilder.build()),
+            )
             player.playWhenReady = true
 
             player.addListener(object : Player.Listener {
@@ -96,9 +107,20 @@ class OfflinePlayer(
         }
     }
 
-    private fun generateContentId(url: String): String {
+    private fun qualityHeightHint(videoData: VideoData): Int {
+        videoData.selectedQualityLabel?.let { label ->
+            Regex("""(\d+)""").find(label)?.groupValues?.getOrNull(1)?.toIntOrNull()?.let { return it }
+        }
+        return 0
+    }
+
+    private fun generateContentId(url: String, heightPx: Int = 0): String {
         return try {
-            val stablePart = url.substringBefore("?")
+            val stablePart = if (heightPx > 0) {
+                "${url.substringBefore("?")}#$heightPx"
+            } else {
+                url.substringBefore("?")
+            }
             val digest = MessageDigest.getInstance("SHA-256").digest(stablePart.toByteArray())
             Base64.encodeToString(digest, Base64.NO_WRAP or Base64.NO_PADDING)
         } catch (e: Exception) {

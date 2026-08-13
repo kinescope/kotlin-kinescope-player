@@ -10,6 +10,7 @@ import androidx.core.view.isVisible
 import androidx.media3.common.util.UnstableApi
 import io.kinescope.demo.KinescopeDemoConfig
 import io.kinescope.demo.R
+import io.kinescope.sdk.player.KinescopeContentOrientationController
 import io.kinescope.sdk.player.KinescopePictureInPictureSession
 import io.kinescope.sdk.player.KinescopeVideoPlayer
 import io.kinescope.sdk.view.KinescopePlayerView
@@ -18,6 +19,7 @@ import io.kinescope.sdk.view.KinescopePlayerView
 class ChaptersActivity : AppCompatActivity() {
     private var isVideoFullscreen = false
     private lateinit var pipSession: KinescopePictureInPictureSession
+    private lateinit var orientationController: KinescopeContentOrientationController
     private lateinit var playerView: KinescopePlayerView
     private lateinit var fullscreenPlayerView: KinescopePlayerView
     private lateinit var kinescopePlayer: KinescopeVideoPlayer
@@ -28,6 +30,7 @@ class ChaptersActivity : AppCompatActivity() {
 
         kinescopePlayer = KinescopeVideoPlayer(this)
         kinescopePlayer.kinescopePlayerOptions.showChaptersButton = true
+        kinescopePlayer.setShowSubtitles(true)
         pipSession = KinescopePictureInPictureSession(
             activity = this,
             playerView = { playerView },
@@ -46,6 +49,11 @@ class ChaptersActivity : AppCompatActivity() {
         playerView.applyTemplateOptions()
         playerView.onFullscreenButtonCallback = { toggleFullscreen() }
         fullscreenPlayerView.onFullscreenButtonCallback = { toggleFullscreen() }
+        orientationController = KinescopeContentOrientationController(
+            activity = this,
+            playerViews = { listOf(playerView, fullscreenPlayerView) },
+        )
+        orientationController.attach()
         pipSession.attach()
 
         kinescopePlayer.loadVideo(KinescopeDemoConfig.CHAPTERS_VIDEO_ID, onSuccess = {
@@ -95,15 +103,14 @@ class ChaptersActivity : AppCompatActivity() {
         if (isVideoFullscreen) {
             setFullscreen(false)
             supportActionBar?.show()
-            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             isVideoFullscreen = false
         } else {
             setFullscreen(true)
             supportActionBar?.hide()
-            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
             isVideoFullscreen = true
         }
         fullscreenPlayerView.isVisible = isVideoFullscreen
+        orientationController.setFullscreen(isVideoFullscreen)
     }
 
     @Deprecated("Deprecated in Java")

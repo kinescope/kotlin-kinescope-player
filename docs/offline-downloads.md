@@ -5,19 +5,47 @@ The library includes an offline download pipeline: `VideoDownloadService` (decla
 ## Basic flow
 
 1. Initialize at app startup: `DownloadVideoOffline.initialize(context)`
-2. Start a download (HLS):
+2. Prefer [Quality selection](#quality-selection) so only one height is cached. A bare master-playlist `DownloadRequest` **without** stream keys downloads **all** variants.
+3. For **DASH**: use `MimeTypes.APPLICATION_MPD` and the `.mpd` manifest URI with the same helpers.
+4. Subscribe to changes: `DownloadVideoOffline.addDownloadListener(context, listener)`; in `onDestroy` call `removeDownloadListener(listener)`.
+5. Playback: `download.request.toMediaItem()` + `DownloadVideoOffline.getDownloadCache(context)` with `CacheDataSource`; for DRM set `setDrmKeySetId`. For DASH use `DashMediaSource` with the same cache and keySetId. Offline `CacheDataSource` must use `upstream = null` and **must not** set `FLAG_IGNORE_CACHE_ON_ERROR`.
+
+## Download cache
+
+The download `SimpleCache` must use **`NoOpCacheEvictor`** (Media3 requirement for `DownloadManager`). An LRU size cap (e.g. 300 MB) deletes spans mid-download — progress appears to roll back — and can mark a download completed while segments are missing (intermittent Source error on open). Soft UI quotas are fine; automatic eviction of download spans is not.
+
+## Quality selection
+
+By default a bare `DownloadRequest` on a master playlist downloads **all** variants.
+To download a **single** quality, list heights then build a filtered request:
 
 ```kotlin
-val request = DownloadRequest.Builder(contentId, hlsUri)
-    .setMimeType(MimeTypes.APPLICATION_M3U8)
-    .setData(metadata)
-    .build()
-DownloadVideoOffline.startDownload(context, request)
+DownloadVideoOffline.listDownloadQualities(
+    context,
+    hlsUri,
+    qualityMap = listOf(
+        OfflineDownloadQualityHelper.QualityMapHint(height = 720, name = "720p"),
+        // from embed JSON quality_map — labels use height / short side / digits in name
+    ),
+) { result ->
+    result.onSuccess { qualities ->
+        val chosen = qualities.first() // or show a picker (labels from quality_map.name)
+        DownloadVideoOffline.startDownloadWithQuality(
+            context = context,
+            contentId = contentId,
+            manifestUri = hlsUri,
+            videoHeightPx = chosen.height,
+            data = metadata,
+            keySetId = keySetId, // optional DRM
+        )
+    }
+}
 ```
 
-3. For **DASH**: use `MimeTypes.APPLICATION_MPD` and the `.mpd` manifest URI
-4. Subscribe to changes: `DownloadVideoOffline.addDownloadListener(context, listener)`; in `onDestroy` call `removeDownloadListener(listener)`
-5. Playback: `DownloadVideoOffline.getDownloadCache(context)` with `CacheDataSource`; for DRM use `MediaItem` with `setDrmKeySetId`. For DASH use `DashMediaSource` with the same cache and keySetId.
+Low-level API: [`OfflineDownloadQualityHelper`](../kotlin-kinescope-shorts/library/src/main/java/io/kinescope/sdk/shorts/download/OfflineDownloadQualityHelper.kt)
+(Media3 `DownloadHelper` + stream keys).
+
+Offline playback must use `download.request.toMediaItem()` so `streamKeys` match the cached tracks.
 
 ## DRM offline keys flow (Widevine)
 

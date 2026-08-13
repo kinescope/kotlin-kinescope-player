@@ -9,6 +9,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -17,9 +18,10 @@ import androidx.media3.exoplayer.offline.Download
 import androidx.media3.exoplayer.offline.DownloadManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.bumptech.glide.Glide
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import com.google.android.material.imageview.ShapeableImageView
 import io.kinescope.demo.R
-import io.kinescope.demo.shorts.OfflineVideoPlayerActivity
 import io.kinescope.sdk.shorts.AppJson
 import io.kinescope.sdk.shorts.download.VideoDownloadManager
 import io.kinescope.sdk.shorts.models.VideoData
@@ -49,7 +51,6 @@ class OfflineDrmDemoActivity : AppCompatActivity() {
         }
     }
 
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_offline_drm_demo)
@@ -67,6 +68,12 @@ class OfflineDrmDemoActivity : AppCompatActivity() {
 
         VideoDownloadManager.initialize(this)
         VideoDownloadManager.addDownloadListener(this, downloadListener)
+        refreshList()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
         refreshList()
     }
 
@@ -103,11 +110,14 @@ class OfflineDrmDemoActivity : AppCompatActivity() {
             Toast.makeText(this, "Ошибка данных", Toast.LENGTH_SHORT).show()
             return
         }
-        
-        // Всегда используем основной плеер для открытия скачанных видео
+
         val intent = Intent(this, OfflineMainPlayerActivity::class.java).apply {
             putExtra(OfflineMainPlayerActivity.EXTRA_VIDEO_DATA_JSON, videoDataJson)
             putExtra(OfflineMainPlayerActivity.EXTRA_DOWNLOAD_ID, downloadId)
+            putExtra(
+                OfflineMainPlayerActivity.EXTRA_UP_NAVIGATION,
+                OfflineMainPlayerActivity.UP_NAV_OFFLINE_DRM_LIST,
+            )
         }
         startActivity(intent)
     }
@@ -147,24 +157,42 @@ class OfflineDrmDemoActivity : AppCompatActivity() {
     private class Adapter(
         private val items: List<OfflineDrmItem>,
         private val onItemClick: (VideoData, String) -> Unit,
-        private val onDeleteClick: (String) -> Unit
+        private val onDeleteClick: (String) -> Unit,
     ) : RecyclerView.Adapter<Adapter.VH>() {
 
         class VH(view: View) : RecyclerView.ViewHolder(view) {
+            val index: TextView = view.findViewById(R.id.index)
+            val thumbnail: ShapeableImageView = view.findViewById(R.id.thumbnail)
+            val playOverlay: ImageView = view.findViewById(R.id.playOverlay)
             val title: TextView = view.findViewById(R.id.title)
-            val drmBadge: TextView = view.findViewById(R.id.drmBadge)
             val btnDelete: ImageButton = view.findViewById(R.id.btnDelete)
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
-            val v = LayoutInflater.from(parent.context).inflate(R.layout.item_offline_drm, parent, false)
+            val v = LayoutInflater.from(parent.context)
+                .inflate(R.layout.item_offline_drm, parent, false)
             return VH(v)
         }
 
         override fun onBindViewHolder(holder: VH, position: Int) {
             val item = items[position]
+            holder.index.text = (position + 1).toString()
             holder.title.text = item.videoData.title
-            holder.drmBadge.visibility = if (item.videoData.drm?.widevine?.licenseUrl.isNullOrBlank()) View.GONE else View.VISIBLE
+
+            val posterUrl = item.videoData.posterUrl
+            if (posterUrl.isNullOrBlank()) {
+                Glide.with(holder.thumbnail).clear(holder.thumbnail)
+                holder.thumbnail.setImageDrawable(null)
+            } else {
+                Glide.with(holder.thumbnail)
+                    .load(posterUrl)
+                    .centerCrop()
+                    .placeholder(R.drawable.bg_saved_videos_thumbnail)
+                    .error(R.drawable.bg_saved_videos_thumbnail)
+                    .into(holder.thumbnail)
+            }
+            holder.playOverlay.visibility = View.VISIBLE
+
             holder.itemView.setOnClickListener {
                 onItemClick(item.videoData, item.download.request.id)
             }

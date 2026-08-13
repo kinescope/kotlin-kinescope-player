@@ -51,7 +51,7 @@
         android:layout_width="@dimen/kinescope_play_pause_size"
         android:layout_height="@dimen/kinescope_play_pause_size"
         android:layout_gravity="center"
-        android:background="@null"
+        android:background="@drawable/bg_play_pause_button"
         android:contentDescription="@string/player_play"
         android:scaleType="fitCenter"
         android:visibility="gone" />

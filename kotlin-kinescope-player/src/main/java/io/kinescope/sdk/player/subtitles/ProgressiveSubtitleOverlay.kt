@@ -36,6 +36,7 @@ internal class ProgressiveSubtitleOverlay(
     private var bottomMarginAnimator: ValueAnimator? = null
     private var appliedStyle = SubtitleStyle()
     private var isFullscreenMode = false
+    private var isLandscapeFullscreenMode = false
 
     private val measurePaint = TextPaint(TextPaint.ANTI_ALIAS_FLAG)
 
@@ -53,13 +54,19 @@ internal class ProgressiveSubtitleOverlay(
         textSizePx: Float,
         bottomPaddingPx: Int,
         isFullscreen: Boolean = false,
+        isLandscapeFullscreen: Boolean = false,
+        startMarginPx: Int? = null,
+        endMarginPx: Int? = null,
     ) {
         appliedStyle = style
         val roboto = ResourcesCompat.getFont(container.context, R.font.roboto_regular)
         val textSizeChanged = styledTextSizePx <= 0f ||
             kotlin.math.abs(textSizePx - styledTextSizePx) > TEXT_SIZE_CHANGE_EPSILON_PX
-        val fullscreenChanged = isFullscreenMode != isFullscreen
+        val layoutModeChanged =
+            isFullscreenMode != isFullscreen ||
+                isLandscapeFullscreenMode != isLandscapeFullscreen
         isFullscreenMode = isFullscreen
+        isLandscapeFullscreenMode = isLandscapeFullscreen
 
         styledTextSizePx = textSizePx
         styledTypeface = roboto ?: Typeface.DEFAULT
@@ -71,48 +78,53 @@ internal class ProgressiveSubtitleOverlay(
 
         applyTextStyle(topView, style, textSizePx)
         applyTextStyle(bottomView, style, textSizePx)
-
-        if (textSizeChanged || fullscreenChanged) {
-            textMaxWidthPx = 0
-            lastResolvedParentWidthPx = 0
-        }
+        applyTextAlignment(hasTop = hasVisibleTopLine(), hasBottom = hasVisibleBottomLine())
 
         val resources = container.resources
-        val startMarginPx = resources.getDimensionPixelSize(
-            if (isFullscreen) {
-                R.dimen.kinescope_caption_margin_start_fullscreen
-            } else {
-                R.dimen.kinescope_caption_margin_start
+        val resolvedStartMarginPx = startMarginPx ?: resources.getDimensionPixelSize(
+            when {
+                isLandscapeFullscreen || isFullscreen ->
+                    R.dimen.kinescope_caption_margin_start_fullscreen_landscape
+                else -> R.dimen.kinescope_caption_margin_start
             },
         )
-        val endMarginPx = resources.getDimensionPixelSize(
-            if (isFullscreen) {
-                R.dimen.kinescope_caption_margin_end_fullscreen
-            } else {
-                R.dimen.kinescope_caption_margin_end
+        val resolvedEndMarginPx = endMarginPx ?: resources.getDimensionPixelSize(
+            when {
+                isLandscapeFullscreen || isFullscreen ->
+                    R.dimen.kinescope_caption_margin_end_fullscreen_landscape
+                else -> R.dimen.kinescope_caption_margin_end
             },
         )
 
         (container.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
-            // Keep current width when content is already laid out — resetting to WRAP_CONTENT
-            // while controls animate causes a one-frame caption flash.
             if (!hasVisibleContent()) {
                 params.width = FrameLayout.LayoutParams.WRAP_CONTENT
             }
             params.height = FrameLayout.LayoutParams.WRAP_CONTENT
-            params.marginStart = startMarginPx
-            params.leftMargin = startMarginPx
-            params.marginEnd = endMarginPx
-            params.rightMargin = endMarginPx
-            params.gravity = Gravity.BOTTOM or Gravity.START
+            params.marginStart = resolvedStartMarginPx
+            params.leftMargin = resolvedStartMarginPx
+            params.marginEnd = resolvedEndMarginPx
+            params.rightMargin = resolvedEndMarginPx
+            // Full-bleed bar between side margins; text is centered inside it.
+            params.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
             container.layoutParams = params
         }
 
         val animateBottomMargin = lastBottomPaddingPx >= 0 && lastBottomPaddingPx != bottomPaddingPx
         lastBottomPaddingPx = bottomPaddingPx
         setBottomMargin(bottomPaddingPx, animate = animateBottomMargin)
+        // Reposition immediately so overlay toggles are visible even if size is unchanged.
+        if (hasVisibleContent() && isLayoutReady()) {
+            syncLayoutNow()
+        }
 
-        if ((textSizeChanged || fullscreenChanged) && lastVisibleWordCount > 0 && isLayoutReady()) {
+        textMaxWidthPx = 0
+        lastResolvedParentWidthPx = 0
+        if (hasVisibleContent() && isLayoutReady()) {
+            updateTextMaxWidth()
+            relayoutFromWordCount(lastVisibleWordCount.coerceAtLeast(1))
+            applyCachedLayout()
+        } else if ((textSizeChanged || layoutModeChanged) && lastVisibleWordCount > 0 && isLayoutReady()) {
             updateTextMaxWidth()
             relayoutFromWordCount(lastVisibleWordCount)
             applyCachedLayout()
@@ -271,14 +283,16 @@ internal class ProgressiveSubtitleOverlay(
         applyLineViews(hasTop, hasBottom)
     }
 
-    private fun applyTextAlignment(hasTop: Boolean, hasBottom: Boolean) {
-        val twoLines = hasTop && hasBottom
-        val lineGravity = if (twoLines) Gravity.CENTER_HORIZONTAL else Gravity.START
-        val textAlignment = if (twoLines) {
-            View.TEXT_ALIGNMENT_CENTER
-        } else {
-            View.TEXT_ALIGNMENT_VIEW_START
-        }
+    private fun hasVisibleTopLine(): Boolean = cachedTopLine.isNotBlank()
+
+    private fun hasVisibleBottomLine(): Boolean = cachedBottomLine.isNotBlank()
+
+    private fun applyTextAlignment(
+        @Suppress("UNUSED_PARAMETER") hasTop: Boolean,
+        @Suppress("UNUSED_PARAMETER") hasBottom: Boolean,
+    ) {
+        val lineGravity = Gravity.CENTER_HORIZONTAL
+        val textAlignment = View.TEXT_ALIGNMENT_CENTER
         linesContainer.gravity = lineGravity
         topView.gravity = lineGravity
         bottomView.gravity = lineGravity
@@ -287,8 +301,18 @@ internal class ProgressiveSubtitleOverlay(
     }
 
     private fun applyLineViews(hasTop: Boolean, hasBottom: Boolean) {
+        // Match parent so wrap width uses the full caption bar, not a left-sized pill.
+        (topView.layoutParams as? ViewGroup.LayoutParams)?.let { params ->
+            params.width = ViewGroup.LayoutParams.MATCH_PARENT
+            topView.layoutParams = params
+        }
+        (bottomView.layoutParams as? ViewGroup.LayoutParams)?.let { params ->
+            params.width = ViewGroup.LayoutParams.MATCH_PARENT
+            bottomView.layoutParams = params
+        }
+
         if (hasTop) {
-            topView.maxWidth = textMaxWidthPx
+            topView.maxWidth = Int.MAX_VALUE
             topView.ellipsize = null
             topView.text = cachedTopLine
             applyTextStyle(topView, appliedStyle, styledTextSizePx)
@@ -298,7 +322,7 @@ internal class ProgressiveSubtitleOverlay(
             topView.visibility = View.GONE
         }
 
-        bottomView.maxWidth = textMaxWidthPx
+        bottomView.maxWidth = Int.MAX_VALUE
         bottomView.ellipsize = null
         if (hasBottom) {
             bottomView.text = cachedBottomLine
@@ -337,10 +361,8 @@ internal class ProgressiveSubtitleOverlay(
 
         if (backgroundWidthPx > 0) {
             (container.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
-                if (params.width != backgroundWidthPx) {
-                    params.width = backgroundWidthPx
-                    container.layoutParams = params
-                }
+                params.width = backgroundWidthPx
+                container.layoutParams = params
             }
         }
 
@@ -351,12 +373,14 @@ internal class ProgressiveSubtitleOverlay(
         val params = container.layoutParams as? FrameLayout.LayoutParams ?: return
         val currentPx = params.bottomMargin
         if (currentPx == targetPx) {
+            syncLayoutNow()
             return
         }
         bottomMarginAnimator?.cancel()
         if (!animate) {
             params.bottomMargin = targetPx
             container.layoutParams = params
+            syncLayoutNow()
             return
         }
         bottomMarginAnimator = ValueAnimator.ofInt(currentPx, targetPx).apply {
@@ -365,6 +389,7 @@ internal class ProgressiveSubtitleOverlay(
                 val value = animation.animatedValue as Int
                 params.bottomMargin = value
                 container.layoutParams = params
+                syncLayoutNow()
             }
             start()
         }
@@ -372,7 +397,7 @@ internal class ProgressiveSubtitleOverlay(
 
     private fun syncLayoutNow() {
         val parent = container.parent as? View ?: return
-        if (parent.width <= 0) {
+        if (parent.width <= 0 || parent.height <= 0) {
             linesContainer.requestLayout()
             container.requestLayout()
             return
@@ -381,12 +406,26 @@ internal class ProgressiveSubtitleOverlay(
         val widthSpec = View.MeasureSpec.makeMeasureSpec(parent.width, View.MeasureSpec.AT_MOST)
         val heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
         container.measure(widthSpec, heightSpec)
-        container.layout(
-            container.left,
-            container.top,
-            container.left + container.measuredWidth,
-            container.top + container.measuredHeight,
-        )
+
+        val lp = container.layoutParams as? FrameLayout.LayoutParams
+        val bottomMargin = lp?.bottomMargin ?: 0
+        val startMargin = lp?.marginStart ?: lp?.leftMargin ?: 0
+        val endMargin = lp?.marginEnd ?: lp?.rightMargin ?: 0
+        val gravity = lp?.gravity ?: (Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL)
+        val absoluteGravity = Gravity.getAbsoluteGravity(gravity, container.layoutDirection)
+
+        val w = container.measuredWidth
+        val h = container.measuredHeight
+        val left = when {
+            absoluteGravity and Gravity.CENTER_HORIZONTAL == Gravity.CENTER_HORIZONTAL ->
+                ((parent.width - w) / 2).coerceAtLeast(0)
+            absoluteGravity and Gravity.RIGHT == Gravity.RIGHT ->
+                (parent.width - w - endMargin).coerceAtLeast(0)
+            else -> startMargin
+        }
+        // Always bottom-align with current bottomMargin so overlay show/hide moves captions.
+        val top = (parent.height - h - bottomMargin).coerceAtLeast(0)
+        container.layout(left, top, left + w, top + h)
     }
 
     private fun applyTextStyle(view: TextView, style: SubtitleStyle, textSizePx: Float) {
