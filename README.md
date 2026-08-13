@@ -24,6 +24,7 @@ Android SDK for [Kinescope](https://kinescope.io/) video: player, vertical Short
 | Player options | [docs/player-options.md](docs/player-options.md) |
 | Customization (poster, colours, custom button) | [docs/customization.md](docs/customization.md) |
 | Live | [docs/live.md](docs/live.md) |
+| Local / progressive playback | [docs/local-playback.md](docs/local-playback.md) |
 | Fullscreen | [docs/fullscreen.md](docs/fullscreen.md) |
 | Picture-in-Picture | [docs/picture-in-picture.md](docs/picture-in-picture.md) |
 | Chromecast | [docs/chromecast.md](docs/chromecast.md) |

@@ -18,11 +18,15 @@
 - Paused playback no longer keeps top/bottom gradient overlays stuck after a tap to dismiss chrome
 - Offline fullscreen no longer flashes the play icon after `switchTargetView` (removed premature `setPlayer`)
 
-
 ### Fixed
 - **Decoder / playback after re-download** — probing qualities (or downloading the same video again) no longer leaves the OEM secure AVC decoder stuck (`c2.qti.avc.decoder.secure`); offline playback uses the secure-decoder workaround + fallback so the video plays after download
 - Download progress no longer rolls back mid-download when the cache hit the old 300 MB LRU cap
 - Intermittent offline Source error from holey completed downloads after LRU eviction; offline `CacheDataSource` no longer sets `FLAG_IGNORE_CACHE_ON_ERROR` with a null upstream
+
+## [0.1.3] — 30.07.2026
+
+### Added
+- **`setLocalSource(uri, autoplay)`** — play a local/progressive URI (`content://`, `file://`, progressive HTTP) through `KinescopeVideoPlayer` without a Kinescope media id; see [docs/local-playback.md](docs/local-playback.md)
 
 ## [0.1.2] — 23.07.2026
 
