@@ -87,6 +87,13 @@ class LiveActivity : AppCompatActivity() {
         super.onStop()
     }
 
+    override fun onDestroy() {
+        if (::orientationController.isInitialized) {
+            orientationController.detach()
+        }
+        super.onDestroy()
+    }
+
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         pipSession.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)

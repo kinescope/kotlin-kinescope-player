@@ -120,6 +120,7 @@ object DownloadVideoOffline {
         drmLicenseUrl: String? = null,
         qualityHint: String? = null,
         onError: ((Throwable) -> Unit)? = null,
+        onStarted: (() -> Unit)? = null,
     ) {
         initialize(context)
         OfflineDownloadQualityHelper.buildDownloadRequest(
@@ -136,6 +137,7 @@ object DownloadVideoOffline {
         ) { result ->
             result.onSuccess { request ->
                 VideoDownloadService.startDownload(context.applicationContext, request)
+                onStarted?.invoke()
             }.onFailure { error ->
                 onError?.invoke(error)
             }
@@ -154,6 +156,7 @@ object DownloadVideoOffline {
         drmLicenseUrl: String? = null,
         qualityHint: String? = null,
         onError: ((Throwable) -> Unit)? = null,
+        onStarted: (() -> Unit)? = null,
     ) = startDownloadWithQuality(
         context,
         contentId,
@@ -166,6 +169,7 @@ object DownloadVideoOffline {
         drmLicenseUrl,
         qualityHint,
         onError,
+        onStarted,
     )
 
     /**

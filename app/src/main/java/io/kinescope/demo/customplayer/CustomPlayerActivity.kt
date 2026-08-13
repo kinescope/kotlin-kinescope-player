@@ -242,6 +242,13 @@ class CustomPlayerActivity : AppCompatActivity() {
         super.onStop()
     }
 
+    override fun onDestroy() {
+        if (::orientationController.isInitialized) {
+            orientationController.detach()
+        }
+        super.onDestroy()
+    }
+
     private fun bindViews() {
         switchAutoplay = bindSettingRow(
             rowId = R.id.row_autoplay,

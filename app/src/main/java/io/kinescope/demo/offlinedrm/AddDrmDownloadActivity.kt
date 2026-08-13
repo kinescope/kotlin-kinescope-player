@@ -71,8 +71,6 @@ class AddDrmDownloadActivity : AppCompatActivity() {
     private lateinit var kinescopeVideoPlayer: KinescopeVideoPlayer
     private var drmTimeoutJob: Job? = null
     private var progressUpdateJob: Job? = null
-    private var pendingQualityHeight: Int? = null
-    private var pendingQualityLabel: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -309,8 +307,6 @@ class AddDrmDownloadActivity : AppCompatActivity() {
             .setTitle("Качество: ${videoData.title}")
             .setItems(labels) { _, which ->
                 val selected = qualities[which]
-                pendingQualityHeight = selected.height
-                pendingQualityLabel = selected.label
                 val withLabel = videoData.copy(selectedQualityLabel = selected.label)
                 if (withLabel.drm?.widevine?.licenseUrl.isNullOrBlank()) {
                     startClearDownload(withLabel, selected.height, selected.width)
@@ -607,9 +603,8 @@ class AddDrmDownloadActivity : AppCompatActivity() {
                 Toast.makeText(this, "Ошибка начала загрузки", Toast.LENGTH_SHORT).show()
                 onStarted?.invoke()
             },
+            onStarted = onStarted,
         )
-        // Request build is async; clear "preparing" state shortly after kickoff.
-        window.decorView.postDelayed({ onStarted?.invoke() }, 300)
     }
 
     private fun generateStableContentId(url: String?, heightPx: Int): String {

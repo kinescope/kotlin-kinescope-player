@@ -49,11 +49,7 @@ class ChaptersActivity : AppCompatActivity() {
         playerView.applyTemplateOptions()
         playerView.onFullscreenButtonCallback = { toggleFullscreen() }
         fullscreenPlayerView.onFullscreenButtonCallback = { toggleFullscreen() }
-        orientationController = KinescopeContentOrientationController(
-            activity = this,
-            playerViews = { listOf(playerView, fullscreenPlayerView) },
-        )
-        orientationController.attach()
+        ensureOrientationController()
         pipSession.attach()
 
         kinescopePlayer.loadVideo(KinescopeDemoConfig.CHAPTERS_VIDEO_ID, onSuccess = {
@@ -63,9 +59,27 @@ class ChaptersActivity : AppCompatActivity() {
         })
     }
 
+    private fun ensureOrientationController() {
+        if (!::orientationController.isInitialized) {
+            orientationController = KinescopeContentOrientationController(
+                activity = this,
+                playerViews = { listOf(playerView, fullscreenPlayerView) },
+            )
+            orientationController.attach()
+        }
+        orientationController.setFullscreen(isVideoFullscreen)
+    }
+
     override fun onStop() {
         pipSession.onStop()
         super.onStop()
+    }
+
+    override fun onDestroy() {
+        if (::orientationController.isInitialized) {
+            orientationController.detach()
+        }
+        super.onDestroy()
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {

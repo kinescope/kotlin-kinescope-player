@@ -88,11 +88,7 @@ class PlaylistActivity : AppCompatActivity() {
         playerView.applyTemplateOptions()
         playerView.onFullscreenButtonCallback = { toggleFullscreen() }
         fullscreenPlayerView.onFullscreenButtonCallback = { toggleFullscreen() }
-        orientationController = KinescopeContentOrientationController(
-            activity = this,
-            playerViews = { listOf(playerView, fullscreenPlayerView) },
-        )
-        orientationController.attach()
+        ensureOrientationController()
         pipSession.attach()
         castSession.attach()
 
@@ -115,6 +111,17 @@ class PlaylistActivity : AppCompatActivity() {
             videosAdapter.updateData(videos)
         }
         viewModel.getAllVideos()
+    }
+
+    private fun ensureOrientationController() {
+        if (!::orientationController.isInitialized) {
+            orientationController = KinescopeContentOrientationController(
+                activity = this,
+                playerViews = { listOf(playerView, fullscreenPlayerView) },
+            )
+            orientationController.attach()
+        }
+        orientationController.setFullscreen(isVideoFullscreen)
     }
 
     private fun playVideo(videoId: String) {
@@ -142,6 +149,13 @@ class PlaylistActivity : AppCompatActivity() {
     override fun onStop() {
         pipSession.onStop()
         super.onStop()
+    }
+
+    override fun onDestroy() {
+        if (::orientationController.isInitialized) {
+            orientationController.detach()
+        }
+        super.onDestroy()
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {

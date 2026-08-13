@@ -155,6 +155,7 @@ class ShortsActivity : AppCompatActivity(), ActivityProvider {
             }
             putExtra(io.kinescope.demo.offlinedrm.OfflineMainPlayerActivity.EXTRA_VIDEO_DATA_JSON, videoDataJson)
             putExtra(io.kinescope.demo.offlinedrm.OfflineMainPlayerActivity.EXTRA_DOWNLOAD_ID, downloadId)
+            // No EXTRA_UP_NAVIGATION → OfflineMainPlayerActivity.finish() returns to Shorts.
         }
     }
 

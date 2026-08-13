@@ -315,6 +315,9 @@ class OfflineMainPlayerActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        if (::orientationController.isInitialized) {
+            orientationController.detach()
+        }
         releasePlayerSafely()
         super.onDestroy()
     }
@@ -397,9 +400,9 @@ class OfflineMainPlayerActivity : AppCompatActivity() {
     }
 
     /**
-     * Return to the offline downloads list. Do **not** use [TaskStackBuilder] with
-     * [io.kinescope.demo.MainActivity] — it applies CLEAR_TASK and lands on Main when the
-     * list intent is dropped. Release DRM player before leaving to avoid process death.
+     * Return to the activity that opened the player.
+     * [EXTRA_UP_NAVIGATION] = [UP_NAV_OFFLINE_DRM_LIST] opens the Saved videos list;
+     * otherwise [finish] returns to the previous screen (e.g. Shorts feed).
      */
     private fun navigateUpFromPlayer() {
         if (isVideoFullscreen) {
@@ -409,14 +412,18 @@ class OfflineMainPlayerActivity : AppCompatActivity() {
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         releasePlayerSafely()
 
-        startActivity(
-            Intent(this, OfflineDrmDemoActivity::class.java).apply {
-                addFlags(
-                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                        Intent.FLAG_ACTIVITY_SINGLE_TOP,
+        when (intent.getStringExtra(EXTRA_UP_NAVIGATION)) {
+            UP_NAV_OFFLINE_DRM_LIST -> {
+                startActivity(
+                    Intent(this, OfflineDrmDemoActivity::class.java).apply {
+                        addFlags(
+                            Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                                Intent.FLAG_ACTIVITY_SINGLE_TOP,
+                        )
+                    },
                 )
-            },
-        )
+            }
+        }
         finish()
     }
 }
