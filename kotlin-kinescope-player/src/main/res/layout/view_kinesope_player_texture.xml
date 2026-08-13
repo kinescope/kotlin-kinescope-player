@@ -39,15 +39,6 @@
 
         </FrameLayout>
 
-        <androidx.media3.ui.SubtitleView
-            android:id="@+id/kinescope_subtitle_view"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:importantForAccessibility="no" />
-
-        <include
-            layout="@layout/view_progressive_subtitle_overlay" />
-
         <View
             android:id="@+id/kinescope_mobile_header_gradient"
             android:layout_width="match_parent"
@@ -76,6 +67,23 @@
             layout="@layout/view_kinescope_player_control"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
+
+        <!-- Above control overlay so captions are not dimmed by the scrim -->
+        <androidx.media3.ui.SubtitleView
+            android:id="@+id/kinescope_subtitle_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clickable="false"
+            android:elevation="10dp"
+            android:focusable="false"
+            android:importantForAccessibility="no" />
+
+        <include
+            layout="@layout/view_progressive_subtitle_overlay"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|start"
+            android:elevation="10dp" />
 
         <io.kinescope.sdk.view.KinescopeCaptionsSearchView
             android:id="@+id/captions_search_overlay"

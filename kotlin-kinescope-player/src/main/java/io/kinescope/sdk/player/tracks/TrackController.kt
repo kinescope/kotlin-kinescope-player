@@ -48,6 +48,10 @@ class TrackController(
         qualityManager.updateVariants(variants)
     }
 
+    fun setQualityNamesByHeight(namesByHeight: Map<Int, String>) {
+        qualityManager.setQualityNamesByHeight(namesByHeight)
+    }
+
     fun updateTextTracks(tracks: Tracks) {
         subtitleTrackOverrides = tracks.groups
             .filter { it.type == C.TRACK_TYPE_TEXT }

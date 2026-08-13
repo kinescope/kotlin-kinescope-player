@@ -89,19 +89,34 @@
 
         <activity
             android:name=".offlinedrm.OfflineDrmDemoActivity"
-            android:configChanges="orientation|screenSize|screenLayout|layoutDirection"
-            android:exported="false" />
+            android:configChanges="orientation|screenSize|screenLayout|layoutDirection|smallestScreenSize"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:parentActivityName=".MainActivity">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".MainActivity" />
+        </activity>
 
         <activity
             android:name=".offlinedrm.AddDrmDownloadActivity"
-            android:configChanges="orientation|screenSize|screenLayout|layoutDirection"
-            android:exported="false" />
+            android:configChanges="orientation|screenSize|screenLayout|layoutDirection|smallestScreenSize"
+            android:exported="false"
+            android:parentActivityName=".offlinedrm.OfflineDrmDemoActivity">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".offlinedrm.OfflineDrmDemoActivity" />
+        </activity>
 
         <activity
             android:name=".offlinedrm.OfflineMainPlayerActivity"
-            android:configChanges="orientation|screenSize|screenLayout|layoutDirection"
-            android:exported="false" />
-
+            android:configChanges="orientation|screenSize|screenLayout|layoutDirection|smallestScreenSize"
+            android:exported="false"
+            android:parentActivityName=".offlinedrm.OfflineDrmDemoActivity">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".offlinedrm.OfflineDrmDemoActivity" />
+        </activity>
         <service
             android:name="io.kinescope.sdk.shorts.download.VideoDownloadService"
             android:exported="false"

@@ -72,13 +72,18 @@ import io.kinescope.sdk.models.videos.startTimeMs
 import io.kinescope.sdk.models.players.syncLegacyChromeFlags
 import io.kinescope.sdk.playlist.KinescopePlaylistItem
 import io.kinescope.sdk.playlist.KinescopePlaylistMenuView
+import io.kinescope.sdk.player.KinescopeContentOrientation
 import io.kinescope.sdk.player.KinescopeGlideListener
 import io.kinescope.sdk.player.KinescopeChromeButton
 import io.kinescope.sdk.player.KinescopePictureInPicture
 import io.kinescope.sdk.player.KinescopePlayerChromeCustomization
 import io.kinescope.sdk.player.KinescopeVideoPlayer
 import io.kinescope.sdk.player.quality.KinescopeQualityVariant
+import io.kinescope.sdk.player.quality.digitsFromQualityName
 import io.kinescope.sdk.player.quality.getQualityVariantsList
+import io.kinescope.sdk.player.quality.qualityDisplayHeightPx
+import io.kinescope.sdk.player.quality.resolveQualityDisplayHeightPx
+import io.kinescope.sdk.player.quality.resolveQualityMapName
 import io.kinescope.sdk.player.speed.KinescopeSpeedVariant
 import io.kinescope.sdk.player.subtitles.ProgressiveSubtitleCues
 import io.kinescope.sdk.player.subtitles.ProgressiveSubtitleOverlay
@@ -139,6 +144,7 @@ class KinescopePlayerView @JvmOverloads constructor(
                 it.setPlayer(player)
                 it.trackController = oldPlayerView.trackController
                 it.analyticsManager = oldPlayerView.analyticsManager
+                it.adoptContentOrientationFrom(oldPlayerView)
                 it.hasStartedPlayback = startedPlayback
                 it.applyExoPlayerVisibility()
                 it.updateBuffering()
@@ -154,6 +160,7 @@ class KinescopePlayerView @JvmOverloads constructor(
                     it.syncLiveTimeChrome()
                 }
                 it.syncLiveInformer()
+                it.applySubtitleStyle()
             }
 
             oldPlayerView.detachForViewSwitch()
@@ -193,6 +200,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         private const val SETTINGS_MENU_ELEVATION_DP = 24f
         private const val SCRUB_SEEKBAR_SCALE = 1.85f
         private const val SCRUB_SEEKBAR_SCALE_DURATION_MS = 150L
+        private const val SUBTITLE_SCRUB_FADE_DURATION_MS = 160L
         private const val LIVE_INFORMER_COUNTDOWN_INTERVAL_MS = 1_000L
         private const val DOUBLE_TAP_SEEK_SECONDS = 10
         private const val DOUBLE_TAP_SEEK_STREAK_WINDOW_MS = 1500L
@@ -207,9 +215,16 @@ class KinescopePlayerView @JvmOverloads constructor(
         private const val LIVE_BADGE_PULSE_MIN_ALPHA = 0f
         private const val VIEW_SWITCH_PLAY_PAUSE_OVERRIDE_MS = 500L
         private const val SUBTITLE_PROGRESS_UPDATE_INTERVAL_MS = 16
-        private const val SUBTITLE_SIZE_FRACTION_OF_HEIGHT = 0.062f
-        /** Slightly smaller than inline so fullscreen captions do not dominate the frame. */
-        private const val SUBTITLE_SIZE_FRACTION_OF_HEIGHT_FULLSCREEN = 0.048f
+        /**
+         * Fraction of the **shorter** player side. Using height alone makes captions
+         * enormous on portrait / vertical videos (tall frame).
+         */
+        private const val SUBTITLE_SIZE_FRACTION_OF_SHORTER_SIDE = 0.045f
+        private const val SUBTITLE_SIZE_FRACTION_OF_SHORTER_SIDE_FULLSCREEN = 0.036f
+        /** Hard cap so tall phone screens never produce billboard-sized captions. */
+        private const val SUBTITLE_MAX_TEXT_SIZE_SP = 18f
+        private const val SUBTITLE_MAX_TEXT_SIZE_FULLSCREEN_SP = 17f
+        private const val TABLET_SMALLEST_WIDTH_DP = 600
         private const val LEGACY_CUSTOM_BUTTON_ID = "legacy_custom"
         private val optionsBarAnimationInterpolator = DecelerateInterpolator()
         private val timeDurationToggleInterpolator = FastOutSlowInInterpolator()
@@ -280,6 +295,15 @@ class KinescopePlayerView @JvmOverloads constructor(
 
     var onFullscreenButtonCallback: (() -> Unit)? = null
     var onPictureInPictureButtonCallback: (() -> Unit)? = null
+    /**
+     * Invoked when the playing video aspect changes.
+     * `true` = portrait / vertical (height > width). Use with [KinescopeContentOrientation].
+     */
+    var onContentOrientationChanged: ((isPortrait: Boolean) -> Unit)? = null
+
+    /** Latest known content aspect: taller than wide. */
+    var isPortraitContent: Boolean = false
+        private set
     var onAttachmentSelected: ((KinescopeVideoAttachments) -> Unit)? = null
 
     private var posterView: ImageView? = null
@@ -414,6 +438,8 @@ class KinescopePlayerView @JvmOverloads constructor(
 
     private var hasStartedPlayback = false
     private var initialSubtitlesConfigured = false
+    /** Ensures the control overlay is shown once per player attach when [controls] is enabled. */
+    private var controlOverlayPresentedForCurrentPlayer = false
     private var scrubbing = false
     private var scrubOverlayHiding = false
     private var controlOverlayHiding = false
@@ -538,6 +564,7 @@ class KinescopePlayerView @JvmOverloads constructor(
                     )
                 }
             }
+            syncQualityNamesFromVideo()
             trackController?.updateTextTracks(tracks)
             trackController?.updateAudioTracks(tracks)
             if (settingsMenuView?.isVisible == true) {
@@ -595,6 +622,8 @@ class KinescopePlayerView @JvmOverloads constructor(
         override fun onVideoSizeChanged(videoSize: VideoSize) {
             if (videoSize.height != 0) {
                 updateOptionsButtonIcon()
+                applySubtitleStyle()
+                updateContentOrientation(videoSize.width, videoSize.height)
                 getAnalyticsArguments().let { args ->
                     when (trackController?.isAutoQuality) {
                         true -> analyticsManager.autoQualityChanged(args = args)
@@ -727,6 +756,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         override fun onScrubStart(timeBar: TimeBar, position: Long) {
             scrubbing = true
             seekView?.hideSeekFeedback()
+            hideVideoSubtitlesForScrub()
             enterScrubOverlayMode()
             seekView?.showScrubOverlay()
 
@@ -775,6 +805,7 @@ class KinescopePlayerView @JvmOverloads constructor(
                 updatePlayPauseButton()
                 updateBuffering()
                 updateTimeline()
+                restoreVideoSubtitlesAfterScrub()
                 if (controlWasVisible) {
                     scheduleControlOverlayAutoHide()
                 } else {
@@ -859,6 +890,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         controlView?.findViewById<ViewGroup>(R.id.scrub_top_bar)?.let { scrubTopBar ->
             seekView?.attachScrubHintBar(scrubTopBar)
         }
+        seekView?.setPortraitContent(isPortraitContent)
 
         progressContainer = controlView?.findViewById(R.id.kinescope_progress_container)
         timeBar = controlView?.findViewById(R.id.kinescope_progress)
@@ -971,7 +1003,10 @@ class KinescopePlayerView @JvmOverloads constructor(
         settingsMenuView?.setFullscreenMode(isVideoFullscreen)
 
         captionsSearchView = findViewById(R.id.captions_search_overlay)
-        captionsSearchView?.setFullscreenMode(isVideoFullscreen)
+        captionsSearchView?.setFullscreenMode(
+            fullscreen = isVideoFullscreen,
+            portrait = isPortraitCaptionsSearchLayout(),
+        )
         captionsSearchView?.onSeekToMs = { positionMs ->
             kinescopePlayer?.seekToPosition(positionMs)
             if (isCaptionsSearchActive()) {
@@ -1026,6 +1061,7 @@ class KinescopePlayerView @JvmOverloads constructor(
             val widthChanged = right - left != oldRight - oldLeft
             val heightChanged = bottom - top != oldBottom - oldTop
             if ((widthChanged || heightChanged) && width > 0 && height > 0) {
+                syncCaptionsSearchFullscreenMode()
                 applySubtitleStyle()
                 updateCaptionsSearchInsets()
             }
@@ -1169,6 +1205,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         playbackBufferingWatchdog.reset()
         hasStartedPlayback = false
         initialSubtitlesConfigured = false
+        controlOverlayPresentedForCurrentPlayer = false
         hidePoster()
         pendingCueGroup = null
         learnedCueDurationUs = C.TIME_UNSET
@@ -1194,6 +1231,7 @@ class KinescopePlayerView @JvmOverloads constructor(
             subtitleView?.setCues(emptyList())
             progressiveSubtitleOverlay?.clear()
             applyDefaultQuality()
+            syncQualityNamesFromVideo()
             analyticsManager.setSource(
                 source = source,
                 metricUrl = metricUrl,
@@ -1655,6 +1693,62 @@ class KinescopePlayerView @JvmOverloads constructor(
 
     private fun getVideo(): KinescopeVideo? = kinescopePlayer?.getVideo()
 
+    private fun syncQualityNamesFromVideo() {
+        val fromPlayer = kinescopePlayer?.qualityNamesByHeight().orEmpty()
+        if (fromPlayer.isNotEmpty()) {
+            trackController?.setQualityNamesByHeight(fromPlayer)
+            return
+        }
+        val qualityMap = getVideo()?.qualityMap
+        if (qualityMap.isNullOrEmpty()) {
+            trackController?.setQualityNamesByHeight(emptyMap())
+            return
+        }
+        val names = mutableMapOf<Int, String>()
+        localExoPlayer?.let { player ->
+            val selector = player.trackSelector as? DefaultTrackSelector ?: return@let
+            selector.getQualityVariantsList().forEach { variant ->
+                val override = variant.override
+                val format = override?.let { o ->
+                    val idx = o.trackIndices.firstOrNull() ?: return@let null
+                    o.mediaTrackGroup.getFormat(idx)
+                }
+                val name = if (format != null) {
+                    resolveQualityMapName(qualityMap, format)
+                } else {
+                    resolveQualityMapName(qualityMap, C.LENGTH_UNSET, variant.id)
+                }
+                if (!name.isNullOrBlank()) {
+                    names[variant.id] = name
+                }
+            }
+        }
+        trackController?.setQualityNamesByHeight(names)
+    }
+
+    /**
+     * Override quality labels (track height → display name from embed `quality_map.name`).
+     * Useful for offline playback when [KinescopeVideo] is not loaded.
+     */
+    fun setQualityNamesByHeight(namesByHeight: Map<Int, String>) {
+        trackController?.setQualityNamesByHeight(namesByHeight)
+        if (settingsMenuView?.isVisible == true) {
+            updateSettingsMenuCurrentValues()
+        }
+    }
+
+    /**
+     * Forces a fixed video quality variant (by track height id). Used for offline
+     * single-quality playback so settings do not stay on Auto with a wrong caption.
+     */
+    fun setVideoQualityVariant(heightPx: Int) {
+        trackController?.setQualityVariant(heightPx)
+        updateOptionsButtonIcon()
+        if (settingsMenuView?.isVisible == true) {
+            updateSettingsMenuCurrentValues()
+        }
+    }
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         applyPlayerChromeLayout()
@@ -1686,7 +1780,10 @@ class KinescopePlayerView @JvmOverloads constructor(
         seekView?.setFullscreenMode(value)
         settingsMenuView?.setFullscreenMode(value)
         chaptersMenuView?.setFullscreenMode(value)
-        captionsSearchView?.setFullscreenMode(value)
+        captionsSearchView?.setFullscreenMode(
+            value,
+            portrait = isPortraitCaptionsSearchLayout(fullscreen = value),
+        )
         applyPlayerChromeLayout()
         updateFullscreenButton()
         updatePlayPauseButton()
@@ -1694,6 +1791,27 @@ class KinescopePlayerView @JvmOverloads constructor(
         if (isCaptionsSearchActive()) {
             updateCaptionsSearchInsets()
         }
+    }
+
+    private fun updateContentOrientation(width: Int, height: Int) {
+        if (width <= 0 || height <= 0) return
+        val portrait = KinescopeContentOrientation.isPortrait(width, height)
+        if (portrait == isPortraitContent) return
+        isPortraitContent = portrait
+        seekView?.setPortraitContent(portrait)
+        syncCaptionsSearchFullscreenMode()
+        applySubtitleStyle()
+        onContentOrientationChanged?.invoke(portrait)
+    }
+
+    /** Copies portrait/landscape content flag when switching inline ↔ fullscreen views. */
+    fun adoptContentOrientationFrom(other: KinescopePlayerView) {
+        if (other.isPortraitContent == isPortraitContent) return
+        isPortraitContent = other.isPortraitContent
+        seekView?.setPortraitContent(isPortraitContent)
+        syncCaptionsSearchFullscreenMode()
+        applySubtitleStyle()
+        onContentOrientationChanged?.invoke(isPortraitContent)
     }
 
     private fun isBufferingSpinnerVisible(): Boolean {
@@ -1878,13 +1996,14 @@ class KinescopePlayerView @JvmOverloads constructor(
         if (!showPlayPause) {
             return false
         }
-        if (!isMobilePlayerChrome) {
-            return true
+        // Gradient chrome (mobile inline + fullscreen): show with overlay, or when paused/ended.
+        if (usesGradientChrome()) {
+            if (controlView?.isVisible == true && !scrubbing) {
+                return true
+            }
+            return shouldShowReplayButton() || !shouldShowPauseButton()
         }
-        if (controlView?.isVisible == true && !scrubbing) {
-            return true
-        }
-        return shouldShowReplayButton() || !shouldShowPauseButton()
+        return true
     }
 
     private fun usesCompactOptionsChrome(): Boolean {
@@ -2135,13 +2254,6 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
     }
 
-    private fun isPlaybackPaused(): Boolean {
-        val player = activePlaybackPlayer ?: return false
-        return !player.playWhenReady &&
-            player.playbackState != Player.STATE_ENDED &&
-            player.playbackState != Player.STATE_IDLE
-    }
-
     private fun shouldShowMobileBackgroundGradients(controlsVisible: Boolean? = null): Boolean {
         if (isPictureInPictureActive) {
             return false
@@ -2163,7 +2275,7 @@ class KinescopePlayerView @JvmOverloads constructor(
             !scrubbing &&
             !scrubOverlayHiding &&
             kinescopePlayer?.kinescopePlayerOptions?.controls == true &&
-            (isPlaybackPaused() || overlayVisible)
+            overlayVisible
     }
 
     private fun updateMobileBackgroundGradients(
@@ -2259,15 +2371,24 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     private fun resolvePlaybackHeightForSettingsIcon(): Int {
-        val videoHeight = localExoPlayer?.videoSize?.height ?: 0
-        if (videoHeight > 0) {
-            return videoHeight
+        val controller = trackController
+        // Locked quality: use the selected variant (name digits / id), not live videoSize.
+        // videoSize can briefly report another resolution from the shared cache and flicker HD.
+        if (controller != null && !controller.isAutoQuality && !controller.isAudioOnlyQuality) {
+            val selected = controller.selectedQualityVariant
+            digitsFromQualityName(selected.name)?.let { return it }
+            return selected.id.coerceAtLeast(0)
         }
-        val controller = trackController ?: return 0
-        if (controller.isAutoQuality || controller.isAudioOnlyQuality) {
-            return 0
+
+        val vs = localExoPlayer?.videoSize
+        val w = vs?.width ?: 0
+        val h = vs?.height ?: 0
+        if (h > 0 || w > 0) {
+            val fromMap = resolveQualityDisplayHeightPx(getVideo()?.qualityMap, w, h)
+            if (fromMap > 0) return fromMap
+            return qualityDisplayHeightPx(w, h).takeIf { it > 0 } ?: h
         }
-        return controller.selectedQualityVariant.id.coerceAtLeast(0)
+        return 0
     }
 
     private fun updateOptionsButtonsVisibility() {
@@ -3336,9 +3457,17 @@ class KinescopePlayerView @JvmOverloads constructor(
             val showControls = options.controls
             if (!showControls) {
                 resetOptionsBarForControlsDisabled()
+                controlOverlayPresentedForCurrentPlayer = false
             }
             when {
-                !showControls -> controlView?.isVisible = false
+                !showControls -> {
+                    cancelControlOverlayAutoHide()
+                    controlView?.isVisible = false
+                }
+                !controlOverlayPresentedForCurrentPlayer -> {
+                    controlOverlayPresentedForCurrentPlayer = true
+                    showControlOverlay(animated = false)
+                }
                 !usesGradientChrome() -> controlView?.isVisible = true
             }
             updateFullscreenButtonVisibility()
@@ -3394,7 +3523,12 @@ class KinescopePlayerView @JvmOverloads constructor(
                 ensureControlBarProgressChromeVisible()
             }
         } else {
-            controlView?.isVisible = true
+            if (!controlOverlayPresentedForCurrentPlayer) {
+                controlOverlayPresentedForCurrentPlayer = true
+                showControlOverlay(animated = false)
+            } else {
+                controlView?.isVisible = true
+            }
             settingsMenuView?.setParameterVisible(
                 KinescopeSettingsView.Parameter.PlaybackSpeed,
                 true
@@ -3503,11 +3637,6 @@ class KinescopePlayerView @JvmOverloads constructor(
         seekFeedbackActive = false
         if (scrubbing || settingsMenuView?.isVisible == true || isCaptionsSearchActive()) {
             seekView?.hideSeekFeedback()
-            return
-        }
-        if (usesGradientChrome() && isPlaybackPaused()) {
-            seekView?.hideSeekFeedback()
-            scheduleControlOverlayAutoHide()
             return
         }
         hideControlOverlay(animated = true)
@@ -3639,9 +3768,6 @@ class KinescopePlayerView @JvmOverloads constructor(
         if (isCaptionsSearchActive()) {
             return
         }
-        if (usesGradientChrome() && isPlaybackPaused()) {
-            return
-        }
         if (isOptionsBarExpanded) {
             return
         }
@@ -3668,6 +3794,8 @@ class KinescopePlayerView @JvmOverloads constructor(
         overlay.isVisible = true
         updateMobileBackgroundGradients(animated = animated, controlsVisible = true)
         applySubtitleStyle(controlsVisibleOverride = true)
+        // Re-apply after control bar has a real height so bottom offset can move.
+        controlBar?.post { applySubtitleStyle(controlsVisibleOverride = true) }
         updateAll()
         if (!animated) {
             overlay.alpha = 1f
@@ -4083,6 +4211,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
         cancelControlOverlayAutoHide()
         showControlOverlay(animated = false)
+        syncCaptionsSearchFullscreenMode()
         captionsSearchView?.show(subtitleUrl)
         updateCaptionsSearchPlayback()
         updateCaptionsSearchInsets()
@@ -4103,11 +4232,11 @@ class KinescopePlayerView @JvmOverloads constructor(
         return true
     }
 
-    private fun subtitleSizeFractionOfHeight(): Float =
+    private fun subtitleSizeFractionOfShorterSide(): Float =
         if (isVideoFullscreen) {
-            SUBTITLE_SIZE_FRACTION_OF_HEIGHT_FULLSCREEN
+            SUBTITLE_SIZE_FRACTION_OF_SHORTER_SIDE_FULLSCREEN
         } else {
-            SUBTITLE_SIZE_FRACTION_OF_HEIGHT
+            SUBTITLE_SIZE_FRACTION_OF_SHORTER_SIDE
         }
 
     private fun restoreControlOverlayAfterCaptionsSearch() {
@@ -4256,11 +4385,25 @@ class KinescopePlayerView @JvmOverloads constructor(
                     trackController?.isAudioOnlyQuality == true ->
                         context.getString(R.string.settings_video_quality_audio_only)
 
-                    trackController?.isAutoQuality == true ->
+                    trackController?.isAutoQuality == true -> {
+                        val vs = localExoPlayer?.videoSize
+                        val w = vs?.width ?: 0
+                        val h = vs?.height ?: 0
+                        val shortSide = qualityDisplayHeightPx(w, h)
+                        val names = kinescopePlayer?.qualityNamesByHeight().orEmpty()
+                        val captionNumber =
+                            names[h]?.let { digitsFromQualityName(it)?.toString() }
+                                ?: names[shortSide]?.let { digitsFromQualityName(it)?.toString() }
+                                ?: resolveQualityMapName(getVideo()?.qualityMap, w, h)
+                                    ?.let { digitsFromQualityName(it)?.toString() }
+                                ?: shortSide.takeIf { it > 0 }?.toString()
+                                ?: h.takeIf { it > 0 }?.toString()
+                                ?: ""
                         context.getString(
                             R.string.settings_video_quality_variant_auto_caption,
-                            localExoPlayer?.videoSize?.height.toString(),
+                            captionNumber,
                         )
+                    }
 
                     else -> trackController?.selectedQualityVariant?.name.orEmpty()
                 },
@@ -4366,7 +4509,6 @@ class KinescopePlayerView @JvmOverloads constructor(
         if (isPictureInPictureActive) {
             return
         }
-        controlView?.isVisible = false
 
         val passThroughTouchListener = View.OnTouchListener { _, _ -> false }
         setOnTouchListener { _, event ->
@@ -4664,12 +4806,33 @@ class KinescopePlayerView @JvmOverloads constructor(
             height > 1 -> height.toFloat()
             else -> 0f
         }
-        val sizeFraction = subtitleSizeFractionOfHeight()
-        if (viewHeight > 1f) {
-            subtitleView.setFixedTextSize(
-                TypedValue.COMPLEX_UNIT_PX,
-                sizeFraction * viewHeight * subtitleStyle.fontSizePercent / 100f,
-            )
+        val viewWidth = when {
+            subtitleView.width > 1 -> subtitleView.width.toFloat()
+            width > 1 -> width.toFloat()
+            else -> 0f
+        }
+        // Shorter side keeps vertical videos from getting huge captions.
+        val referencePx = when {
+            viewWidth > 1f && viewHeight > 1f -> minOf(viewWidth, viewHeight)
+            viewHeight > 1f -> viewHeight
+            viewWidth > 1f -> viewWidth
+            else -> 0f
+        }
+        val sizeFraction = subtitleSizeFractionOfShorterSide()
+        val maxTextSp = if (isVideoFullscreen) {
+            SUBTITLE_MAX_TEXT_SIZE_FULLSCREEN_SP
+        } else {
+            SUBTITLE_MAX_TEXT_SIZE_SP
+        }
+        val maxTextPx = maxTextSp * resources.displayMetrics.scaledDensity
+        val textSizePx = if (referencePx > 1f) {
+            (sizeFraction * referencePx * subtitleStyle.fontSizePercent / 100f)
+                .coerceAtMost(maxTextPx)
+        } else {
+            15f * subtitleStyle.fontSizePercent / 100f * resources.displayMetrics.scaledDensity
+        }
+        if (referencePx > 1f) {
+            subtitleView.setFixedTextSize(TypedValue.COMPLEX_UNIT_PX, textSizePx)
         } else {
             subtitleView.setFixedTextSize(
                 TypedValue.COMPLEX_UNIT_SP,
@@ -4688,16 +4851,15 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
         subtitleView.setBottomPaddingFraction(0f)
 
-        val textSizePx = if (viewHeight > 1f) {
-            sizeFraction * viewHeight * subtitleStyle.fontSizePercent / 100f
-        } else {
-            15f * subtitleStyle.fontSizePercent / 100f * resources.displayMetrics.scaledDensity
-        }
+        val (startMarginPx, endMarginPx) = resolveCaptionHorizontalMarginsPx()
         progressiveSubtitleOverlay?.applyStyle(
             style = subtitleStyle,
             textSizePx = textSizePx,
             bottomPaddingPx = bottomPx,
             isFullscreen = isVideoFullscreen,
+            isLandscapeFullscreen = isLandscapeFullscreenCaptions(),
+            startMarginPx = startMarginPx,
+            endMarginPx = endMarginPx,
         )
 
         // Progressive overlay owns rendering; flashing cues onto SubtitleView when the control
@@ -4712,28 +4874,180 @@ class KinescopePlayerView @JvmOverloads constructor(
         applyScrubChapterTitleStyle()
     }
 
+    /**
+     * Landscape fullscreen UI for horizontal video.
+     * Prefer content orientation so portrait fullscreen is not misclassified on wide tablets.
+     */
+    private fun isLandscapeFullscreenCaptions(): Boolean {
+        if (!isVideoFullscreen) return false
+        if (isPortraitContent) return false
+        if (width > 1 && height > 1) {
+            return width > height
+        }
+        return true
+    }
+
+    /** Portrait video fullscreen (content-based, not just view aspect). */
+    private fun isPortraitFullscreenCaptions(): Boolean {
+        if (!isVideoFullscreen) return false
+        return isPortraitContent || (width > 1 && height > 1 && height >= width)
+    }
+
+    /** Portrait video / tall player UI (inline or fullscreen). */
+    private fun isPortraitCaptionsLayout(): Boolean {
+        if (isPortraitContent) return true
+        return width > 1 && height > 1 && height > width
+    }
+
+    /**
+     * Side margins for the caption bar.
+     * Portrait uses the same edge-to-edge style as horizontal fullscreen.
+     */
+    private fun resolveCaptionHorizontalMarginsPx(): Pair<Int, Int> {
+        val res = resources
+        fun dimen(id: Int) = res.getDimensionPixelSize(id)
+        return when {
+            // Same style as horizontal fullscreen for all portrait layouts.
+            isLandscapeFullscreenCaptions() || isPortraitCaptionsLayout() -> {
+                dimen(R.dimen.kinescope_caption_margin_start_fullscreen_landscape) to
+                    dimen(R.dimen.kinescope_caption_margin_end_fullscreen_landscape)
+            }
+            isVideoFullscreen -> {
+                dimen(R.dimen.kinescope_caption_margin_start_fullscreen) to
+                    dimen(R.dimen.kinescope_caption_margin_end_fullscreen)
+            }
+            else -> {
+                dimen(R.dimen.kinescope_caption_margin_start) to
+                    dimen(R.dimen.kinescope_caption_margin_end)
+            }
+        }
+    }
+
+    private fun isPortraitCaptionsSearchLayout(fullscreen: Boolean = isVideoFullscreen): Boolean {
+        if (!fullscreen) return false
+        if (width > 1 && height > 1) {
+            return height >= width
+        }
+        return isPortraitContent
+    }
+
+    private fun syncCaptionsSearchFullscreenMode() {
+        captionsSearchView?.setFullscreenMode(
+            fullscreen = isVideoFullscreen,
+            portrait = isPortraitCaptionsSearchLayout(),
+        )
+    }
+
     private fun resolveSubtitleBottomPaddingPx(
         controlsVisible: Boolean,
         viewHeight: Float,
         density: Float,
     ): Int {
-        val basePx = if (controlsVisible) {
-            if (viewHeight > 1f) {
-                (0.2f * viewHeight + 4f * density).toInt()
+        // Horizontal fullscreen — drop toward the bottom chrome when the control overlay
+        // (incl. top title) is shown; sit near the edge when chrome is hidden.
+        if (isLandscapeFullscreenCaptions()) {
+            return resolveClassicFullscreenCaptionBottomPx(
+                controlsVisible = controlsVisible,
+                density = density,
+            )
+        }
+
+        // Vertical fullscreen — move with overlay (higher when hidden, lower when shown).
+        if (isPortraitFullscreenCaptions()) {
+            return if (controlsVisible) {
+                resolvePortraitFullscreenCaptionBottomPx(density)
             } else {
-                (64f * density).toInt()
+                resolvePortraitFullscreenCaptionBottomPxHidden(
+                    viewHeight = viewHeight,
+                    density = density,
+                )
             }
-        } else {
-            (12f * density).toInt()
         }
-        // Sit captions a bit closer to the bottom; fullscreen gets a slightly larger nudge.
-        val lowerByPx = if (isVideoFullscreen) {
-            (24f * density).toInt()
-        } else {
-            (16f * density).toInt()
+
+        if (isVideoFullscreen) {
+            return resolveClassicFullscreenCaptionBottomPx(
+                controlsVisible = controlsVisible,
+                density = density,
+            )
         }
-        return (basePx - lowerByPx).coerceAtLeast((4f * density).toInt())
+
+        // Inline (non-fullscreen): same as fullscreen — sit just above the control bar
+        // when chrome is shown; near the bottom edge when hidden.
+        if (controlsVisible) {
+            return resolveInlineCaptionBottomPx(density)
+        }
+        return (12f * density).toInt()
     }
+
+    /** Inline player with overlay: tuck captions just above the bottom control bar. */
+    private fun resolveInlineCaptionBottomPx(density: Float): Int {
+        val bar = controlBar
+        val barHeight = when {
+            bar != null && bar.isVisible && bar.height > 0 -> bar.height
+            else -> resources.getDimensionPixelSize(R.dimen.kinescope_control_bar_height)
+        }
+        val gapAboveBar = (4f * density).toInt()
+        return barHeight + gapAboveBar
+    }
+
+    /** Overlay hidden: sit clearly above the seek-bar zone (higher on tablets). */
+    private fun resolvePortraitFullscreenCaptionBottomPxHidden(
+        viewHeight: Float,
+        density: Float,
+    ): Int {
+        val tablet = isTabletDevice()
+        val fraction = if (tablet) 0.28f else 0.14f
+        val minDp = if (tablet) 132f else 64f
+        return if (viewHeight > 1f) {
+            (fraction * viewHeight).toInt().coerceAtLeast((minDp * density).toInt())
+        } else {
+            ((if (tablet) 140f else 72f) * density).toInt()
+        }
+    }
+
+    /**
+     * Landscape / classic fullscreen vertical offset.
+     * Overlay shown: sit just above the bottom control bar (lower than the old ~20% height).
+     * Overlay hidden: near the bottom edge.
+     */
+    private fun resolveClassicFullscreenCaptionBottomPx(
+        controlsVisible: Boolean,
+        density: Float,
+    ): Int {
+        if (controlsVisible) {
+            val bar = controlBar
+            val barHeight = when {
+                bar != null && bar.isVisible && bar.height > 0 -> bar.height
+                else -> resources.getDimensionPixelSize(R.dimen.kinescope_control_bar_height)
+            }
+            val gapAboveBar = (4f * density).toInt()
+            return barHeight + gapAboveBar
+        }
+        return (12f * density).toInt()
+    }
+
+    /**
+     * Portrait fullscreen with overlay: sit near the seek/control bar.
+     * On tablets tuck lower so captions clear the top chrome and sit closer to the bar.
+     */
+    private fun resolvePortraitFullscreenCaptionBottomPx(density: Float): Int {
+        val bar = controlBar
+        val barHeight = when {
+            bar != null && bar.isVisible && bar.height > 0 -> bar.height
+            else -> resources.getDimensionPixelSize(R.dimen.kinescope_control_bar_height)
+        }
+        return if (isTabletDevice()) {
+            // Tuck into/near the seek bar when overlay (incl. top chrome) is shown.
+            val tuckPx = (36f * density).toInt()
+            (barHeight - tuckPx).coerceAtLeast((2f * density).toInt())
+        } else {
+            val gapAboveBar = (2f * density).toInt()
+            barHeight + gapAboveBar
+        }
+    }
+
+    private fun isTabletDevice(): Boolean =
+        resources.configuration.smallestScreenWidthDp >= TABLET_SMALLEST_WIDTH_DP
 
     private fun applyScrubChapterTitleStyle() {
         val titleView = scrubChapterTitleView ?: return
@@ -4794,10 +5108,69 @@ class KinescopePlayerView @JvmOverloads constructor(
         return cueStartUs + learnedCueDurationUs
     }
 
-    private fun applyProgressiveSubtitles() {
-        if (videoSubtitlesHiddenForCaptionsSearch) {
-            subtitleView?.setCues(emptyList())
+    private fun hideVideoSubtitlesForScrub() {
+        stopSubtitleUpdates()
+        subtitleView?.setCues(emptyList())
+        subtitleView?.isVisible = false
+        val container = findViewById<View>(R.id.kinescope_progressive_subtitle_container) ?: run {
             progressiveSubtitleOverlay?.clear()
+            return
+        }
+        container.animate().cancel()
+        if (!container.isVisible || container.alpha <= 0.01f) {
+            progressiveSubtitleOverlay?.clear()
+            container.isVisible = false
+            container.alpha = 1f
+            return
+        }
+        container.animate()
+            .alpha(0f)
+            .setDuration(SUBTITLE_SCRUB_FADE_DURATION_MS)
+            .withEndAction {
+                progressiveSubtitleOverlay?.clear()
+                container.isVisible = false
+                container.alpha = 1f
+            }
+            .start()
+    }
+
+    private fun restoreVideoSubtitlesAfterScrub() {
+        if (videoSubtitlesHiddenForCaptionsSearch) {
+            return
+        }
+        if (trackController?.selectedSubtitleIndex == TrackController.SUBTITLES_OFF_ID) {
+            return
+        }
+        subtitleView?.isVisible = true
+        val container = findViewById<View>(R.id.kinescope_progressive_subtitle_container)
+        container?.animate()?.cancel()
+        container?.alpha = 0f
+        applyProgressiveSubtitles()
+        if (shouldApplyProgressiveSubtitles()) {
+            scheduleSubtitleUpdates()
+        }
+        val target = container ?: return
+        if (!target.isVisible && progressiveSubtitleOverlay?.hasVisibleContent() != true) {
+            target.alpha = 1f
+            return
+        }
+        if (!target.isVisible) {
+            target.isVisible = true
+        }
+        target.animate()
+            .alpha(1f)
+            .setDuration(SUBTITLE_SCRUB_FADE_DURATION_MS)
+            .start()
+    }
+
+    private fun areVideoSubtitlesSuppressed(): Boolean {
+        return videoSubtitlesHiddenForCaptionsSearch || scrubbing || scrubOverlayHiding
+    }
+
+    private fun applyProgressiveSubtitles() {
+        if (areVideoSubtitlesSuppressed()) {
+            // Keep current overlay pixels while scrub fade-out runs; do not hard-clear.
+            subtitleView?.setCues(emptyList())
             return
         }
         val player = localExoPlayer

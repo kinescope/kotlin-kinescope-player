@@ -14,6 +14,7 @@ import androidx.media3.common.util.UnstableApi
 import io.kinescope.demo.KinescopeDemoConfig
 import io.kinescope.demo.R
 import io.kinescope.sdk.player.KinescopeCastSession
+import io.kinescope.sdk.player.KinescopeContentOrientationController
 import io.kinescope.sdk.player.KinescopePictureInPictureSession
 import io.kinescope.sdk.player.KinescopeVideoPlayer
 import io.kinescope.sdk.view.KinescopePlayerView
@@ -32,6 +33,7 @@ class LiveActivity : AppCompatActivity() {
     private var isFullscreen = false
     private lateinit var pipSession: KinescopePictureInPictureSession
     private lateinit var castSession: KinescopeCastSession
+    private lateinit var orientationController: KinescopeContentOrientationController
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -67,6 +69,11 @@ class LiveActivity : AppCompatActivity() {
             player = { kinescopePlayer },
             additionalPlayerViews = { listOf(kinescopePlayerFullscreenView) },
         )
+        orientationController = KinescopeContentOrientationController(
+            activity = this,
+            playerViews = { listOf(kinescopePlayerView, kinescopePlayerFullscreenView) },
+        )
+        orientationController.attach()
         pipSession.attach()
         castSession.attach()
 
@@ -78,6 +85,13 @@ class LiveActivity : AppCompatActivity() {
     override fun onStop() {
         pipSession.onStop()
         super.onStop()
+    }
+
+    override fun onDestroy() {
+        if (::orientationController.isInitialized) {
+            orientationController.detach()
+        }
+        super.onDestroy()
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
@@ -121,17 +135,16 @@ class LiveActivity : AppCompatActivity() {
             if (supportActionBar != null) {
                 supportActionBar?.show()
             }
-            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             isFullscreen = false
         } else {
             setFullscreen(true)
             if (supportActionBar != null) {
                 supportActionBar?.hide()
             }
-            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
             isFullscreen = true
         }
         kinescopePlayerFullscreenView.isVisible = isFullscreen
+        orientationController.setFullscreen(isFullscreen)
     }
 
     private fun setFullscreen(isFullscreen: Boolean) {

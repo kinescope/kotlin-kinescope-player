@@ -24,6 +24,7 @@ import io.kinescope.demo.KinescopeViewModel
 import io.kinescope.demo.application.KinescopeSDKDemoApplication
 import io.kinescope.sdk.models.videos.KinescopeVideoApi
 import io.kinescope.sdk.player.KinescopeCastSession
+import io.kinescope.sdk.player.KinescopeContentOrientationController
 import io.kinescope.sdk.player.KinescopePictureInPictureSession
 import io.kinescope.sdk.player.KinescopeVideoPlayer
 import io.kinescope.sdk.view.KinescopePlayerView
@@ -38,6 +39,7 @@ class PlaylistActivity : AppCompatActivity() {
     private lateinit var videosAdapter: VideosAdapter
     private lateinit var playlistProgressView: TextView
     private lateinit var pipSession: KinescopePictureInPictureSession
+    private lateinit var orientationController: KinescopeContentOrientationController
     private lateinit var castSession: KinescopeCastSession
     private lateinit var playlistPanel: View
     private var playerLayoutParamsBackup: ConstraintLayout.LayoutParams? = null
@@ -86,6 +88,7 @@ class PlaylistActivity : AppCompatActivity() {
         playerView.applyTemplateOptions()
         playerView.onFullscreenButtonCallback = { toggleFullscreen() }
         fullscreenPlayerView.onFullscreenButtonCallback = { toggleFullscreen() }
+        ensureOrientationController()
         pipSession.attach()
         castSession.attach()
 
@@ -108,6 +111,17 @@ class PlaylistActivity : AppCompatActivity() {
             videosAdapter.updateData(videos)
         }
         viewModel.getAllVideos()
+    }
+
+    private fun ensureOrientationController() {
+        if (!::orientationController.isInitialized) {
+            orientationController = KinescopeContentOrientationController(
+                activity = this,
+                playerViews = { listOf(playerView, fullscreenPlayerView) },
+            )
+            orientationController.attach()
+        }
+        orientationController.setFullscreen(isVideoFullscreen)
     }
 
     private fun playVideo(videoId: String) {
@@ -135,6 +149,13 @@ class PlaylistActivity : AppCompatActivity() {
     override fun onStop() {
         pipSession.onStop()
         super.onStop()
+    }
+
+    override fun onDestroy() {
+        if (::orientationController.isInitialized) {
+            orientationController.detach()
+        }
+        super.onDestroy()
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
@@ -207,17 +228,16 @@ class PlaylistActivity : AppCompatActivity() {
             if (supportActionBar != null) {
                 supportActionBar?.show()
             }
-            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             isVideoFullscreen = false
         } else {
             setFullscreen(true)
             if (supportActionBar != null) {
                 supportActionBar?.hide()
             }
-            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
             isVideoFullscreen = true
         }
         fullscreenPlayerView.isVisible = isVideoFullscreen
+        orientationController.setFullscreen(isVideoFullscreen)
     }
 
     override fun onBackPressed() {

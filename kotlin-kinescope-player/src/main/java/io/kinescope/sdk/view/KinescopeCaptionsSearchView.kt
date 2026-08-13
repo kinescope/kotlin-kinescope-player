@@ -59,6 +59,7 @@ class KinescopeCaptionsSearchView @JvmOverloads constructor(
     private var playingEntryIndex: Int = -1
     private var autoFollowPlayback: Boolean = true
     private var isFullscreenMode = false
+    private var isPortraitFullscreenMode = false
 
     var onDismiss: (() -> Unit)? = null
     var onSeekToMs: ((Long) -> Unit)? = null
@@ -122,21 +123,30 @@ class KinescopeCaptionsSearchView @JvmOverloads constructor(
         }
     }
 
-    fun setFullscreenMode(fullscreen: Boolean) {
-        if (isFullscreenMode == fullscreen) {
+    fun setFullscreenMode(fullscreen: Boolean, portrait: Boolean = false) {
+        if (isFullscreenMode == fullscreen && isPortraitFullscreenMode == portrait) {
             return
         }
         isFullscreenMode = fullscreen
+        isPortraitFullscreenMode = portrait
         applyModeLayout()
     }
 
     fun isFullscreenLayout(): Boolean = isFullscreenMode
 
     private fun applyModeLayout() {
-        val sideInset = if (isFullscreenMode) {
-            resources.getDimensionPixelSize(R.dimen.kinescope_captions_search_fullscreen_side_inset)
-        } else {
-            resources.getDimensionPixelSize(R.dimen.kinescope_mobile_control_margin_horizontal)
+        val sideInset = when {
+            isFullscreenMode && isPortraitFullscreenMode -> {
+                resources.getDimensionPixelSize(
+                    R.dimen.kinescope_captions_search_fullscreen_side_inset_portrait,
+                )
+            }
+            isFullscreenMode -> {
+                resources.getDimensionPixelSize(R.dimen.kinescope_captions_search_fullscreen_side_inset)
+            }
+            else -> {
+                resources.getDimensionPixelSize(R.dimen.kinescope_mobile_control_margin_horizontal)
+            }
         }
 
         if (layoutParams is FrameLayout.LayoutParams) {

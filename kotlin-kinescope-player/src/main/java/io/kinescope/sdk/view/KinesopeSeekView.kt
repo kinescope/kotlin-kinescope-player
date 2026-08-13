@@ -45,6 +45,7 @@ class KinesopeSeekView(
     private var visibleEdgeForward: Boolean? = null
     private var isFullscreenMode = false
     private var isMobilePlayerChrome = false
+    private var isPortraitContent = false
 
     init {
         inflate(context, R.layout.view_kinescope_seek_view, this)
@@ -96,33 +97,78 @@ class KinesopeSeekView(
         applyEdgeFeedbackStyle(isFullscreenMode)
     }
 
+    fun setPortraitContent(portrait: Boolean) {
+        if (isPortraitContent == portrait) {
+            return
+        }
+        isPortraitContent = portrait
+        applyEdgeFeedbackStyle(isFullscreenMode)
+    }
+
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        if (isMobilePlayerChrome && w != oldw && w > 0) {
+        val sizeChanged = w != oldw || h != oldh
+        if (sizeChanged && w > 0) {
             applyEdgeFeedbackStyle(isFullscreenMode)
         }
     }
 
     private fun applyEdgeFeedbackStyle(fullscreen: Boolean) {
-        val diameter = when {
-            isMobilePlayerChrome && width > 0 -> width
-            fullscreen -> resources.getDimensionPixelSize(
-                R.dimen.kinescope_seek_feedback_circle_diameter_fullscreen,
-            )
-            else -> resources.getDimensionPixelSize(R.dimen.kinescope_seek_feedback_circle_diameter)
+        if (isPortraitContent && width > 0 && height > 0) {
+            applyPortraitOvalHemisphereStyle(fullscreen)
+            return
         }
-        val radius = diameter / 2
-        val contentOffset = (radius * CONTENT_OFFSET_IN_RADIUS).toInt()
 
-        updateEdgePanelLayout(seekFeedbackBackHemisphereClip, radius)
-        updateEdgePanelLayout(seekFeedbackForwardHemisphereClip, radius)
-        layoutCircleHemisphere(seekFeedbackBackHemisphere, diameter, radius, isLeft = true)
-        layoutCircleHemisphere(seekFeedbackForwardHemisphere, diameter, radius, isLeft = false)
+        val fixedDiameter = resources.getDimensionPixelSize(
+            R.dimen.kinescope_seek_feedback_circle_diameter,
+        )
+        val diameter = when {
+            // Landscape fullscreen — hemispheres sized to screen height.
+            fullscreen && height > 0 ->
+                (height * FULLSCREEN_HEMISPHERE_SCALE).toInt()
+            // Landscape inline — fixed-size hemispheres.
+            else -> fixedDiameter
+        }
+        applyCircleHemisphereStyle(diameter)
+    }
+
+    /** Tall half-ovals along left/right edges for vertical video. */
+    private fun applyPortraitOvalHemisphereStyle(fullscreen: Boolean) {
+        val fixedDiameter = resources.getDimensionPixelSize(
+            R.dimen.kinescope_seek_feedback_circle_diameter,
+        )
+        val ovalWidth = if (fullscreen) {
+            (width * FULLSCREEN_PORTRAIT_OVAL_WIDTH_SCALE).toInt()
+        } else {
+            minOf(fixedDiameter, (width * INLINE_PORTRAIT_OVAL_WIDTH_SCALE).toInt())
+        }
+        val ovalHeight = maxOf(
+            (height * PORTRAIT_OVAL_HEIGHT_STRETCH).toInt(),
+            (ovalWidth * PORTRAIT_OVAL_MIN_ASPECT).toInt(),
+        )
+        applyOvalHemisphereStyle(ovalWidth, ovalHeight)
+    }
+
+    private fun applyCircleHemisphereStyle(diameter: Int) {
+        applyOvalHemisphereStyle(diameter, diameter)
+    }
+
+    private fun applyOvalHemisphereStyle(ovalWidth: Int, ovalHeight: Int) {
+        val halfWidth = ovalWidth / 2
+        val contentOffset = (halfWidth * CONTENT_OFFSET_IN_RADIUS).toInt()
+
+        updateEdgePanelLayout(seekFeedbackBackHemisphereClip, halfWidth)
+        updateEdgePanelLayout(seekFeedbackForwardHemisphereClip, halfWidth)
+        layoutOvalHemisphere(seekFeedbackBackHemisphere, ovalWidth, ovalHeight, isLeft = true)
+        layoutOvalHemisphere(seekFeedbackForwardHemisphere, ovalWidth, ovalHeight, isLeft = false)
         seekFeedbackBackHemisphere.setBackgroundResource(R.drawable.bg_seek_feedback_circle)
         seekFeedbackForwardHemisphere.setBackgroundResource(R.drawable.bg_seek_feedback_circle)
         updateEdgeFeedbackScalePivot(seekFeedbackBack, fromStart = true)
         updateEdgeFeedbackScalePivot(seekFeedbackForward, fromStart = false)
+        applyEdgeContentOffsets(contentOffset)
+    }
 
+    private fun applyEdgeContentOffsets(contentOffset: Int) {
         (seekFeedbackBackContent.layoutParams as? MarginLayoutParams)?.let { params ->
             params.marginStart = contentOffset
             seekFeedbackBackContent.layoutParams = params
@@ -146,17 +192,18 @@ class KinesopeSeekView(
         }
     }
 
-    private fun layoutCircleHemisphere(view: View, diameter: Int, radius: Int, isLeft: Boolean) {
-        val params = FrameLayout.LayoutParams(diameter, diameter).apply {
+    private fun layoutOvalHemisphere(view: View, ovalWidth: Int, ovalHeight: Int, isLeft: Boolean) {
+        val halfWidth = ovalWidth / 2
+        val params = FrameLayout.LayoutParams(ovalWidth, ovalHeight).apply {
             gravity = if (isLeft) {
                 Gravity.CENTER_VERTICAL or Gravity.START
             } else {
                 Gravity.CENTER_VERTICAL or Gravity.END
             }
             if (isLeft) {
-                marginStart = -radius
+                marginStart = -halfWidth
             } else {
-                marginEnd = -radius
+                marginEnd = -halfWidth
             }
         }
         view.layoutParams = params
@@ -370,6 +417,16 @@ class KinesopeSeekView(
 
     private companion object {
         private const val CONTENT_OFFSET_IN_RADIUS = 0.42f
+        /** Landscape fullscreen hemisphere diameter vs screen height. */
+        private const val FULLSCREEN_HEMISPHERE_SCALE = 1.45f
+        /** Portrait fullscreen oval width vs player width. */
+        private const val FULLSCREEN_PORTRAIT_OVAL_WIDTH_SCALE = 1.2f
+        /** Portrait inline: compact oval width vs player width. */
+        private const val INLINE_PORTRAIT_OVAL_WIDTH_SCALE = 0.58f
+        /** Stretch oval past player height so the clipped edge looks elongated. */
+        private const val PORTRAIT_OVAL_HEIGHT_STRETCH = 1.45f
+        /** Minimum oval height / width for portrait half-ovals. */
+        private const val PORTRAIT_OVAL_MIN_ASPECT = 2.6f
         private const val SCRUB_OVERLAY_FADE_MS = 150L
         private const val FEEDBACK_SHOW_MS = 180L
         private const val FEEDBACK_HIDE_MS = 150L

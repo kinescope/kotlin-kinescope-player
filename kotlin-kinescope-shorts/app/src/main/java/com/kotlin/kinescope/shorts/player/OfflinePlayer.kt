@@ -55,11 +55,11 @@ class OfflinePlayer(
                 else -> throw IllegalArgumentException("Unsupported binding type")
             }
 
+            // Offline-only: do not set FLAG_IGNORE_CACHE_ON_ERROR (upstream is null).
             val cacheDataSourceFactory = CacheDataSource.Factory()
                 .setCache(VideoDownloadManager.getDownloadCache(context))
                 .setUpstreamDataSourceFactory(null)
                 .setCacheReadDataSourceFactory(FileDataSource.Factory())
-                .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
 
             val mediaItemBuilder = MediaItem.Builder()
                 .setUri(videoData.hlsLink.toUri())

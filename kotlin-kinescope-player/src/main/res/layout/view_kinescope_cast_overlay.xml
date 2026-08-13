@@ -31,10 +31,11 @@
             android:layout_width="@dimen/kinescope_play_pause_size"
             android:layout_height="@dimen/kinescope_play_pause_size"
             android:layout_marginTop="16dp"
-            android:background="@null"
+            android:background="@drawable/bg_play_pause_button"
             android:contentDescription="@string/player_play"
+            android:padding="@dimen/kinescope_play_pause_glyph_inset"
             android:scaleType="fitCenter"
-            android:src="@drawable/ic_play" />
+            android:src="@drawable/ic_center_play_glyph" />
 
         <LinearLayout
             android:layout_width="match_parent"

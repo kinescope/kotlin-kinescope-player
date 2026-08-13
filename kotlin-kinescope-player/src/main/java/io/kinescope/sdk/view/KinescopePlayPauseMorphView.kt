@@ -12,10 +12,10 @@ import androidx.vectordrawable.graphics.drawable.AnimatedVectorDrawableCompat
 import io.kinescope.sdk.R
 
 /**
- * Center play/pause control with Figma path morph (play <-> pause) and light tap zoom.
+ * Center play/pause control with path morph (play <-> pause) and light tap zoom.
  * Replay uses a static rewind icon.
  *
- * Uses the same [R.drawable.ic_play_pause_morph] asset as Compose; pause state = animation end.
+ * Uses [R.drawable.ic_play_pause_morph]; pause state = animation end.
  */
 class KinescopePlayPauseMorphView @JvmOverloads constructor(
     context: Context,
@@ -23,7 +23,7 @@ class KinescopePlayPauseMorphView @JvmOverloads constructor(
 ) : AppCompatImageButton(context, attrs) {
 
     private var showingReplay = false
-  /** false = play (morph start), true = pause (morph end) — matches Compose `atEnd`. */
+    /** false = play (morph start), true = pause (morph end) — matches Compose `atEnd`. */
     private var atEnd = false
     private var morphAnimating = false
 
@@ -34,7 +34,7 @@ class KinescopePlayPauseMorphView @JvmOverloads constructor(
         get() = resources.getDimensionPixelSize(R.dimen.kinescope_play_pause_rewind_glyph_inset)
 
     init {
-        background = null
+        setBackgroundResource(R.drawable.bg_play_pause_button)
         scaleType = ScaleType.FIT_CENTER
         applyGlyphInset(replay = false)
         showMorphFrame(atEnd = false)

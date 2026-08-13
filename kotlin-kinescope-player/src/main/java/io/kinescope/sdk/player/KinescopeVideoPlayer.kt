@@ -41,6 +41,8 @@ class KinescopeVideoPlayer(
 
     private val USER_AGENT = "KinescopeAndroidVideoKotlin"
     private var currentKinescopeVideo: KinescopeVideo? = null
+    /** height → display name from embed `quality_map.name`. */
+    private var qualityNamesByHeight: Map<Int, String> = emptyMap()
     private var fetch: KinescopeFetch
     private var boundLifecycle: Lifecycle? = null
     private var lifecycleObserver: DefaultLifecycleObserver? = null
@@ -49,15 +51,18 @@ class KinescopeVideoPlayer(
 
     init {
         val toneMapToSdr = KinescopeHdrHelper.shouldToneMapToSdr(context, kinescopePlayerOptions.hdrToneMapping)
+        val renderersFactory = if (toneMapToSdr) {
+            KinescopeToneMappingRenderersFactory(context, requestOpenGlToneMapping = true)
+        } else {
+            androidx.media3.exoplayer.DefaultRenderersFactory(context)
+        }
+        KinescopeSecureDecoderWorkaround.applyTo(renderersFactory)
+
         val playerBuilder = ExoPlayer.Builder(context)
             .setTrackSelector(DefaultTrackSelector(context, AdaptiveTrackSelection.Factory()))
             .setSeekBackIncrementMs(10000)
             .setSeekForwardIncrementMs(10000)
-        if (toneMapToSdr) {
-            playerBuilder.setRenderersFactory(
-                KinescopeToneMappingRenderersFactory(context, requestOpenGlToneMapping = true),
-            )
-        }
+            .setRenderersFactory(renderersFactory)
         exoPlayer = playerBuilder.build()
         playerHost = exoPlayer?.let { KinescopePlayerHost(it) }
 
@@ -170,6 +175,27 @@ class KinescopeVideoPlayer(
     }
 
     fun getVideo(): KinescopeVideo? = currentKinescopeVideo
+
+    /**
+     * Sets quality labels from embed `quality_map` (track height → name).
+     * Used for offline playback when [getVideo] is unavailable.
+     */
+    fun setQualityNamesByHeight(namesByHeight: Map<Int, String>) {
+        qualityNamesByHeight = namesByHeight
+    }
+
+    fun qualityNamesByHeight(): Map<Int, String> {
+        if (qualityNamesByHeight.isNotEmpty()) {
+            return qualityNamesByHeight
+        }
+        return currentKinescopeVideo?.qualityMap
+            ?.mapNotNull { entry ->
+                val name = entry.name.trim().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                entry.height to name
+            }
+            ?.toMap()
+            .orEmpty()
+    }
 
     /** Active media3 player for UI binding (local ExoPlayer by default, CastPlayer when casting). */
     val playbackPlayer: Player?

@@ -51,7 +51,7 @@ Install on a connected device:
 |--------|----------|----------------------|--------------|
 | **Playlist test** | `PlaylistActivity` | Video list from Dashboard API, `KinescopePlayerView` with template options, fullscreen, PiP, Chromecast | [quick-start.md](quick-start.md), [chromecast.md](chromecast.md), [picture-in-picture.md](picture-in-picture.md) |
 | **Subtitles test** | `SubtitlesActivity` | Subtitles, captions search, appearance | [subtitles-and-settings.md](subtitles-and-settings.md) |
-| **Chapters test** | `ChaptersActivity` | Chapters icon + seek markers | [player-chrome.md](player-chrome.md) · [settings-menu.md — Chapters](settings-menu.md) |
+| **Chapters test** | `ChaptersActivity` | Chapters icon + seek markers; subtitles on (`setShowSubtitles(true)`) | [player-chrome.md](player-chrome.md) · [subtitles-and-settings.md](subtitles-and-settings.md) · [settings-menu.md — Chapters](settings-menu.md) |
 | **DRM viewing** | `DrmViewingActivity` | Online Widevine-protected VOD playback | [offline-downloads.md](offline-downloads.md) |
 | **Custom Player test** | `CustomPlayerActivity` | `KinescopePlayerOptions` toggles, quality/preload, Dashboard API — list/create/update/delete player templates | [player-options.md](player-options.md), [dashboard-api.md](dashboard-api.md) |
 | **Live test** | `LiveActivity` | Live stream playback and live-specific UI | [live.md](live.md) |

@@ -24,7 +24,7 @@ On **narrow layouts** (width ≤ ~480 dp) and in **fullscreen**, the bottom bar 
 
 | Element | Option | Default | Description |
 |---------|--------|---------|-------------|
-| Play / Pause / Replay | `showPlayPauseButton` | `true` | Large centre button; shows replay when playback ended |
+| Play / Pause / Replay | `showPlayPauseButton` | `true` | 72 dp circle (primary @ 64%) with play↔pause morph; replay icon when playback ended |
 | — | `controls` | `true` | Master switch for the whole overlay |
 
 Hidden during Picture-in-Picture, buffering spinner (initial load), and while [captions search](subtitles-and-settings.md) is open.
@@ -82,6 +82,8 @@ When `usesCompactOptionsChrome()` is active:
 | Author / subtitle | When `KinescopeVideo.subtitle` is set |
 
 Hidden during scrubbing, captions search, and PiP exit flash suppression.
+
+Progressive captions also fade out during seek-bar scrubbing (see [Subtitles](subtitles-and-settings.md)).
 
 ## Gestures
 

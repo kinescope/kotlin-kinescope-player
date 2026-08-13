@@ -7,6 +7,7 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <color name="gray">#FF9E9E9E</color>
 
     <color name="player_custom_color_remaining">#6C2EB9</color>
 
@@ -19,4 +20,10 @@
     <color name="playlist_thumbnail_placeholder">#E8E8E8</color>
     <color name="playlist_duration_bg">#A3111111</color>
     <color name="playlist_drag_handle">#29111111</color>
+
+    <!-- Saved videos (offline) -->
+    <color name="saved_videos_surface">#FF111111</color>
+    <color name="saved_videos_row_pressed">#0AFFFFFF</color>
+    <color name="saved_videos_text_secondary">#A3FFFFFF</color>
+    <color name="saved_videos_thumbnail_placeholder">#1FFFFFFF</color>
 </resources>

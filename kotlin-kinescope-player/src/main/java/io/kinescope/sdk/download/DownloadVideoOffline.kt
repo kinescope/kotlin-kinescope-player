@@ -1,12 +1,16 @@
 package io.kinescope.sdk.download
 
 import android.content.Context
+import android.net.Uri
 import androidx.annotation.OptIn
+import androidx.core.net.toUri
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.cache.Cache
 import androidx.media3.exoplayer.offline.Download
 import androidx.media3.exoplayer.offline.DownloadManager
 import androidx.media3.exoplayer.offline.DownloadRequest
+import io.kinescope.sdk.shorts.download.OfflineDownloadQualityHelper
 import io.kinescope.sdk.shorts.download.VideoDownloadManager
 import io.kinescope.sdk.shorts.download.VideoDownloadService
 
@@ -20,44 +24,36 @@ import io.kinescope.sdk.shorts.download.VideoDownloadService
  *
  * 1. Add dependency: `implementation 'com.github.kinescope:kotlin-kinescope-player:x'`
  * 2. Call [initialize] at app startup (Application or first Activity).
- * 3. Start a download: [startDownload]
+ * 3. Prefer [listDownloadQualities] + [startDownloadWithQuality] so only one height is cached.
+ *    A bare [DownloadRequest] on a master playlist downloads **all** variants.
  *
- * ## Without DRM (HLS)
+ * ## Single quality (recommended)
  *
  * ```kotlin
  * DownloadVideoOffline.initialize(context)
- * val request = DownloadRequest.Builder(contentId, uri)
- *     .setMimeType(MimeTypes.APPLICATION_M3U8)
- *     .setData(metadataJson.toByteArray(Charsets.UTF_8)) // optional
- *     .build()
- * DownloadVideoOffline.startDownload(context, request)
+ * DownloadVideoOffline.listDownloadQualities(context, uri, qualityMapHints) { result ->
+ *     val height = result.getOrNull()?.firstOrNull()?.height ?: return@listDownloadQualities
+ *     DownloadVideoOffline.startDownloadWithQuality(
+ *         context = context,
+ *         contentId = contentId,
+ *         manifestUri = uri,
+ *         videoHeightPx = height,
+ *         keySetId = keySetId, // optional Widevine
+ *     )
+ * }
  * ```
  *
  * ## With DRM (Widevine)
  *
  * You need: PSSH from the stream, license URL, and keySetId after acquiring the offline license.
  * [io.kinescope.sdk.shorts.drm.DrmConfigurator] and [io.kinescope.sdk.shorts.drm.DrmHelper]
- * can obtain PSSH from ExoPlayer and acquire the offline license. Then:
- *
- * ```kotlin
- * val request = DownloadRequest.Builder(contentId, uri)
- *     .setMimeType(MimeTypes.APPLICATION_M3U8)
- *     .setData(metadataJson.toByteArray(Charsets.UTF_8))
- *     .setKeySetId(keySetId)
- *     .build()
- * DownloadVideoOffline.startDownload(context, request)
- * ```
- *
- * ## DASH (instead of HLS)
- *
- * Same flow, different MIME and manifest URL:
- * `setMimeType(MimeTypes.APPLICATION_MPD)`, URI to `.mpd`. DRM (keySetId) — same as for HLS.
+ * can obtain PSSH from ExoPlayer and acquire the offline license. Then pass [keySetId] to
+ * [startDownloadWithQuality] / [startDownload].
  *
  * ## Offline playback
  *
- * [getDownloadCache] — download cache. Use CacheDataSource + MediaItem with [Download.request.keySetId] for DRM.
- * [io.kinescope.sdk.shorts.player.OfflinePlayer] supports HLS only; for DASH use
- * `DashMediaSource.Factory(cacheDataSourceFactory).createMediaSource(mediaItem)` with the same cache and keySetId.
+ * Prefer `download.request.toMediaItem()` so [DownloadRequest.streamKeys] match the cached tracks.
+ * [getDownloadCache] — download cache. Use CacheDataSource + MediaItem with keySetId for DRM.
  */
 @OptIn(UnstableApi::class)
 object DownloadVideoOffline {
@@ -71,7 +67,114 @@ object DownloadVideoOffline {
     }
 
     /**
+     * Lists downloadable video heights from an HLS/DASH manifest.
+     * [qualityMap] supplies display names from embed `quality_map` (height / short side / name digits).
+     */
+    fun listDownloadQualities(
+        context: Context,
+        manifestUri: Uri,
+        qualityMap: List<OfflineDownloadQualityHelper.QualityMapHint>? = null,
+        mimeType: String = MimeTypes.APPLICATION_M3U8,
+        drmLicenseUrl: String? = null,
+        callback: (Result<List<OfflineDownloadQualityHelper.QualityOption>>) -> Unit,
+    ) {
+        initialize(context)
+        OfflineDownloadQualityHelper.listQualities(
+            context = context,
+            manifestUri = manifestUri,
+            mimeType = mimeType,
+            qualityMap = qualityMap,
+            drmLicenseUrl = drmLicenseUrl,
+            callback = callback,
+        )
+    }
+
+    fun listDownloadQualities(
+        context: Context,
+        manifestUri: String,
+        qualityMap: List<OfflineDownloadQualityHelper.QualityMapHint>? = null,
+        mimeType: String = MimeTypes.APPLICATION_M3U8,
+        drmLicenseUrl: String? = null,
+        callback: (Result<List<OfflineDownloadQualityHelper.QualityOption>>) -> Unit,
+    ) = listDownloadQualities(
+        context,
+        manifestUri.toUri(),
+        qualityMap,
+        mimeType,
+        drmLicenseUrl,
+        callback,
+    )
+
+    /**
+     * Builds a single-quality [DownloadRequest] (stream keys) and starts the download.
+     */
+    fun startDownloadWithQuality(
+        context: Context,
+        contentId: String,
+        manifestUri: Uri,
+        videoHeightPx: Int,
+        videoWidthPx: Int = androidx.media3.common.C.LENGTH_UNSET,
+        mimeType: String = MimeTypes.APPLICATION_M3U8,
+        data: ByteArray? = null,
+        keySetId: ByteArray? = null,
+        drmLicenseUrl: String? = null,
+        qualityHint: String? = null,
+        onError: ((Throwable) -> Unit)? = null,
+        onStarted: (() -> Unit)? = null,
+    ) {
+        initialize(context)
+        OfflineDownloadQualityHelper.buildDownloadRequest(
+            context = context,
+            contentId = contentId,
+            manifestUri = manifestUri,
+            videoHeightPx = videoHeightPx,
+            videoWidthPx = videoWidthPx,
+            mimeType = mimeType,
+            data = data,
+            keySetId = keySetId,
+            drmLicenseUrl = drmLicenseUrl,
+            qualityHint = qualityHint,
+        ) { result ->
+            result.onSuccess { request ->
+                VideoDownloadService.startDownload(context.applicationContext, request)
+                onStarted?.invoke()
+            }.onFailure { error ->
+                onError?.invoke(error)
+            }
+        }
+    }
+
+    fun startDownloadWithQuality(
+        context: Context,
+        contentId: String,
+        manifestUri: String,
+        videoHeightPx: Int,
+        videoWidthPx: Int = androidx.media3.common.C.LENGTH_UNSET,
+        mimeType: String = MimeTypes.APPLICATION_M3U8,
+        data: ByteArray? = null,
+        keySetId: ByteArray? = null,
+        drmLicenseUrl: String? = null,
+        qualityHint: String? = null,
+        onError: ((Throwable) -> Unit)? = null,
+        onStarted: (() -> Unit)? = null,
+    ) = startDownloadWithQuality(
+        context,
+        contentId,
+        manifestUri.toUri(),
+        videoHeightPx,
+        videoWidthPx,
+        mimeType,
+        data,
+        keySetId,
+        drmLicenseUrl,
+        qualityHint,
+        onError,
+        onStarted,
+    )
+
+    /**
      * Starts a download via VideoDownloadService (foreground, with notification).
+     * Prefer [startDownloadWithQuality] so only one height is cached.
      */
     fun startDownload(context: Context, request: DownloadRequest) {
         initialize(context)

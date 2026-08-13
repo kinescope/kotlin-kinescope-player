@@ -35,6 +35,34 @@
             android:tint="@color/white" />
     </androidx.appcompat.widget.Toolbar>
 
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingBottom="12dp">
+
+        <EditText
+            android:id="@+id/etVideoId"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:hint="Video ID (DRM)"
+            android:inputType="text"
+            android:textColor="@color/white"
+            android:textColorHint="@color/gray"
+            android:textSize="14sp" />
+
+        <Button
+            android:id="@+id/btnDownloadById"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Скачать"
+            android:textSize="14sp" />
+    </LinearLayout>
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerAddDrm"
         android:layout_width="match_parent"

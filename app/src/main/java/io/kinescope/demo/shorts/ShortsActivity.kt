@@ -147,7 +147,7 @@ class ShortsActivity : AppCompatActivity(), ActivityProvider {
 
     override fun getOfflinePlayerActivityIntent(videoData: VideoData, downloadId: String): android.content.Intent {
         return android.content.Intent(this, io.kinescope.demo.offlinedrm.OfflineMainPlayerActivity::class.java).apply {
-            flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
+            // Avoid NEW_TASK|CLEAR_TOP — they wipe the Shorts back stack so Back jumps to Main.
             val videoDataJson = try {
                 AppJson.encodeToString(VideoData.serializer(), videoData)
             } catch (e: Exception) {
@@ -155,6 +155,7 @@ class ShortsActivity : AppCompatActivity(), ActivityProvider {
             }
             putExtra(io.kinescope.demo.offlinedrm.OfflineMainPlayerActivity.EXTRA_VIDEO_DATA_JSON, videoDataJson)
             putExtra(io.kinescope.demo.offlinedrm.OfflineMainPlayerActivity.EXTRA_DOWNLOAD_ID, downloadId)
+            // No EXTRA_UP_NAVIGATION → OfflineMainPlayerActivity.finish() returns to Shorts.
         }
     }
 

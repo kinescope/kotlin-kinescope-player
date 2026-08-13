@@ -1,6 +1,5 @@
 package io.kinescope.demo.drm
 
-import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.os.Bundle
 import android.view.View
@@ -10,6 +9,7 @@ import androidx.core.view.isVisible
 import androidx.media3.common.util.UnstableApi
 import io.kinescope.demo.KinescopeDemoConfig
 import io.kinescope.demo.R
+import io.kinescope.sdk.player.KinescopeContentOrientationController
 import io.kinescope.sdk.player.KinescopePictureInPictureSession
 import io.kinescope.sdk.player.KinescopeVideoPlayer
 import io.kinescope.sdk.view.KinescopePlayerView
@@ -18,6 +18,7 @@ import io.kinescope.sdk.view.KinescopePlayerView
 class DrmViewingActivity : AppCompatActivity() {
     private var isVideoFullscreen = false
     private lateinit var pipSession: KinescopePictureInPictureSession
+    private lateinit var orientationController: KinescopeContentOrientationController
     private lateinit var playerView: KinescopePlayerView
     private lateinit var fullscreenPlayerView: KinescopePlayerView
     private lateinit var kinescopePlayer: KinescopeVideoPlayer
@@ -45,6 +46,7 @@ class DrmViewingActivity : AppCompatActivity() {
         playerView.applyTemplateOptions()
         playerView.onFullscreenButtonCallback = { toggleFullscreen() }
         fullscreenPlayerView.onFullscreenButtonCallback = { toggleFullscreen() }
+        ensureOrientationController()
         pipSession.attach()
 
         kinescopePlayer.loadVideo(KinescopeDemoConfig.DRM_VIDEO_ID, onSuccess = { video ->
@@ -54,9 +56,27 @@ class DrmViewingActivity : AppCompatActivity() {
         })
     }
 
+    private fun ensureOrientationController() {
+        if (!::orientationController.isInitialized) {
+            orientationController = KinescopeContentOrientationController(
+                activity = this,
+                playerViews = { listOf(playerView, fullscreenPlayerView) },
+            )
+            orientationController.attach()
+        }
+        orientationController.setFullscreen(isVideoFullscreen)
+    }
+
     override fun onStop() {
         pipSession.onStop()
         super.onStop()
+    }
+
+    override fun onDestroy() {
+        if (::orientationController.isInitialized) {
+            orientationController.detach()
+        }
+        super.onDestroy()
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
@@ -90,15 +110,14 @@ class DrmViewingActivity : AppCompatActivity() {
         if (isVideoFullscreen) {
             setFullscreen(false)
             supportActionBar?.show()
-            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             isVideoFullscreen = false
         } else {
             setFullscreen(true)
             supportActionBar?.hide()
-            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
             isVideoFullscreen = true
         }
         fullscreenPlayerView.isVisible = isVideoFullscreen
+        orientationController.setFullscreen(isVideoFullscreen)
     }
 
     @Deprecated("Deprecated in Java")

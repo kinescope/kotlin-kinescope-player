@@ -53,7 +53,9 @@ Closes automatically on Picture-in-Picture entry.
 | **Two-line alignment** | Both lines centred in the caption block |
 | **Single line** | Left-aligned |
 | **Caption box** | Dark rounded background; 12 dp side margins |
-| **Controls offset** | Captions move up when control overlay is visible (200 ms animation) |
+| **Z-order** | Drawn above the control overlay scrim (not dimmed behind chrome) |
+| **Controls offset** | Sit just above the control bar when chrome is visible (inline and fullscreen); animate with the overlay (~200 ms) |
+| **Scrub** | Fade out while dragging the seek bar; fade back in after scrub ends |
 
 ### Layout dimensions
 

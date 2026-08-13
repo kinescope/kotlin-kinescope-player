@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="demo_player_inline_height">260dp</dimen>
+    <dimen name="demo_player_inline_height_compact">220dp</dimen>
+    <dimen name="demo_player_inline_height_playlist">211dp</dimen>
+</resources>
