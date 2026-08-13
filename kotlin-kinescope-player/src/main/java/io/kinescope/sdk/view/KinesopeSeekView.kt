@@ -108,7 +108,7 @@ class KinesopeSeekView(
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         val sizeChanged = w != oldw || h != oldh
-        if (sizeChanged && w > 0 && (isMobilePlayerChrome || isPortraitContent || isFullscreenMode)) {
+        if (sizeChanged && w > 0) {
             applyEdgeFeedbackStyle(isFullscreenMode)
         }
     }

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Inline double-tap seek hemispheres: larger on tablet so they match the bigger player. -->
+    <dimen name="kinescope_seek_feedback_circle_diameter">480dp</dimen>
+    <dimen name="kinescope_seek_feedback_icon_width">40dp</dimen>
+    <dimen name="kinescope_seek_feedback_icon_height">15dp</dimen>
+</resources>
