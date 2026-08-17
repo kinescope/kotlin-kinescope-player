@@ -48,6 +48,15 @@ kinescopePlayer.loadVideo(videoId, onSuccess = { video ->
 
 When `autoplay = true`, playback starts automatically after `loadVideo` succeeds.
 
+### DRM Authorization Backend
+
+```kotlin
+kinescopePlayer.kinescopePlayerOptions.drmAuthToken = userJwtOrId
+kinescopePlayer.loadVideo(videoId, ...)
+```
+
+See [Player options → drmAuthToken](player-options.md).
+
 ## Local / progressive file
 
 To play a local or progressive URI (`content://`, `file://`, progressive HTTP) without a Kinescope media id:

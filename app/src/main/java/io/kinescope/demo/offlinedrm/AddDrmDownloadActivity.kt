@@ -64,7 +64,8 @@ class AddDrmDownloadActivity : AppCompatActivity() {
 
     private var recycler: RecyclerView? = null
     private var adapter: Adapter? = null
-    private val downloadingIds = mutableSetOf<String>()
+    /** contentId → HLS URL key (without query); kept until COMPLETED / FAILED / removed. */
+    private val downloadingIds = mutableMapOf<String, String>()
     private var currentTempPlayer: ExoPlayer? = null
     private val drmConfigurator = DrmConfigurator(this)
     private lateinit var apiHelper: KinescopeApiHelper
@@ -134,18 +135,29 @@ class AddDrmDownloadActivity : AppCompatActivity() {
             finalException: Exception?,
         ) {
             runOnUiThread {
-                if (download.state == Download.STATE_COMPLETED) {
-                    try {
-                        val videoDataJson = String(download.request.data, StandardCharsets.UTF_8)
-                        val videoData = AppJson.decodeFromString(VideoData.serializer(), videoDataJson)
-                        val quality = videoData.selectedQualityLabel?.let { " ($it)" }.orEmpty()
+                when (download.state) {
+                    Download.STATE_COMPLETED -> {
+                        downloadingIds.remove(download.request.id)
+                        try {
+                            val videoDataJson = String(download.request.data, StandardCharsets.UTF_8)
+                            val videoData = AppJson.decodeFromString(VideoData.serializer(), videoDataJson)
+                            val quality = videoData.selectedQualityLabel?.let { " ($it)" }.orEmpty()
+                            Toast.makeText(
+                                this@AddDrmDownloadActivity,
+                                "Видео \"${videoData.title}\"$quality скачано",
+                                Toast.LENGTH_LONG,
+                            ).show()
+                        } catch (_: Exception) {
+                            Toast.makeText(this@AddDrmDownloadActivity, "Видео скачано", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                    Download.STATE_FAILED -> {
+                        downloadingIds.remove(download.request.id)
                         Toast.makeText(
                             this@AddDrmDownloadActivity,
-                            "Видео \"${videoData.title}\"$quality скачано",
+                            "Ошибка скачивания",
                             Toast.LENGTH_LONG,
                         ).show()
-                    } catch (_: Exception) {
-                        Toast.makeText(this@AddDrmDownloadActivity, "Видео скачано", Toast.LENGTH_LONG).show()
                     }
                 }
                 adapter?.notifyItemChangedForDownload(download)
@@ -153,7 +165,10 @@ class AddDrmDownloadActivity : AppCompatActivity() {
         }
 
         override fun onDownloadRemoved(downloadManager: DownloadManager, download: Download) {
-            runOnUiThread { adapter?.notifyItemChangedForDownload(download) }
+            runOnUiThread {
+                downloadingIds.remove(download.request.id)
+                adapter?.notifyItemChangedForDownload(download)
+            }
         }
     }
 
@@ -357,13 +372,10 @@ class AddDrmDownloadActivity : AppCompatActivity() {
             ).show()
             return
         }
-        downloadingIds.add(contentId)
+        downloadingIds[contentId] = hlsKey(videoData.hlsLink)
         adapter?.notifyDataSetChanged()
         Toast.makeText(this, "Скачиваем ${videoData.selectedQualityLabel ?: ""}…", Toast.LENGTH_SHORT).show()
-        startOfflineDownload(videoData, null, videoHeightPx, videoWidthPx) {
-            downloadingIds.remove(contentId)
-            adapter?.notifyDataSetChanged()
-        }
+        startOfflineDownload(videoData, null, videoHeightPx, videoWidthPx)
     }
 
     private fun startDrmDownload(videoData: VideoData, videoHeightPx: Int, videoWidthPx: Int = C.LENGTH_UNSET) {
@@ -378,7 +390,7 @@ class AddDrmDownloadActivity : AppCompatActivity() {
             return
         }
 
-        downloadingIds.add(contentId)
+        downloadingIds[contentId] = hlsKey(videoData.hlsLink)
         adapter?.notifyDataSetChanged()
 
         val licenseUrl = videoData.drm?.widevine?.licenseUrl?.takeIf { it.isNotBlank() }
@@ -407,10 +419,7 @@ class AddDrmDownloadActivity : AppCompatActivity() {
             val withDrm = videoData.copy(
                 drm = DrmInfo(widevine = WidevineInfo(licenseUrl = licenseUrl)),
             )
-            startOfflineDownload(withDrm, keySetId, videoHeightPx, videoWidthPx) {
-                downloadingIds.remove(cId)
-                adapter?.notifyDataSetChanged()
-            }
+            startOfflineDownload(withDrm, keySetId, videoHeightPx, videoWidthPx)
             Toast.makeText(
                 this,
                 "Скачивание с DRM запущено (${videoData.selectedQualityLabel})",
@@ -571,18 +580,18 @@ class AddDrmDownloadActivity : AppCompatActivity() {
         keySetId: ByteArray?,
         videoHeightPx: Int,
         videoWidthPx: Int = C.LENGTH_UNSET,
-        onStarted: (() -> Unit)? = null,
     ) {
         if (videoData.hlsLink.isBlank()) {
-            onStarted?.invoke()
             return
         }
         val contentId = generateStableContentId(videoData.hlsLink, videoHeightPx)
         val existing = VideoDownloadManager.getDownloadById(contentId)
         if (existing != null && existing.state == Download.STATE_COMPLETED) {
-            onStarted?.invoke()
+            downloadingIds.remove(contentId)
+            adapter?.notifyDataSetChanged()
             return
         }
+        downloadingIds[contentId] = hlsKey(videoData.hlsLink)
         val videoDataJson = try {
             AppJson.encodeToString(VideoData.serializer(), videoData)
         } catch (_: Exception) {
@@ -600,12 +609,17 @@ class AddDrmDownloadActivity : AppCompatActivity() {
             drmLicenseUrl = videoData.drm?.widevine?.licenseUrl,
             qualityHint = videoData.selectedQualityLabel,
             onError = {
+                downloadingIds.remove(contentId)
+                adapter?.notifyDataSetChanged()
                 Toast.makeText(this, "Ошибка начала загрузки", Toast.LENGTH_SHORT).show()
-                onStarted?.invoke()
             },
-            onStarted = onStarted,
+            onStarted = {
+                adapter?.notifyDataSetChanged()
+            },
         )
     }
+
+    private fun hlsKey(url: String): String = url.substringBefore("?")
 
     private fun generateStableContentId(url: String?, heightPx: Int): String {
         if (url.isNullOrBlank()) return UUID.randomUUID().toString()
@@ -629,7 +643,7 @@ class AddDrmDownloadActivity : AppCompatActivity() {
 
     private class Adapter(
         private val items: List<VideoData>,
-        private val downloadingIds: Set<String>,
+        private val downloadingIds: Map<String, String>,
         private val onDownloadClick: (VideoData) -> Unit,
         private val context: android.content.Context,
     ) : RecyclerView.Adapter<Adapter.VH>() {
@@ -654,47 +668,37 @@ class AddDrmDownloadActivity : AppCompatActivity() {
             holder.drmBadge.visibility =
                 if (v.drm?.widevine?.licenseUrl.isNullOrBlank()) View.GONE else View.VISIBLE
 
-            val anyDownloading = downloadingIds.any { id ->
-                VideoDownloadManager.getDownloadById(id)?.let { download ->
-                    try {
-                        val json = String(download.request.data, StandardCharsets.UTF_8)
-                        val data = AppJson.decodeFromString(VideoData.serializer(), json)
-                        data.hlsLink.substringBefore("?") == v.hlsLink.substringBefore("?")
-                    } catch (_: Exception) {
-                        false
-                    }
-                } == true
-            } || run {
-                val downloads = VideoDownloadManager.getDownloadManager(context).currentDownloads
-                downloads.any { download ->
-                    download.state == Download.STATE_DOWNLOADING &&
-                        downloadMatchesVideo(download, v)
+            val videoHlsKey = v.hlsLink.substringBefore("?")
+            val trackedContentIds = downloadingIds.filterValues { it == videoHlsKey }.keys
+            val isTracked = trackedContentIds.isNotEmpty()
+            val activeDownload = trackedContentIds
+                .asSequence()
+                .mapNotNull { id -> VideoDownloadManager.getDownloadById(id) }
+                .firstOrNull { VideoDownloadManager.isActiveState(it.state) }
+                ?: VideoDownloadManager.getActiveDownloads(context)
+                    .firstOrNull { downloadMatchesVideo(it, v) }
+            val anyDownloading = isTracked || activeDownload != null
+
+            val completed = !anyDownloading &&
+                VideoDownloadManager.getAllCompletedDownloads(context).any { download ->
+                    downloadMatchesVideo(download, v)
                 }
-            }
-
-            val completed = VideoDownloadManager.getAllCompletedDownloads(context).any { download ->
-                downloadMatchesVideo(download, v)
-            }
-
-            val downloadingDownload = VideoDownloadManager.getDownloadManager(context).currentDownloads
-                .firstOrNull { it.state == Download.STATE_DOWNLOADING && downloadMatchesVideo(it, v) }
 
             when {
-                downloadingDownload != null || anyDownloading -> {
-                    val download = downloadingDownload
+                anyDownloading -> {
                     holder.progressBar.visibility = View.VISIBLE
                     holder.progressText.visibility = View.VISIBLE
-                    if (download != null) {
-                        val (percent, bytesDownloaded) = VideoDownloadManager.getDownloadProgress(download)
-                        holder.progressBar.progress = percent
-                        val downloadedMB = bytesDownloaded / (1024 * 1024)
-                        val totalBytes = download.contentLength
-                        val totalMB = if (totalBytes > 0) totalBytes / (1024 * 1024) else 0
-                        holder.progressText.text = if (totalMB > 0) {
-                            "Скачивается: ${downloadedMB}MB / ${totalMB}MB ($percent%)"
-                        } else {
-                            "Скачивается: ${downloadedMB}MB ($percent%)"
+                    if (activeDownload != null) {
+                        val (percent, bytesDownloaded) = VideoDownloadManager.getDownloadProgress(activeDownload)
+                        val indeterminate = percent <= 0 && bytesDownloaded <= 0 ||
+                            activeDownload.state == Download.STATE_QUEUED ||
+                            activeDownload.state == Download.STATE_RESTARTING
+                        holder.progressBar.isIndeterminate = indeterminate
+                        if (!indeterminate) {
+                            holder.progressBar.progress = percent.coerceIn(0, 100)
                         }
+                        holder.progressText.text =
+                            VideoDownloadManager.formatDownloadProgressLabel(activeDownload)
                     } else {
                         holder.progressBar.isIndeterminate = true
                         holder.progressText.text = "Скачивается…"
@@ -703,12 +707,14 @@ class AddDrmDownloadActivity : AppCompatActivity() {
                     holder.btnDownload.text = "Скачивается…"
                 }
                 completed -> {
+                    holder.progressBar.isIndeterminate = false
                     holder.progressBar.visibility = View.GONE
                     holder.progressText.visibility = View.GONE
                     holder.btnDownload.isEnabled = true
                     holder.btnDownload.text = "Скачать ещё"
                 }
                 else -> {
+                    holder.progressBar.isIndeterminate = false
                     holder.progressBar.visibility = View.GONE
                     holder.progressText.visibility = View.GONE
                     holder.btnDownload.isEnabled = true
@@ -730,9 +736,19 @@ class AddDrmDownloadActivity : AppCompatActivity() {
 
         fun notifyProgressUpdate() {
             for (i in items.indices) {
-                val download = VideoDownloadManager.getDownloadManager(context).currentDownloads
-                    .firstOrNull { it.state == Download.STATE_DOWNLOADING && downloadMatchesVideo(it, items[i]) }
-                if (download != null) notifyItemChanged(i)
+                val video = items[i]
+                val videoHlsKey = video.hlsLink.substringBefore("?")
+                val tracked = downloadingIds.values.any { it == videoHlsKey }
+                val active = VideoDownloadManager.getActiveDownloads(context)
+                    .any { downloadMatchesVideo(it, video) } ||
+                    downloadingIds.keys.any { id ->
+                        VideoDownloadManager.getDownloadById(id)
+                            ?.takeIf { VideoDownloadManager.isActiveState(it.state) }
+                            ?.let { downloadMatchesVideo(it, video) } == true
+                    }
+                if (tracked || active) {
+                    notifyItemChanged(i)
+                }
             }
         }
 
@@ -744,8 +760,7 @@ class AddDrmDownloadActivity : AppCompatActivity() {
                 val data = AppJson.decodeFromString(VideoData.serializer(), json)
                 data.hlsLink.substringBefore("?") == video.hlsLink.substringBefore("?")
             } catch (_: Exception) {
-                download.request.uri.toString().substringBefore("?") ==
-                    video.hlsLink.substringBefore("?")
+                false
             }
         }
     }

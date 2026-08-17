@@ -116,6 +116,54 @@ object VideoDownloadManager {
         return Pair(percent, download.bytesDownloaded)
     }
 
+    /**
+     * Fresh download snapshot from the index (includes latest persisted progress).
+     * Prefer this over stale objects from [DownloadManager.currentDownloads] when polling UI.
+     */
+    fun findActiveDownload(
+        context: Context,
+        contentId: String? = null,
+        matches: ((Download) -> Boolean)? = null,
+    ): Download? {
+        initialize(context)
+        if (!contentId.isNullOrBlank()) {
+            getDownloadById(contentId)?.takeIf { isActiveState(it.state) }?.let { return it }
+        }
+        return getActiveDownloads(context).firstOrNull { download ->
+            matches?.invoke(download) != false
+        }
+    }
+
+    fun isActiveState(state: Int): Boolean =
+        state == Download.STATE_DOWNLOADING ||
+            state == Download.STATE_QUEUED ||
+            state == Download.STATE_RESTARTING
+
+    fun formatDownloadProgressLabel(download: Download): String {
+        val (percent, bytesDownloaded) = getDownloadProgress(download)
+        val downloadedMb = bytesDownloaded / (1024.0 * 1024.0)
+        val totalBytes = download.contentLength
+        return when {
+            download.state == Download.STATE_QUEUED ||
+                download.state == Download.STATE_RESTARTING ->
+                "В очереди / подготовка…"
+            bytesDownloaded <= 0L && percent <= 0 ->
+                "Скачивается…"
+            totalBytes > 0L && percent > 0 -> {
+                val totalMb = totalBytes / (1024.0 * 1024.0)
+                "Скачивается: %.1f / %.1f МБ (%d%%)".format(downloadedMb, totalMb, percent)
+            }
+            totalBytes > 0L -> {
+                val totalMb = totalBytes / (1024.0 * 1024.0)
+                "Скачивается: %.1f / %.1f МБ".format(downloadedMb, totalMb)
+            }
+            percent > 0 ->
+                "Скачивается: %.1f МБ (%d%%)".format(downloadedMb, percent)
+            else ->
+                "Скачивается: %.1f МБ".format(downloadedMb)
+        }
+    }
+
     fun getRemainingStorage(context: Context): Long {
         val downloadDirectory = File(context.getExternalFilesDir(null), "downloads")
         val freeSpace = downloadDirectory.freeSpace
@@ -146,7 +194,8 @@ object VideoDownloadManager {
             while (cursor.moveToNext()) {
                 val download = cursor.download
                 if (download.state == Download.STATE_DOWNLOADING ||
-                    download.state == Download.STATE_QUEUED
+                    download.state == Download.STATE_QUEUED ||
+                    download.state == Download.STATE_RESTARTING
                 ) {
                     downloads.add(download)
                 }

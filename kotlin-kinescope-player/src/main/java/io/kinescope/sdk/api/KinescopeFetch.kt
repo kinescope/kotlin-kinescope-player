@@ -11,6 +11,7 @@ interface KinescopeFetch {
     @GET(KinescopeApiConfig.VIDEO_JSON)
     fun getVideo(
         @Path(KinescopeApiConfig.VIDEO_ID_PARAM) videoId: String,
-        @Query("sdk") sdk: String = SDK_TYPE
+        @Query("sdk") sdk: String = SDK_TYPE,
+        @Query("drmauthtoken") drmAuthToken: String? = null,
     ): Call<KinescopeVideo>
 }

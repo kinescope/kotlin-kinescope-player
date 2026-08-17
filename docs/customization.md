@@ -25,6 +25,15 @@ playerView.setColors(
 
 ## Poster
 
+When video metadata includes `poster.url`, the player shows that image before playback. If there is **no** URL, the SDK falls back to the built-in `default_poster` drawable (on by default).
+
+```kotlin
+// Disable the bundled fallback (empty surface until play / your own poster)
+kinescopePlayer.kinescopePlayerOptions.showDefaultPoster = false
+```
+
+Show a poster yourself:
+
 ```kotlin
 playerView.showPoster(
     url = POSTER_URL,
@@ -54,6 +63,8 @@ playerView.hidePoster()
 ```
 
 > The poster is hidden automatically once playback starts.
+
+For the live awaiting placeholder (`live_awaiting_cover`), see [Live](live.md) (`showLiveAwaitingCover`).
 
 ## Built-in chrome toggles
 

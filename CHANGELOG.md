@@ -1,6 +1,14 @@
 # Changelog
 
-## [Unreleased]
+## [0.1.5] — 17.08.2026
+
+### Added
+- **`drmAuthToken`** — `KinescopePlayerOptions.drmAuthToken` passes `drmauthtoken` on `{videoId}.json` (same as web embed / RN), enabling Authorization Backend with DRM-protected videos
+- **`showDefaultPoster`** — opt out of the built-in `default_poster` fallback when metadata has no poster URL (default remains `true`)
+
+### Notes
+- Live awaiting cover was already controllable via `showLiveAwaitingCover` (default `true`)
+- **Domain restrictions** — when the video is limited to specific domains, call `kinescopePlayer.setReferer("https://your-domain.com/")` before `loadVideo` so the app’s `Referer` matches the allow list (default is `https://kinescope.io/`). This does not open embedding on other sites; see [player-options.md](docs/player-options.md)
 
 ## [0.1.4] — 13.08.2026
 

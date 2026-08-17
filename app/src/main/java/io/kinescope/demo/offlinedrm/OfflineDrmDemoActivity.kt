@@ -10,9 +10,11 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.ImageView
+import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.isVisible
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.offline.Download
 import androidx.media3.exoplayer.offline.DownloadManager
@@ -26,7 +28,12 @@ import io.kinescope.sdk.shorts.AppJson
 import io.kinescope.sdk.shorts.download.VideoDownloadManager
 import io.kinescope.sdk.shorts.models.VideoData
 import java.nio.charset.StandardCharsets
-
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 @UnstableApi
 class OfflineDrmDemoActivity : AppCompatActivity() {
@@ -34,16 +41,15 @@ class OfflineDrmDemoActivity : AppCompatActivity() {
     private lateinit var recycler: RecyclerView
     private lateinit var emptyText: TextView
     private var adapter: Adapter? = null
+    private var progressUpdateJob: Job? = null
 
     private val downloadListener = object : DownloadManager.Listener {
         override fun onDownloadChanged(
             downloadManager: DownloadManager,
             download: Download,
-            finalException: Exception?
+            finalException: Exception?,
         ) {
-            if (download.state == Download.STATE_COMPLETED) {
-                runOnUiThread { refreshList() }
-            }
+            runOnUiThread { refreshList() }
         }
 
         override fun onDownloadRemoved(downloadManager: DownloadManager, download: Download) {
@@ -68,7 +74,9 @@ class OfflineDrmDemoActivity : AppCompatActivity() {
 
         VideoDownloadManager.initialize(this)
         VideoDownloadManager.addDownloadListener(this, downloadListener)
+        recycler.layoutManager = LinearLayoutManager(this)
         refreshList()
+        startProgressUpdates()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -78,6 +86,8 @@ class OfflineDrmDemoActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        progressUpdateJob?.cancel()
+        progressUpdateJob = null
         VideoDownloadManager.removeDownloadListener(downloadListener)
         super.onDestroy()
     }
@@ -87,10 +97,21 @@ class OfflineDrmDemoActivity : AppCompatActivity() {
         refreshList()
     }
 
+    private fun startProgressUpdates() {
+        progressUpdateJob?.cancel()
+        progressUpdateJob = CoroutineScope(Dispatchers.Main).launch {
+            while (isActive) {
+                delay(500)
+                if (VideoDownloadManager.getActiveDownloads(this@OfflineDrmDemoActivity).isNotEmpty()) {
+                    refreshList()
+                }
+            }
+        }
+    }
+
     private fun refreshList() {
-        val items = loadCompletedOfflineDrmItems()
+        val items = loadOfflineListItems()
         adapter = Adapter(items, ::onOfflineItemClick, ::onDeleteClick)
-        recycler.layoutManager = LinearLayoutManager(this)
         recycler.adapter = adapter
 
         if (items.isEmpty()) {
@@ -102,7 +123,12 @@ class OfflineDrmDemoActivity : AppCompatActivity() {
         }
     }
 
-    private fun onOfflineItemClick(videoData: VideoData, downloadId: String) {
+    private fun onOfflineItemClick(item: OfflineListItem) {
+        if (item.isActive) {
+            Toast.makeText(this, "Дождитесь окончания загрузки", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val videoData = item.videoData ?: return
         val videoDataJson = try {
             AppJson.encodeToString(VideoData.serializer(), videoData)
         } catch (e: Exception) {
@@ -113,7 +139,7 @@ class OfflineDrmDemoActivity : AppCompatActivity() {
 
         val intent = Intent(this, OfflineMainPlayerActivity::class.java).apply {
             putExtra(OfflineMainPlayerActivity.EXTRA_VIDEO_DATA_JSON, videoDataJson)
-            putExtra(OfflineMainPlayerActivity.EXTRA_DOWNLOAD_ID, downloadId)
+            putExtra(OfflineMainPlayerActivity.EXTRA_DOWNLOAD_ID, item.download.request.id)
             putExtra(
                 OfflineMainPlayerActivity.EXTRA_UP_NAVIGATION,
                 OfflineMainPlayerActivity.UP_NAV_OFFLINE_DRM_LIST,
@@ -128,35 +154,48 @@ class OfflineDrmDemoActivity : AppCompatActivity() {
         refreshList()
     }
 
-    private fun loadCompletedOfflineDrmItems(): List<OfflineDrmItem> {
-        val result = mutableListOf<OfflineDrmItem>()
-        val downloads = VideoDownloadManager.getAllCompletedDownloads(this)
-        for (download in downloads) {
-            val data = download.request.data
-            if (data == null || data.isEmpty()) continue
-            val json = try {
-                String(data, StandardCharsets.UTF_8)
-            } catch (e: Exception) {
-                Log.e(TAG, "decode request.data", e)
-                continue
-            }
-            val videoData = try {
-                AppJson.decodeFromString(VideoData.serializer(), json)
-            } catch (e: Exception) {
-                Log.e(TAG, "parse VideoData: $json", e)
-                continue
-            }
-            if (videoData.hlsLink.isBlank()) continue
-            result.add(OfflineDrmItem(download, videoData))
+    private fun loadOfflineListItems(): List<OfflineListItem> {
+        val active = VideoDownloadManager.getActiveDownloads(this).map { download ->
+            OfflineListItem(
+                download = download,
+                videoData = parseVideoData(download),
+                isActive = true,
+            )
         }
-        return result
+        val completed = VideoDownloadManager.getAllCompletedDownloads(this).mapNotNull { download ->
+            val videoData = parseVideoData(download) ?: return@mapNotNull null
+            if (videoData.hlsLink.isBlank()) return@mapNotNull null
+            OfflineListItem(download = download, videoData = videoData, isActive = false)
+        }
+        return active + completed
     }
 
-    private data class OfflineDrmItem(val download: Download, val videoData: VideoData)
+    private fun parseVideoData(download: Download): VideoData? {
+        val data = download.request.data ?: return null
+        if (data.isEmpty()) return null
+        val json = try {
+            String(data, StandardCharsets.UTF_8)
+        } catch (e: Exception) {
+            Log.e(TAG, "decode request.data", e)
+            return null
+        }
+        return try {
+            AppJson.decodeFromString(VideoData.serializer(), json)
+        } catch (e: Exception) {
+            Log.e(TAG, "parse VideoData: $json", e)
+            null
+        }
+    }
+
+    private data class OfflineListItem(
+        val download: Download,
+        val videoData: VideoData?,
+        val isActive: Boolean,
+    )
 
     private class Adapter(
-        private val items: List<OfflineDrmItem>,
-        private val onItemClick: (VideoData, String) -> Unit,
+        private val items: List<OfflineListItem>,
+        private val onItemClick: (OfflineListItem) -> Unit,
         private val onDeleteClick: (String) -> Unit,
     ) : RecyclerView.Adapter<Adapter.VH>() {
 
@@ -165,6 +204,8 @@ class OfflineDrmDemoActivity : AppCompatActivity() {
             val thumbnail: ShapeableImageView = view.findViewById(R.id.thumbnail)
             val playOverlay: ImageView = view.findViewById(R.id.playOverlay)
             val title: TextView = view.findViewById(R.id.title)
+            val progressBar: ProgressBar = view.findViewById(R.id.progressBar)
+            val progressText: TextView = view.findViewById(R.id.progressText)
             val btnDelete: ImageButton = view.findViewById(R.id.btnDelete)
         }
 
@@ -177,9 +218,10 @@ class OfflineDrmDemoActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: VH, position: Int) {
             val item = items[position]
             holder.index.text = (position + 1).toString()
-            holder.title.text = item.videoData.title
+            val title = item.videoData?.title?.takeIf { it.isNotBlank() } ?: "Загрузка…"
+            holder.title.text = title
 
-            val posterUrl = item.videoData.posterUrl
+            val posterUrl = item.videoData?.posterUrl
             if (posterUrl.isNullOrBlank()) {
                 Glide.with(holder.thumbnail).clear(holder.thumbnail)
                 holder.thumbnail.setImageDrawable(null)
@@ -191,11 +233,31 @@ class OfflineDrmDemoActivity : AppCompatActivity() {
                     .error(R.drawable.bg_saved_videos_thumbnail)
                     .into(holder.thumbnail)
             }
-            holder.playOverlay.visibility = View.VISIBLE
 
-            holder.itemView.setOnClickListener {
-                onItemClick(item.videoData, item.download.request.id)
+            if (item.isActive) {
+                holder.playOverlay.isVisible = false
+                holder.progressBar.isVisible = true
+                holder.progressText.isVisible = true
+                val (percent, bytesDownloaded) = VideoDownloadManager.getDownloadProgress(item.download)
+                val indeterminate = percent <= 0 && bytesDownloaded <= 0 ||
+                    item.download.state == Download.STATE_QUEUED ||
+                    item.download.state == Download.STATE_RESTARTING
+                holder.progressBar.isIndeterminate = indeterminate
+                if (!indeterminate) {
+                    holder.progressBar.progress = percent.coerceIn(0, 100)
+                }
+                holder.progressText.text =
+                    VideoDownloadManager.formatDownloadProgressLabel(item.download)
+                holder.btnDelete.isEnabled = true
+            } else {
+                holder.playOverlay.isVisible = true
+                holder.progressBar.isIndeterminate = false
+                holder.progressBar.isVisible = false
+                holder.progressText.isVisible = false
+                holder.btnDelete.isEnabled = true
             }
+
+            holder.itemView.setOnClickListener { onItemClick(item) }
             holder.btnDelete.setOnClickListener {
                 onDeleteClick(item.download.request.id)
             }
