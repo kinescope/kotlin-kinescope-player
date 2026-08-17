@@ -27,8 +27,43 @@
 | `showAudioTracksInSettings` | `true` | Show audio track submenu when the stream has multiple tracks |
 | `showAudioOnlyQualityInSettings` | `true` | Show audio-only quality option in settings |
 | `videoScale` | `true` | Pinch-to-zoom on video and **Scale** item in settings (1×–5×) |
+| `showDefaultPoster` | `true` | Built-in `default_poster` when the video has no poster URL |
+| `showLiveAwaitingCover` | `true` | Built-in `live_awaiting_cover` while a live broadcast has not started |
+| `drmAuthToken` | `null` | Authorization Backend token (`drmauthtoken`) sent with `{videoId}.json` on `loadVideo` |
+| `referer` | `https://kinescope.io/` | HTTP `Referer` for metadata / DRM requests (must match domain restrictions in the dashboard) |
 
 Chrome icons (play, seek bar, PiP, fullscreen, …) vs settings popup items (Quality, Speed, …) are documented separately: [Player chrome](player-chrome.md), [Settings menu](settings-menu.md).
+
+### Built-in posters
+
+Both placeholders are **on by default**. Disable if you want an empty surface or your own art:
+
+```kotlin
+kinescopePlayer.kinescopePlayerOptions.apply {
+    showDefaultPoster = false       // no default_poster.png fallback
+    showLiveAwaitingCover = false   // no live_awaiting_cover.png before live starts
+}
+```
+
+- `showDefaultPoster = false` — when metadata has no `poster.url`, nothing is shown (you can still call `showPoster(...)` yourself).
+- `showLiveAwaitingCover = false` — `showLiveAwaitingCover()` becomes a no-op; see [Live](live.md).
+
+### DRM Authorization Backend (`drmAuthToken`)
+
+When video access is gated by a [Kinescope Authorization Backend](https://docs.kinescope.com/developer-guides/authorization-backend/), pass the same token you would put in the embed `?drmauthtoken=` query:
+
+```kotlin
+kinescopePlayer.kinescopePlayerOptions.drmAuthToken = userJwtOrId
+kinescopePlayer.loadVideo(videoId)
+```
+
+The SDK appends `drmauthtoken` to the metadata request (`https://kinescope.io/{videoId}.json`). Set the token **before** `loadVideo`. Reload the video after changing the token.
+
+If the video is also limited to specific domains in the dashboard, set a matching Referer (does not open embedding on other sites):
+
+```kotlin
+kinescopePlayer.setReferer("https://your-domain.com/")
+```
 
 ### Settings icon quality badge
 

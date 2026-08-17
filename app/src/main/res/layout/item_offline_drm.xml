@@ -49,19 +49,43 @@
             android:src="@drawable/ic_saved_videos_play" />
     </FrameLayout>
 
-    <TextView
-        android:id="@+id/title"
+    <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="12dp"
         android:layout_weight="1"
-        android:ellipsize="end"
-        android:includeFontPadding="false"
-        android:maxHeight="56dp"
-        android:maxLines="2"
-        android:textColor="@color/white"
-        android:textSize="14sp"
-        tools:text="Never lose your video again" />
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="2"
+            android:textColor="@color/white"
+            android:textSize="14sp"
+            tools:text="Never lose your video again" />
+
+        <ProgressBar
+            android:id="@+id/progressBar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="4dp"
+            android:layout_marginTop="6dp"
+            android:max="100"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/progressText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textColor="@color/saved_videos_text_secondary"
+            android:textSize="12sp"
+            android:visibility="gone"
+            tools:text="Скачивается: 12.5 МБ" />
+    </LinearLayout>
 
     <ImageButton
         android:id="@+id/btnDelete"

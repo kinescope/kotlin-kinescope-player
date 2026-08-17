@@ -285,7 +285,9 @@ class KinescopeVideoPlayer(
         onSuccess: ((KinescopeVideo?) -> Unit)? = null,
         onFailed: ((t: Throwable?) -> Unit)? = null,
     ) {
-        fetch.getVideo(videoId).enqueue(object : Callback<KinescopeVideo> {
+        val drmAuthToken = kinescopePlayerOptions.drmAuthToken?.takeIf { it.isNotBlank() }
+        fetch.getVideo(videoId = videoId, drmAuthToken = drmAuthToken)
+            .enqueue(object : Callback<KinescopeVideo> {
             override fun onResponse(
                 call: Call<KinescopeVideo>,
                 response: Response<KinescopeVideo>
@@ -383,7 +385,7 @@ class KinescopeVideoPlayer(
 
     fun setReferer(value: String) {
         kinescopePlayerOptions.referer = value
-        fetchUpdate();
+        fetchUpdate()
         KinescopeLogger.log(KinescopeLoggerLevel.PLAYER, "Referer $value")
     }
 

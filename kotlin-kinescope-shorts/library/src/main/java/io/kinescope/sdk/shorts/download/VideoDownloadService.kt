@@ -48,12 +48,12 @@ class VideoDownloadService : DownloadService(
 
         if (activeDownloads.isNotEmpty()) {
             val download = activeDownloads.first()
-            val (percent, _) = VideoDownloadManager.getDownloadProgress(download)
-
+            val (percent, bytesDownloaded) = VideoDownloadManager.getDownloadProgress(download)
+            val indeterminate = percent <= 0 && bytesDownloaded <= 0
             notificationBuilder
                 .setContentTitle("Загрузка видео")
-                .setContentText("Прогресс: $percent%")
-                .setProgress(100, percent, false)
+                .setContentText(VideoDownloadManager.formatDownloadProgressLabel(download))
+                .setProgress(100, percent.coerceAtLeast(0), indeterminate)
         } else {
             notificationBuilder
                 .setContentTitle("Загрузки видео")

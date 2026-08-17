@@ -2,7 +2,11 @@
 
 Kinescope supports Live mode. Call `setLiveState` on `KinescopePlayerView` to enable Live UI. Check whether the video is a live broadcast via `KinescopeVideo.isLive`.
 
-While the broadcast has not started yet, the player can show a default awaiting cover (`Cover 1` design). Disable it with `KinescopePlayerOptions.showLiveAwaitingCover = false` if you prefer your own poster or no placeholder.
+While the broadcast has not started yet, the player can show a default awaiting cover (`live_awaiting_cover` / Cover 1 design). It is **enabled by default**. Disable it if you prefer your own poster or no placeholder:
+
+```kotlin
+kinescopePlayer.kinescopePlayerOptions.showLiveAwaitingCover = false
+```
 
 Once the stream is ready, the seek bar shows **Live** / **В эфире** with a red indicator instead of elapsed time.
 

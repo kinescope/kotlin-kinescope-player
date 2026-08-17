@@ -1454,6 +1454,11 @@ class KinescopePlayerView @JvmOverloads constructor(
         if (shouldSuppressPosterDisplay()) {
             return
         }
+        if (drawableRes == R.drawable.default_poster &&
+            kinescopePlayer?.kinescopePlayerOptions?.showDefaultPoster == false
+        ) {
+            return
+        }
         posterView?.let {
             it.isVisible = true
             Glide.with(context).clear(it)
@@ -1865,6 +1870,10 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
         val posterUrl = getVideo()?.poster?.url
         if (posterUrl.isNullOrBlank()) {
+            if (kinescopePlayer?.kinescopePlayerOptions?.showDefaultPoster == false) {
+                hidePoster()
+                return
+            }
             showDefaultPoster()
         } else {
             showPoster(posterUrl)

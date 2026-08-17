@@ -34,4 +34,15 @@ data class KinescopePlayerOptions(
     var backgroundPlaybackAllowed: Boolean = false,
     /** Default cover shown for live streams until the broadcast is ready. Set to false to skip it. */
     var showLiveAwaitingCover: Boolean = true,
+    /**
+     * Built-in `default_poster` drawable when the video has no poster URL.
+     * Set to false to leave the surface empty until playback (or your own poster call).
+     */
+    var showDefaultPoster: Boolean = true,
+    /**
+     * User authorization token for Kinescope Authorization Backend (`drmauthtoken`).
+     * Passed as a query parameter when fetching `{videoId}.json` so DRM-protected
+     * playback can use your access-check endpoint instead of leaving the video public.
+     */
+    var drmAuthToken: String? = null,
 )

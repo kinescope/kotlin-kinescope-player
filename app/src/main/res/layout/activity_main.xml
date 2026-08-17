@@ -10,66 +10,73 @@
     android:keepScreenOn="true"
     tools:context=".MainActivity">
 
-    <LinearLayout
-        android:id="@+id/main_buttons_layout"
+    <ScrollView
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginEnd="16dp"
-        android:gravity="center"
-        android:orientation="vertical"
+        android:layout_height="0dp"
+        android:fillViewport="true"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.5">
+        app:layout_constraintTop_toTopOf="parent">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_playlist"
-            style="@style/DemoAccentButton"
-            android:text="Playlist test" />
+        <LinearLayout
+            android:id="@+id/main_buttons_layout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingTop="24dp"
+            android:paddingBottom="24dp">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_subtitles"
-            style="@style/DemoAccentButton"
-            android:layout_marginTop="25dp"
-            android:text="Subtitles test" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_playlist"
+                style="@style/DemoAccentButton"
+                android:text="Playlist test" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_chapters"
-            style="@style/DemoAccentButton"
-            android:layout_marginTop="25dp"
-            android:text="Chapters test" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_subtitles"
+                style="@style/DemoAccentButton"
+                android:layout_marginTop="25dp"
+                android:text="Subtitles test" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_drm_viewing"
-            style="@style/DemoAccentButton"
-            android:layout_marginTop="25dp"
-            android:text="DRM viewing" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_chapters"
+                style="@style/DemoAccentButton"
+                android:layout_marginTop="25dp"
+                android:text="Chapters test" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_custom_player"
-            style="@style/DemoAccentButton"
-            android:layout_marginTop="25dp"
-            android:text="@string/custom_player_title" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_drm_viewing"
+                style="@style/DemoAccentButton"
+                android:layout_marginTop="25dp"
+                android:text="DRM viewing" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_live"
-            style="@style/DemoAccentButton"
-            android:layout_marginTop="25dp"
-            android:text="Live test" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_custom_player"
+                style="@style/DemoAccentButton"
+                android:layout_marginTop="25dp"
+                android:text="@string/custom_player_title" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_shorts"
-            style="@style/DemoAccentButton"
-            android:layout_marginTop="25dp"
-            android:text="Shorts" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_live"
+                style="@style/DemoAccentButton"
+                android:layout_marginTop="25dp"
+                android:text="Live test" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_offline_drm"
-            style="@style/DemoAccentButton"
-            android:layout_marginTop="25dp"
-            android:text="Saved videos" />
-    </LinearLayout>
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_shorts"
+                style="@style/DemoAccentButton"
+                android:layout_marginTop="25dp"
+                android:text="Shorts" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_offline_drm"
+                style="@style/DemoAccentButton"
+                android:layout_marginTop="25dp"
+                android:text="Saved videos" />
+        </LinearLayout>
+    </ScrollView>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
