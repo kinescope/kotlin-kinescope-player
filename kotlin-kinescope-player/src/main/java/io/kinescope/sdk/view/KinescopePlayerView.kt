@@ -1825,7 +1825,11 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
         val player = localExoPlayer ?: return false
         if (!hasStartedPlayback && player.playbackState == Player.STATE_BUFFERING) {
-            return true
+            // Pre-start buffering only means the source is being prepared. Unless
+            // playback was actually requested (autoplay or an early play tap),
+            // spinning here makes a passive preload look like a stalled autostart
+            // and hides the center play button behind the spinner.
+            return player.playWhenReady
         }
         return hasStartedPlayback &&
             player.playbackState == Player.STATE_BUFFERING &&
