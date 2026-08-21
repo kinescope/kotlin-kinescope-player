@@ -370,6 +370,20 @@ class KinescopePlayerView @JvmOverloads constructor(
      * long, wrapping title never runs into the system chrome.
      */
     private var chromeTopOverlapPx = 0
+
+    /**
+     * Whether this view draws the video title/author block. Hosts that render
+     * their own chrome over the video (a back button, a menu) can turn it off
+     * for the embedded view while a fullscreen view of the same player keeps
+     * it. View-level on purpose: the player options object is shared by every
+     * view attached to the engine.
+     */
+    var titleChromeEnabled: Boolean = true
+        set(value) {
+            if (field == value) return
+            field = value
+            updateTitles()
+        }
     private var timeContainer: View? = null
     private var mobileHeaderGradient: View? = null
     private var mobileFooterGradient: View? = null
@@ -3666,11 +3680,11 @@ class KinescopePlayerView @JvmOverloads constructor(
         if (video != null) {
             titleView?.apply {
                 text = video.title
-                isVisible = video.title.isNotEmpty()
+                isVisible = titleChromeEnabled && video.title.isNotEmpty()
             }
             authorView?.apply {
                 text = video.subtitle
-                isVisible = !video.subtitle.isNullOrEmpty()
+                isVisible = titleChromeEnabled && !video.subtitle.isNullOrEmpty()
             }
             enforceLiveTimeChromeIfNeeded()
             applyVideoPoster()
@@ -4301,7 +4315,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
 
     private fun restoreControlOverlayAfterCaptionsSearch() {
-        descriptionBlock?.isVisible = true
+        descriptionBlock?.isVisible = titleChromeEnabled
         updateTitles()
         ensureControlBarProgressChromeVisible()
         updatePlayPauseButton()
