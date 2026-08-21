@@ -34,6 +34,8 @@ import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.GestureDetectorCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.children
 import androidx.core.view.isVisible
 import androidx.media3.common.C
@@ -360,6 +362,14 @@ class KinescopePlayerView @JvmOverloads constructor(
     private var titleView: TextView? = null
     private var authorView: TextView? = null
     private var descriptionBlock: View? = null
+
+    /**
+     * How far the status bar overlaps this view's top edge, in px. Non-zero
+     * only when the view is laid out under the status bar (edge-to-edge
+     * embedding); the title/author block is pushed down by this amount so a
+     * long, wrapping title never runs into the system chrome.
+     */
+    private var chromeTopOverlapPx = 0
     private var timeContainer: View? = null
     private var mobileHeaderGradient: View? = null
     private var mobileFooterGradient: View? = null
@@ -916,6 +926,10 @@ class KinescopePlayerView @JvmOverloads constructor(
         customButtonsContainer = controlView?.findViewById(R.id.kinescope_custom_buttons_container)
 
         titleView = controlView?.findViewById(R.id.kinescope_title)
+        titleView?.apply {
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }
         authorView = controlView?.findViewById(R.id.kinescope_author)
         descriptionBlock = controlView?.findViewById(R.id.kinescope_description_block)
         timeContainer = controlView?.findViewById(R.id.kinescope_time_container)
@@ -1756,9 +1770,30 @@ class KinescopePlayerView @JvmOverloads constructor(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
+            updateChromeTopOverlap(insets)
+            insets
+        }
+        addOnLayoutChangeListener { _, _, top, _, _, _, oldTop, _, _ ->
+            if (top != oldTop) {
+                updateChromeTopOverlap(ViewCompat.getRootWindowInsets(this))
+            }
+        }
+        updateChromeTopOverlap(ViewCompat.getRootWindowInsets(this))
         applyPlayerChromeLayout()
         updateAll()
         refreshCaptionsSearchChrome()
+    }
+
+    private fun updateChromeTopOverlap(insets: WindowInsetsCompat?) {
+        val statusBarBottom = insets?.getInsets(WindowInsetsCompat.Type.statusBars())?.top ?: return
+        val location = IntArray(2)
+        getLocationInWindow(location)
+        val overlap = (statusBarBottom - location[1]).coerceAtLeast(0)
+        if (overlap != chromeTopOverlapPx) {
+            chromeTopOverlapPx = overlap
+            applyPlayerChromeLayout()
+        }
     }
 
     override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
@@ -2044,7 +2079,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         descriptionBlock?.let { block ->
             (block.layoutParams as? MarginLayoutParams)?.let { params ->
                 params.marginStart = horizontalMargin
-                params.topMargin = horizontalMargin
+                params.topMargin = horizontalMargin + chromeTopOverlapPx
                 block.layoutParams = params
             }
         }
