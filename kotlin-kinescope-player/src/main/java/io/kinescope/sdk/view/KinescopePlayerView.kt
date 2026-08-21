@@ -1768,27 +1768,40 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
     }
 
+    private val chromeTopOverlapLayoutListener =
+        OnLayoutChangeListener { _, _, top, _, _, _, oldTop, _, _ ->
+            if (top != oldTop) {
+                updateChromeTopOverlap(ViewCompat.getRootWindowInsets(this))
+            }
+        }
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
             updateChromeTopOverlap(insets)
             insets
         }
-        addOnLayoutChangeListener { _, _, top, _, _, _, oldTop, _, _ ->
-            if (top != oldTop) {
-                updateChromeTopOverlap(ViewCompat.getRootWindowInsets(this))
-            }
-        }
+        addOnLayoutChangeListener(chromeTopOverlapLayoutListener)
         updateChromeTopOverlap(ViewCompat.getRootWindowInsets(this))
         applyPlayerChromeLayout()
         updateAll()
         refreshCaptionsSearchChrome()
     }
 
+    override fun onDetachedFromWindow() {
+        removeOnLayoutChangeListener(chromeTopOverlapLayoutListener)
+        ViewCompat.setOnApplyWindowInsetsListener(this, null)
+        super.onDetachedFromWindow()
+    }
+
     private fun updateChromeTopOverlap(insets: WindowInsetsCompat?) {
         val statusBarBottom = insets?.getInsets(WindowInsetsCompat.Type.statusBars())?.top ?: return
+        // Screen coordinates, not window coordinates: in a decor-fitted (non
+        // edge-to-edge) window the content already starts below the status bar
+        // yet sits at window Y=0, which would fake a full-bar overlap. The
+        // status bar itself is always anchored to screen Y=0.
         val location = IntArray(2)
-        getLocationInWindow(location)
+        getLocationOnScreen(location)
         val overlap = (statusBarBottom - location[1]).coerceAtLeast(0)
         if (overlap != chromeTopOverlapPx) {
             chromeTopOverlapPx = overlap
