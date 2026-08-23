@@ -1489,7 +1489,7 @@ class KinescopePlayerView @JvmOverloads constructor(
                 it.setImageDrawable(null)
                 Glide.with(context)
                     .load(url)
-                    .centerCrop()
+                    .fitCenter()
                     .apply { if (errorPlaceholder != R.drawable.default_poster) error(errorPlaceholder) }
                     .addListener(KinescopeGlideListener { isSuccess ->
                         onLoadFinished?.invoke(isSuccess)
@@ -1499,7 +1499,7 @@ class KinescopePlayerView @JvmOverloads constructor(
                 it.setImageResource(placeholder)
                 Glide.with(context)
                     .load(url)
-                    .centerCrop()
+                    .fitCenter()
                     .placeholder(placeholder)
                     .error(errorPlaceholder)
                     .addListener(KinescopeGlideListener { isSuccess ->
