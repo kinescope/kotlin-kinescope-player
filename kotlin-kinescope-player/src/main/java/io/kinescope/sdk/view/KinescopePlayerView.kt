@@ -1461,18 +1461,37 @@ class KinescopePlayerView @JvmOverloads constructor(
         if (shouldSuppressPosterDisplay()) {
             return
         }
+        // showDefaultPoster=false suppresses the branded stand-in on EVERY
+        // path: not just the no-URL case, but also the load placeholder and
+        // the error fallback here — otherwise a slow network flashes the
+        // default art while the real poster downloads. The view stays empty
+        // (host background shows through) until the actual image lands.
+        val suppressDefault = kinescopePlayer?.kinescopePlayerOptions?.showDefaultPoster == false
         posterView?.let {
             it.isVisible = true
-            it.setImageResource(placeholder)
-            Glide.with(context)
-                .load(url)
-                .centerCrop()
-                .placeholder(placeholder)
-                .error(errorPlaceholder)
-                .addListener(KinescopeGlideListener { isSuccess ->
-                    onLoadFinished?.invoke(isSuccess)
-                })
-                .into(it)
+            if (suppressDefault && placeholder == R.drawable.default_poster) {
+                Glide.with(context).clear(it)
+                it.setImageDrawable(null)
+                Glide.with(context)
+                    .load(url)
+                    .centerCrop()
+                    .apply { if (errorPlaceholder != R.drawable.default_poster) error(errorPlaceholder) }
+                    .addListener(KinescopeGlideListener { isSuccess ->
+                        onLoadFinished?.invoke(isSuccess)
+                    })
+                    .into(it)
+            } else {
+                it.setImageResource(placeholder)
+                Glide.with(context)
+                    .load(url)
+                    .centerCrop()
+                    .placeholder(placeholder)
+                    .error(errorPlaceholder)
+                    .addListener(KinescopeGlideListener { isSuccess ->
+                        onLoadFinished?.invoke(isSuccess)
+                    })
+                    .into(it)
+            }
         }
     }
 
