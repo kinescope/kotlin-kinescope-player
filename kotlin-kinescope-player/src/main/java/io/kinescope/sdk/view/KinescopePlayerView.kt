@@ -479,6 +479,11 @@ class KinescopePlayerView @JvmOverloads constructor(
         if (scrubbing || settingsMenuView?.isVisible == true || isCaptionsSearchActive()) {
             return@Runnable
         }
+        // Armed before start (or start rolled back to IDLE meanwhile): keep
+        // the chrome — see scheduleControlOverlayAutoHide.
+        if (!hasStartedPlayback) {
+            return@Runnable
+        }
         hideControlOverlay(animated = true)
     }
 
@@ -3860,6 +3865,13 @@ class KinescopePlayerView @JvmOverloads constructor(
     private fun scheduleControlOverlayAutoHide() {
         removeCallbacks(hideControlOverlayRunnable)
         if (kinescopePlayer?.kinescopePlayerOptions?.controls != true) {
+            return
+        }
+        // Before playback ever starts there is nothing to declutter: hiding
+        // the overlay also hides the centre play button (its child), leaving
+        // a poster with no affordance at all. The countdown starts with
+        // playback.
+        if (!hasStartedPlayback) {
             return
         }
         if (settingsMenuView?.isVisible == true || scrubbing) {
