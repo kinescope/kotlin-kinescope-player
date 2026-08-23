@@ -372,6 +372,16 @@ class KinescopePlayerView @JvmOverloads constructor(
     private var chromeTopOverlapPx = 0
 
     /**
+     * Whether the band has anything visual to stand on before playback: a
+     * poster (default or real, loaded OR failed — failure is final too) or a
+     * deliberate hide. While false and playback hasn't started, the buffering
+     * spinner doubles as a loading indicator (Vimeo's pattern: dark band +
+     * centred spinner until artwork lands), so a slow network never leaves a
+     * dead black rectangle.
+     */
+    private var firstVisualResolved = false
+
+    /**
      * Whether this view draws the video title/author block. Hosts that render
      * their own chrome over the video (a back button, a menu) can turn it off
      * for the embedded view while a fullscreen view of the same player keeps
@@ -1477,10 +1487,13 @@ class KinescopePlayerView @JvmOverloads constructor(
                     .centerCrop()
                     .apply { if (errorPlaceholder != R.drawable.default_poster) error(errorPlaceholder) }
                     .addListener(KinescopeGlideListener { isSuccess ->
+                        markFirstVisualResolved()
                         onLoadFinished?.invoke(isSuccess)
                     })
                     .into(it)
             } else {
+                // The placeholder IS a visual — the loading spinner yields to it.
+                markFirstVisualResolved()
                 it.setImageResource(placeholder)
                 Glide.with(context)
                     .load(url)
@@ -1511,6 +1524,7 @@ class KinescopePlayerView @JvmOverloads constructor(
             Glide.with(context).clear(it)
             it.setImageResource(drawableRes)
         }
+        markFirstVisualResolved()
     }
 
     /**
@@ -1827,6 +1841,15 @@ class KinescopePlayerView @JvmOverloads constructor(
         super.onDetachedFromWindow()
     }
 
+    /** First visual settled (poster shown, failed for good, or deliberately
+     *  hidden) — the pre-start loading spinner yields to whatever the band has. */
+    private fun markFirstVisualResolved() {
+        if (firstVisualResolved) return
+        firstVisualResolved = true
+        updateBuffering()
+        updatePlayPauseButton()
+    }
+
     private fun updateChromeTopOverlap(insets: WindowInsetsCompat?) {
         val statusBarBottom = insets?.getInsets(WindowInsetsCompat.Type.statusBars())?.top ?: return
         // Screen coordinates, not window coordinates: in a decor-fitted (non
@@ -1905,12 +1928,22 @@ class KinescopePlayerView @JvmOverloads constructor(
             return false
         }
         val player = localExoPlayer ?: return false
-        if (!hasStartedPlayback && player.playbackState == Player.STATE_BUFFERING) {
-            // Pre-start buffering only means the source is being prepared. Unless
-            // playback was actually requested (autoplay or an early play tap),
-            // spinning here makes a passive preload look like a stalled autostart
-            // and hides the center play button behind the spinner.
-            return player.playWhenReady
+        if (!hasStartedPlayback) {
+            // Pre-start the spinner serves two masters: a requested start
+            // (autoplay or an early play tap) buffering its source, and the
+            // loading phase before ANY visual exists — config fetch and the
+            // poster download on a slow network both leave a dead black band
+            // otherwise. Once a poster (or its final failure) lands, a passive
+            // preload shows poster + play, never a spinner over them.
+            // Live previews draw their own chrome (informer / start date) and
+            // never resolve a poster — the loading phase there keeps the old
+            // behaviour.
+            if (!firstVisualResolved && !isLiveState) {
+                return true
+            }
+            if (player.playbackState == Player.STATE_BUFFERING) {
+                return player.playWhenReady
+            }
         }
         return hasStartedPlayback &&
             player.playbackState == Player.STATE_BUFFERING &&
@@ -1957,6 +1990,8 @@ class KinescopePlayerView @JvmOverloads constructor(
         if (posterUrl.isNullOrBlank()) {
             if (kinescopePlayer?.kinescopePlayerOptions?.showDefaultPoster == false) {
                 hidePoster()
+                // Nothing will ever land here — the band settles on black + play.
+                markFirstVisualResolved()
                 return
             }
             showDefaultPoster()
