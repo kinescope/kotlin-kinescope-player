@@ -34,7 +34,7 @@
                 android:layout_height="match_parent"
                 android:background="@android:color/black"
                 android:importantForAccessibility="no"
-                android:scaleType="centerCrop"
+                android:scaleType="fitCenter"
                 android:visibility="gone" />
 
         </FrameLayout>
