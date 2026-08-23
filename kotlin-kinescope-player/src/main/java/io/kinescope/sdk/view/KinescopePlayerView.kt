@@ -249,6 +249,12 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
 
         override fun onDoubleTapEvent(e: MotionEvent): Boolean {
+            // Some OEMs deliver touches into the PiP window: a double tap then
+            // raised the seek feedback + control chrome over the SYSTEM PiP
+            // controls. In PiP the system owns all gestures — swallow ours.
+            if (isPictureInPictureActive) {
+                return true
+            }
             KinescopeLogger.log(
                 KinescopeLoggerLevel.PLAYER_VIEW,
                 "double tap event, action=${e.action}, isForward=${isForward(e)}"
@@ -281,6 +287,9 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
 
         override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+            if (isPictureInPictureActive) {
+                return true
+            }
             KinescopeLogger.log(KinescopeLoggerLevel.PLAYER_VIEW, "single tap confirmed")
             if (tryOpenCaptionsSearchAt(e.x, e.y)) {
                 return true
@@ -3748,6 +3757,9 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     private fun showSeekFeedbackChrome() {
+        if (isPictureInPictureActive) {
+            return
+        }
         seekFeedbackActive = true
         controlOverlayHiding = false
         cancelControlOverlayAutoHide()
@@ -3891,6 +3903,11 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     private fun showControlOverlay(animated: Boolean) {
+        // The PiP window shows only the system's own controls; every path that
+        // could raise our overlay while minimised is cut off here.
+        if (isPictureInPictureActive) {
+            return
+        }
         if (isPictureInPictureActive) {
             return
         }
