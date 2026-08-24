@@ -388,6 +388,27 @@ class KinescopePlayerView @JvmOverloads constructor(
      * it. View-level on purpose: the player options object is shared by every
      * view attached to the engine.
      */
+    /**
+     * Frame-preview mode: the host scrubs the engine to pick a poster frame
+     * BEFORE playback ever started. Pre-start the video surface is
+     * deliberately INVISIBLE (poster + play own the band), so seeks render
+     * nowhere — this flips the surface on and the poster off without starting
+     * playback, and restores the pre-start chrome on exit.
+     */
+    fun setFramePreviewActive(active: Boolean) {
+        if (framePreviewActive == active) return
+        framePreviewActive = active
+        if (active) {
+            posterView?.isVisible = false
+            exoPlayerView?.visibility = View.VISIBLE
+        } else {
+            updateBuffering()
+            applyVideoPoster()
+        }
+    }
+
+    private var framePreviewActive = false
+
     var titleChromeEnabled: Boolean = true
         set(value) {
             if (field == value) return
@@ -1970,7 +1991,7 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     private fun applyVideoPoster() {
-        if (hasStartedPlayback || shouldSuppressPosterDisplay()) {
+        if (hasStartedPlayback || framePreviewActive || shouldSuppressPosterDisplay()) {
             return
         }
         val posterUrl = getVideo()?.poster?.url
@@ -2031,7 +2052,7 @@ class KinescopePlayerView @JvmOverloads constructor(
 
         exoPlayerView?.visibility = when {
             kinescopePlayer == null -> View.GONE
-            !hasStartedPlayback -> View.INVISIBLE
+            !hasStartedPlayback && !framePreviewActive -> View.INVISIBLE
             else -> View.VISIBLE
         }
 
