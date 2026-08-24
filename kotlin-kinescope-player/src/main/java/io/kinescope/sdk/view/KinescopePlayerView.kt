@@ -252,7 +252,8 @@ class KinescopePlayerView @JvmOverloads constructor(
             // Some OEMs deliver touches into the PiP window: a double tap then
             // raised the seek feedback + control chrome over the SYSTEM PiP
             // controls. In PiP the system owns all gestures — swallow ours.
-            if (isPictureInPictureActive) {
+            // Frame preview likewise: the host owns the whole chrome.
+            if (isPictureInPictureActive || framePreviewActive) {
                 return true
             }
             KinescopeLogger.log(
@@ -287,7 +288,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
 
         override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-            if (isPictureInPictureActive) {
+            if (isPictureInPictureActive || framePreviewActive) {
                 return true
             }
             KinescopeLogger.log(KinescopeLoggerLevel.PLAYER_VIEW, "single tap confirmed")
@@ -401,7 +402,19 @@ class KinescopePlayerView @JvmOverloads constructor(
         if (active) {
             posterView?.isVisible = false
             exoPlayerView?.visibility = View.VISIBLE
+            // The host draws the entire frame-pick chrome itself (trim-style
+            // header, centre play, timeline) — every piece of ours goes quiet:
+            // overlay, centre play, subtitles; taps are swallowed below.
+            controlView?.animate()?.cancel()
+            controlView?.isVisible = false
+            subtitleView?.isVisible = false
+            findViewById<View?>(R.id.kinescope_progressive_subtitle_container)?.isVisible = false
+            updatePlayPauseButton()
         } else {
+            findViewById<View?>(R.id.kinescope_progressive_subtitle_container)?.isVisible = true
+            subtitleView?.isVisible = false
+            showControlOverlay(animated = false)
+            updatePlayPauseButton()
             updateBuffering()
             applyVideoPoster()
         }
@@ -2115,7 +2128,7 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     private fun shouldShowCenterPlayControl(showControls: Boolean): Boolean {
-        if (isPictureInPictureActive) {
+        if (isPictureInPictureActive || framePreviewActive) {
             return false
         }
         if (isCaptionsSearchActive()) {
@@ -3925,8 +3938,9 @@ class KinescopePlayerView @JvmOverloads constructor(
 
     private fun showControlOverlay(animated: Boolean) {
         // The PiP window shows only the system's own controls; every path that
-        // could raise our overlay while minimised is cut off here.
-        if (isPictureInPictureActive) {
+        // could raise our overlay while minimised is cut off here. Frame
+        // preview owns its chrome the same way.
+        if (isPictureInPictureActive || framePreviewActive) {
             return
         }
         if (isPictureInPictureActive) {
