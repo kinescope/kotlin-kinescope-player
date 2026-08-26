@@ -1950,6 +1950,14 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     private fun isBufferingSpinnerVisible(): Boolean {
+        // The PiP window shows only the system's own UI. hidePipOverlays()
+        // hides the spinner on entry, but the first rebuffer used to bring it
+        // straight back through updateBuffering() — together with its opaque
+        // black backdrop on the first-playback path. prepareForPictureInPicture
+        // (false) re-runs updateBuffering() on exit, so visibility recovers.
+        if (isPictureInPictureActive) {
+            return false
+        }
         if (shouldShowLiveInformer()) {
             return false
         }
