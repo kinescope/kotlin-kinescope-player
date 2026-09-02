@@ -91,6 +91,28 @@ class KinescopePlayerViewOptionsBarTest {
     }
 
     /**
+     * Same race, zero frames in: the hide was requested but its fade has not
+     * rendered a frame yet, so the overlay is still fully opaque. `show` used
+     * to take its fully-visible fast path before cancelling the animator, and
+     * the fade's end action still hid the overlay and collapsed the bar.
+     */
+    @Test
+    fun dotsTapAfterHideRequested_beforeFirstFadeFrame_expandsStripAndKeepsOverlay() {
+        // Hold the first animation frame back: looper time advances, frames do not.
+        ShadowChoreographer.setFrameDelay(Duration.ofMillis(HELD_FRAME_MS))
+        tapVideo()
+        assertTrue("overlay must still be fully visible", overlay().isVisible)
+        assertEquals(1f, overlay().alpha)
+        clickDots()
+        ShadowChoreographer.setFrameDelay(Duration.ofMillis(FRAME_MS))
+        // The expansion's first frame was scheduled under the long delay: wait it out.
+        pumpFrames(HELD_FRAME_MS.toInt() / FRAME_MS.toInt() + FRAMES_TO_SETTLE)
+        assertTrue("overlay hidden by the fade end", overlay().isVisible)
+        assertEquals(1f, overlay().alpha)
+        assertStripExpanded()
+    }
+
+    /**
      * The expansion finishes in a deferred pass. When the bar gets collapsed in
      * between — an overlay fade end, a chrome mode change, a view switch; here
      * the host flips the view to fullscreen, which re-applies the chrome — the
@@ -155,6 +177,7 @@ class KinescopePlayerViewOptionsBarTest {
 
     private companion object {
         const val FRAME_MS = 16L
+        const val HELD_FRAME_MS = 1000L
         const val FRAMES_TO_SETTLE = 40
         const val MAX_WAIT_FRAMES = 400
 

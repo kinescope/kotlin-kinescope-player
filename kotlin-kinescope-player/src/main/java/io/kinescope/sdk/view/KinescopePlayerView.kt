@@ -3977,13 +3977,17 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
         val overlay = controlView ?: return
         controlOverlayHiding = false
+        // A hide fade may already be running without having rendered a frame
+        // yet (alpha still 1): cancel it before the fully-visible fast path,
+        // otherwise its end action would still hide the overlay and collapse
+        // the options bar right after this call.
+        overlay.animate().cancel()
         if (overlay.isVisible && overlay.alpha >= 1f) {
             updateAll()
             applySubtitleStyle()
             scheduleControlOverlayAutoHide()
             return
         }
-        overlay.animate().cancel()
         overlay.isVisible = true
         updateMobileBackgroundGradients(animated = animated, controlsVisible = true)
         applySubtitleStyle(controlsVisibleOverride = true)
