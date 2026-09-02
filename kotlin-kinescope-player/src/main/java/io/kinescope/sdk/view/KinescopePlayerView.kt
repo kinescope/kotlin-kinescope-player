@@ -428,6 +428,25 @@ class KinescopePlayerView @JvmOverloads constructor(
             field = value
             updateTitles()
         }
+
+    /**
+     * Where the captions search panel sits while this view is inline (not
+     * fullscreen). [KinescopeCaptionsSearchPlacement.BOTTOM] (default) docks
+     * a fixed-height panel above the control bar;
+     * [KinescopeCaptionsSearchPlacement.TOP] docks it to the top edge and lets
+     * the list fill down to the control bar — for hosts whose player band
+     * changes height (a draggable sheet), so the panel stays put instead of
+     * following the bottom edge. The fullscreen layout is unaffected. Honoured
+     * by every re-sync of the panel: fullscreen toggles, content orientation
+     * changes, view switches, resizes. View-level, like [titleChromeEnabled].
+     */
+    var captionsSearchPlacement: KinescopeCaptionsSearchPlacement = KinescopeCaptionsSearchPlacement.BOTTOM
+        set(value) {
+            if (field == value) return
+            field = value
+            syncCaptionsSearchFullscreenMode()
+            updateCaptionsSearchInsets()
+        }
     private var timeContainer: View? = null
     private var mobileHeaderGradient: View? = null
     private var mobileFooterGradient: View? = null
@@ -1080,10 +1099,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         settingsMenuView?.setFullscreenMode(isVideoFullscreen)
 
         captionsSearchView = findViewById(R.id.captions_search_overlay)
-        captionsSearchView?.setFullscreenMode(
-            fullscreen = isVideoFullscreen,
-            portrait = isPortraitCaptionsSearchLayout(),
-        )
+        syncCaptionsSearchFullscreenMode()
         captionsSearchView?.onSeekToMs = { positionMs ->
             kinescopePlayer?.seekToPosition(positionMs)
             if (isCaptionsSearchActive()) {
@@ -1915,10 +1931,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         seekView?.setFullscreenMode(value)
         settingsMenuView?.setFullscreenMode(value)
         chaptersMenuView?.setFullscreenMode(value)
-        captionsSearchView?.setFullscreenMode(
-            value,
-            portrait = isPortraitCaptionsSearchLayout(fullscreen = value),
-        )
+        syncCaptionsSearchFullscreenMode()
         applyPlayerChromeLayout()
         updateFullscreenButton()
         updatePlayPauseButton()
@@ -4432,7 +4445,7 @@ class KinescopePlayerView @JvmOverloads constructor(
                 return@post
             }
             val layoutParams = searchView.layoutParams as? FrameLayout.LayoutParams ?: return@post
-            val fullscreen = searchView.isFullscreenLayout()
+            val fullscreen = searchView.fillsPlayer()
             layoutParams.width = ViewGroup.LayoutParams.MATCH_PARENT
             layoutParams.height = if (fullscreen) {
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -5103,11 +5116,14 @@ class KinescopePlayerView @JvmOverloads constructor(
         return isPortraitContent
     }
 
+    /** The one place the panel learns its layout; every re-sync path goes through here. */
     private fun syncCaptionsSearchFullscreenMode() {
-        captionsSearchView?.setFullscreenMode(
+        val search = captionsSearchView ?: return
+        search.setFullscreenMode(
             fullscreen = isVideoFullscreen,
             portrait = isPortraitCaptionsSearchLayout(),
         )
+        search.setPinnedToTop(captionsSearchPlacement == KinescopeCaptionsSearchPlacement.TOP)
     }
 
     private fun resolveSubtitleBottomPaddingPx(

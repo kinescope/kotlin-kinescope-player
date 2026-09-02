@@ -60,6 +60,7 @@ class KinescopeCaptionsSearchView @JvmOverloads constructor(
     private var autoFollowPlayback: Boolean = true
     private var isFullscreenMode = false
     private var isPortraitFullscreenMode = false
+    private var isPinnedToTop = false
 
     var onDismiss: (() -> Unit)? = null
     var onSeekToMs: ((Long) -> Unit)? = null
@@ -134,7 +135,25 @@ class KinescopeCaptionsSearchView @JvmOverloads constructor(
 
     fun isFullscreenLayout(): Boolean = isFullscreenMode
 
+    /**
+     * Inline placement: docked to the top edge with the list filling down to
+     * the control bar, instead of a fixed-height panel above the bar. The
+     * fullscreen layout fills the player either way, so the pin only matters
+     * while [isFullscreenLayout] is false.
+     */
+    fun setPinnedToTop(pinned: Boolean) {
+        if (isPinnedToTop == pinned) {
+            return
+        }
+        isPinnedToTop = pinned
+        applyModeLayout()
+    }
+
+    /** Whether the panel spans the player height (fullscreen, or pinned to the top inline). */
+    fun fillsPlayer(): Boolean = isFullscreenMode || isPinnedToTop
+
     private fun applyModeLayout() {
+        val fills = fillsPlayer()
         val sideInset = when {
             isFullscreenMode && isPortraitFullscreenMode -> {
                 resources.getDimensionPixelSize(
@@ -152,12 +171,12 @@ class KinescopeCaptionsSearchView @JvmOverloads constructor(
         if (layoutParams is FrameLayout.LayoutParams) {
             updateLayoutParams<FrameLayout.LayoutParams> {
                 width = ViewGroup.LayoutParams.MATCH_PARENT
-                height = if (isFullscreenMode) {
+                height = if (fills) {
                     ViewGroup.LayoutParams.MATCH_PARENT
                 } else {
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 }
-                gravity = if (isFullscreenMode) {
+                gravity = if (fills) {
                     Gravity.FILL_HORIZONTAL or Gravity.TOP
                 } else {
                     Gravity.BOTTOM
@@ -171,12 +190,12 @@ class KinescopeCaptionsSearchView @JvmOverloads constructor(
 
         (panel.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
             params.width = ViewGroup.LayoutParams.MATCH_PARENT
-            params.height = if (isFullscreenMode) {
+            params.height = if (fills) {
                 ViewGroup.LayoutParams.MATCH_PARENT
             } else {
                 ViewGroup.LayoutParams.WRAP_CONTENT
             }
-            params.gravity = if (isFullscreenMode) {
+            params.gravity = if (fills) {
                 Gravity.FILL
             } else {
                 Gravity.BOTTOM
@@ -198,7 +217,7 @@ class KinescopeCaptionsSearchView @JvmOverloads constructor(
         )
 
         val listParams = listView.layoutParams as? LinearLayout.LayoutParams ?: return
-        if (isFullscreenMode) {
+        if (fills) {
             listParams.width = ViewGroup.LayoutParams.MATCH_PARENT
             listParams.height = 0
             listParams.weight = 1f
