@@ -139,9 +139,11 @@ class KinescopeCaptionsSearchView @JvmOverloads constructor(
      * Inline placement: docked to the top edge with the list filling down to
      * the control bar, instead of a fixed-height panel above the bar. The
      * fullscreen layout fills the player either way, so the pin only matters
-     * while [isFullscreenLayout] is false.
+     * while [isFullscreenLayout] is false. Driven by
+     * [KinescopePlayerView.captionsSearchPlacement] — the one public handle —
+     * so the two cannot drift apart.
      */
-    fun setPinnedToTop(pinned: Boolean) {
+    internal fun setPinnedToTop(pinned: Boolean) {
         if (isPinnedToTop == pinned) {
             return
         }
@@ -150,7 +152,7 @@ class KinescopeCaptionsSearchView @JvmOverloads constructor(
     }
 
     /** Whether the panel spans the player height (fullscreen, or pinned to the top inline). */
-    fun fillsPlayer(): Boolean = isFullscreenMode || isPinnedToTop
+    internal fun fillsPlayer(): Boolean = isFullscreenMode || isPinnedToTop
 
     private fun applyModeLayout() {
         val fills = fillsPlayer()
