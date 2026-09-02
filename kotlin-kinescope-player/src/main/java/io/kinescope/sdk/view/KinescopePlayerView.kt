@@ -2799,6 +2799,12 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     private fun animateCompactOptionsBarExpand() {
+        // Re-entered through post(); the bar may have been collapsed meanwhile
+        // (overlay fade end, chrome mode change, view switch) — see the same
+        // guard in the deferred pass below.
+        if (!isOptionsBarExpanded) {
+            return
+        }
         cancelCompactOptionsBarTransition()
         updateExpandedButtonsChildVisibility()
 
@@ -2818,6 +2824,13 @@ class KinescopePlayerView @JvmOverloads constructor(
 
         (controlBar as? ViewGroup)?.requestLayout()
         controlBar?.post {
+            // Whoever collapsed the bar since the tap has already restored the
+            // progress chrome; finishing the expansion here would hide the
+            // progress row and the timer on a bar that is no longer expanded
+            // (the strip target measures 0 with its buttons gone).
+            if (!isOptionsBarExpanded) {
+                return@post
+            }
             val progressStartWidth = if (progressContainer?.isVisible == true) {
                 progressContainer?.width ?: 0
             } else {
@@ -3507,6 +3520,14 @@ class KinescopePlayerView @JvmOverloads constructor(
     private fun onOptionsDotsButtonClick() {
         if (!usesCompactOptionsChrome()) {
             return
+        }
+        // The dots stay clickable while the overlay fades out (auto-hide, tap on
+        // the video). Left alone, the fade's end action hides the overlay and
+        // force-collapses the bar right after this toggle — the tap looks
+        // swallowed: no strip, chrome gone. A tap on a control means "keep the
+        // chrome": cancel the fade before toggling.
+        if (controlOverlayHiding) {
+            showControlOverlay(animated = false)
         }
         if (settingsMenuView?.isVisible == true) {
             settingsMenuView?.dismiss()
