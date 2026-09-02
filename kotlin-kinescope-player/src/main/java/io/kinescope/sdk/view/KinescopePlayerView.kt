@@ -381,6 +381,13 @@ class KinescopePlayerView @JvmOverloads constructor(
      */
     private var chromeTopOverlapPx = 0
 
+    /**
+     * Like [chromeTopOverlapPx] but for the whole system safe area at the top
+     * (status bar and display cutout): what a panel docked to the top edge has
+     * to clear. Fed by the same insets and location.
+     */
+    private var chromeTopSafeInsetPx = 0
+
 
     /**
      * Whether this view draws the video title/author block. Hosts that render
@@ -439,12 +446,31 @@ class KinescopePlayerView @JvmOverloads constructor(
      * following the bottom edge. The fullscreen layout is unaffected. Honoured
      * by every re-sync of the panel: fullscreen toggles, content orientation
      * changes, view switches, resizes. View-level, like [titleChromeEnabled].
+     *
+     * A top-docked panel clears the system safe area at the top (status bar,
+     * display cutout) on its own; [captionsSearchTopInset] adds the host's own
+     * chrome on top of that.
      */
     var captionsSearchPlacement: KinescopeCaptionsSearchPlacement = KinescopeCaptionsSearchPlacement.BOTTOM
         set(value) {
             if (field == value) return
             field = value
             syncCaptionsSearchFullscreenMode()
+            updateCaptionsSearchInsets()
+        }
+
+    /**
+     * Extra top inset, in px, for a panel docked to the top
+     * ([KinescopeCaptionsSearchPlacement.TOP]) — the host's own header drawn
+     * over the top of the player band. Added on top of the system safe area,
+     * which the panel clears on its own. Ignored for the bottom placement and
+     * in fullscreen.
+     */
+    var captionsSearchTopInset: Int = 0
+        set(value) {
+            val clamped = value.coerceAtLeast(0)
+            if (field == clamped) return
+            field = clamped
             updateCaptionsSearchInsets()
         }
     private var timeContainer: View? = null
@@ -1893,7 +1919,11 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     private fun updateChromeTopOverlap(insets: WindowInsetsCompat?) {
-        val statusBarBottom = insets?.getInsets(WindowInsetsCompat.Type.statusBars())?.top ?: return
+        insets ?: return
+        val statusBarBottom = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
+        val safeAreaBottom = insets.getInsets(
+            WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.displayCutout(),
+        ).top
         // Screen coordinates, not window coordinates: in a decor-fitted (non
         // edge-to-edge) window the content already starts below the status bar
         // yet sits at window Y=0, which would fake a full-bar overlap. The
@@ -1901,8 +1931,10 @@ class KinescopePlayerView @JvmOverloads constructor(
         val location = IntArray(2)
         getLocationOnScreen(location)
         val overlap = (statusBarBottom - location[1]).coerceAtLeast(0)
-        if (overlap != chromeTopOverlapPx) {
+        val safeInset = (safeAreaBottom - location[1]).coerceAtLeast(0)
+        if (overlap != chromeTopOverlapPx || safeInset != chromeTopSafeInsetPx) {
             chromeTopOverlapPx = overlap
+            chromeTopSafeInsetPx = safeInset
             applyPlayerChromeLayout()
         }
     }
@@ -3145,6 +3177,11 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     private fun isCaptionsSearchActive(): Boolean = captionsSearchView?.isVisible == true
+
+    /** Inline, top-docked: the panel owns the top edge. */
+    private fun isCaptionsSearchPinnedToTop(): Boolean {
+        return !isVideoFullscreen && captionsSearchPlacement == KinescopeCaptionsSearchPlacement.TOP
+    }
 
     private fun pinsExpandedOptionsToBarEnd(): Boolean {
         return usesCompactOptionsChrome() && isOptionsBarExpanded
@@ -4458,7 +4495,11 @@ class KinescopePlayerView @JvmOverloads constructor(
                 Gravity.BOTTOM
             }
             layoutParams.bottomMargin = barHeight + bar.paddingBottom
-            layoutParams.topMargin = 0
+            layoutParams.topMargin = if (isCaptionsSearchPinnedToTop()) {
+                chromeTopSafeInsetPx + captionsSearchTopInset
+            } else {
+                0
+            }
             layoutParams.marginStart = 0
             layoutParams.marginEnd = 0
             searchView.layoutParams = layoutParams

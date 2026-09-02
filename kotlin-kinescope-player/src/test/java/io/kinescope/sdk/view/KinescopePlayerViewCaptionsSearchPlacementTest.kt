@@ -5,6 +5,9 @@ import android.graphics.Rect
 import android.os.Looper
 import android.view.View
 import android.widget.FrameLayout
+import androidx.core.graphics.Insets
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
 import io.kinescope.sdk.R
 import io.kinescope.sdk.player.KinescopeVideoPlayer
@@ -145,7 +148,55 @@ class KinescopePlayerViewCaptionsSearchPlacementTest {
         assertPinnedToTop()
     }
 
+    /** Edge-to-edge: the top edge is under the status bar and the cutout — the panel clears both. */
+    @Test
+    fun topPlacement_clearsSystemSafeArea() {
+        view.captionsSearchPlacement = KinescopeCaptionsSearchPlacement.TOP
+        showSearch()
 
+        dispatchTopInsets(statusBar = STATUS_BAR_PX, cutout = CUTOUT_PX)
+
+        val safeInset = expectedSafeInset(CUTOUT_PX)
+        assertTrue("test needs a real overlap", safeInset > 0)
+        assertPinnedToTop(expectedTop = safeInset)
+    }
+
+    /** The host draws its own header over the band: its inset stacks on the safe area. */
+    @Test
+    fun topPlacement_addsHostInsetOnTopOfSafeArea() {
+        view.captionsSearchPlacement = KinescopeCaptionsSearchPlacement.TOP
+        view.captionsSearchTopInset = HOST_INSET_PX
+        showSearch()
+
+        dispatchTopInsets(statusBar = STATUS_BAR_PX)
+
+        assertPinnedToTop(expectedTop = expectedSafeInset(STATUS_BAR_PX) + HOST_INSET_PX)
+    }
+
+    @Test
+    fun hostInset_changedWhileOpen_relayoutsPanel() {
+        view.captionsSearchPlacement = KinescopeCaptionsSearchPlacement.TOP
+        showSearch()
+        assertPinnedToTop(expectedTop = 0)
+
+        view.captionsSearchTopInset = HOST_INSET_PX
+        pumpFrames(FRAMES_TO_SETTLE)
+
+        assertPinnedToTop(expectedTop = HOST_INSET_PX)
+    }
+
+    /** Insets and the host inset are a top-placement affair; the bottom panel keeps its geometry. */
+    @Test
+    fun defaultPlacement_ignoresInsets() {
+        view.captionsSearchTopInset = HOST_INSET_PX
+        showSearch()
+        val before = bounds(R.id.captions_search_panel)
+
+        dispatchTopInsets(statusBar = STATUS_BAR_PX, cutout = CUTOUT_PX)
+
+        assertEquals(before, bounds(R.id.captions_search_panel))
+        assertPanelEndsAtControlBar()
+    }
 
 
 
@@ -180,6 +231,21 @@ class KinescopePlayerViewCaptionsSearchPlacementTest {
         assertTrue("knock-out should have dropped the panel", bounds(R.id.captions_search_panel).top > 0)
     }
 
+    private fun dispatchTopInsets(statusBar: Int, cutout: Int = 0) {
+        val insets = WindowInsetsCompat.Builder()
+            .setInsets(WindowInsetsCompat.Type.statusBars(), Insets.of(0, statusBar, 0, 0))
+            .setInsets(WindowInsetsCompat.Type.displayCutout(), Insets.of(0, cutout, 0, 0))
+            .build()
+        ViewCompat.dispatchApplyWindowInsets(view, insets)
+        pumpFrames(FRAMES_TO_SETTLE)
+    }
+
+    /** The overlap the view computes: inset measured from the screen top, minus where the view starts. */
+    private fun expectedSafeInset(insetTop: Int): Int {
+        val location = IntArray(2)
+        view.getLocationOnScreen(location)
+        return (insetTop - location[1]).coerceAtLeast(0)
+    }
 
 
 
@@ -234,6 +300,10 @@ class KinescopePlayerViewCaptionsSearchPlacementTest {
 
         /** Sheet dragged down — the band well taller than the fixed 280 dp list. */
         const val TALL_BAND_PX = 2100
+
+        const val STATUS_BAR_PX = 150
+        const val CUTOUT_PX = 210
+        const val HOST_INSET_PX = 120
 
         const val UNREACHABLE_VTT = "http://127.0.0.1:9/subtitles.vtt"
     }
