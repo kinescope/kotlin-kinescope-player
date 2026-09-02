@@ -5,6 +5,7 @@ import android.graphics.Rect
 import android.os.Looper
 import android.view.View
 import android.widget.FrameLayout
+import androidx.core.view.isVisible
 import io.kinescope.sdk.R
 import io.kinescope.sdk.player.KinescopeVideoPlayer
 import org.junit.After
@@ -29,6 +30,12 @@ import java.time.Duration
  * [KinescopePlayerView.adoptContentOrientationFrom], the show itself — and each
  * of them has to keep the placement, or the panel snaps back to the bottom edge
  * mid-gesture (the host's player band changing height under a sheet).
+ *
+ * The path tests first knock the panel's own pin out through the internal
+ * [KinescopeCaptionsSearchView.setPinnedToTop]: the pin is sticky, so a path
+ * that quietly stopped going through the one sync would otherwise pass on the
+ * strength of an earlier sync. After the knock-out only the path under test
+ * can put the panel back at the top.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], qualifiers = "w360dp-h800dp-xxhdpi")
@@ -60,13 +67,14 @@ class KinescopePlayerViewCaptionsSearchPlacementTest {
     }
 
     @Test
-    fun defaultPlacement_panelSitsAboveControlBar() {
+    fun defaultPlacement_fixedHeightPanelAboveControlBar() {
         showSearch()
 
         val panel = bounds(R.id.captions_search_panel)
-        assertTrue("panel not laid out", !panel.isEmpty)
+        assertFalse("panel not laid out", panel.isEmpty)
         assertTrue("panel should hang below the top edge", panel.top > 0)
         assertPanelEndsAtControlBar()
+        assertEquals("list should keep its fixed height", fixedListHeightPx(), listHeight())
     }
 
     @Test
@@ -90,25 +98,29 @@ class KinescopePlayerViewCaptionsSearchPlacementTest {
         pumpFrames(FRAMES_TO_SETTLE)
         assertTrue("panel should be back at the bottom", bounds(R.id.captions_search_panel).top > 0)
         assertPanelEndsAtControlBar()
+        assertEquals(fixedListHeightPx(), listHeight())
     }
 
-    /** The band grows under a sheet: the resize re-syncs the panel layout. */
+    /** The band grows under a sheet: the resize re-syncs the panel, and the list fills the room. */
     @Test
     fun topPlacement_survivesBandResize() {
         view.captionsSearchPlacement = KinescopeCaptionsSearchPlacement.TOP
         showSearch()
+        knockPinOut()
 
         view.layoutParams = FrameLayout.LayoutParams(WIDTH_PX, TALL_BAND_PX)
         pumpFrames(FRAMES_TO_SETTLE)
 
         assertEquals(TALL_BAND_PX, view.height)
         assertPinnedToTop()
+        assertTrue("list should fill the tall band", listHeight() > fixedListHeightPx())
     }
 
     @Test
     fun topPlacement_survivesFullscreenRoundTrip() {
         view.captionsSearchPlacement = KinescopeCaptionsSearchPlacement.TOP
         showSearch()
+        knockPinOut()
 
         view.setIsFullscreen(true)
         pumpFrames(FRAMES_TO_SETTLE)
@@ -123,6 +135,7 @@ class KinescopePlayerViewCaptionsSearchPlacementTest {
     fun topPlacement_survivesContentOrientationAdoption() {
         view.captionsSearchPlacement = KinescopeCaptionsSearchPlacement.TOP
         showSearch()
+        knockPinOut()
         val portraitPeer = KinescopePlayerView(activity, null).also { it.setPortraitContentForTest(true) }
 
         view.adoptContentOrientationFrom(portraitPeer)
@@ -132,10 +145,14 @@ class KinescopePlayerViewCaptionsSearchPlacementTest {
         assertPinnedToTop()
     }
 
-    private fun assertPinnedToTop() {
+
+
+
+
+    private fun assertPinnedToTop(expectedTop: Int = 0) {
         val panel = bounds(R.id.captions_search_panel)
-        assertTrue("panel not laid out", !panel.isEmpty)
-        assertEquals("panel should start at the top edge", 0, panel.top)
+        assertFalse("panel not laid out", panel.isEmpty)
+        assertEquals("panel top edge", expectedTop, panel.top)
         assertPanelEndsAtControlBar()
     }
 
@@ -143,7 +160,7 @@ class KinescopePlayerViewCaptionsSearchPlacementTest {
     private fun assertPanelEndsAtControlBar() {
         val panel = bounds(R.id.captions_search_panel)
         val bar = bounds(R.id.kinescope_control_bar)
-        val barPaddingBottom = view.findViewById<View>(R.id.kinescope_control_bar).paddingBottom
+        val barPaddingBottom = child(R.id.kinescope_control_bar).paddingBottom
         assertFalse("control bar not laid out", bar.isEmpty)
         assertTrue("panel overlaps the control bar", panel.bottom <= bar.top)
         assertTrue("panel stops short of the control bar", panel.bottom >= bar.top - barPaddingBottom)
@@ -152,13 +169,34 @@ class KinescopePlayerViewCaptionsSearchPlacementTest {
     private fun showSearch() {
         // As on a subtitle tap: the transcript itself is not needed here, a
         // closed local port refuses the fetch right away.
-        view.findViewById<KinescopeCaptionsSearchView>(R.id.captions_search_overlay).show(UNREACHABLE_VTT)
+        search().show(UNREACHABLE_VTT)
         pumpFrames(FRAMES_TO_SETTLE)
     }
 
+    /** Drops the panel's own pin; only a path going through the view's sync can restore it. */
+    private fun knockPinOut() {
+        search().setPinnedToTop(false)
+        pumpFrames(FRAMES_TO_SETTLE)
+        assertTrue("knock-out should have dropped the panel", bounds(R.id.captions_search_panel).top > 0)
+    }
+
+
+
+
+    private fun listHeight(): Int = child(R.id.captions_search_list).height
+
+    private fun fixedListHeightPx(): Int =
+        view.resources.getDimensionPixelSize(R.dimen.kinescope_captions_search_panel_max_height)
+
+    private fun search(): KinescopeCaptionsSearchView = child(R.id.captions_search_overlay) as KinescopeCaptionsSearchView
+
+    private fun overlay(): View = child(R.id.view_control)
+
+    private fun child(id: Int): View = view.findViewById(id)
+
     /** Bounds of a descendant in the player view's own coordinates. */
     private fun bounds(id: Int): Rect {
-        val target = view.findViewById<View>(id)
+        val target = child(id)
         var left = 0
         var top = 0
         var node: View = target
