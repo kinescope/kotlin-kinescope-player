@@ -449,7 +449,9 @@ class KinescopePlayerView @JvmOverloads constructor(
      *
      * A top-docked panel clears the system safe area at the top (status bar,
      * display cutout) on its own; [captionsSearchTopInset] adds the host's own
-     * chrome on top of that.
+     * chrome on top of that. While it is up, scrubbing keeps the scrub hint
+     * header and the control overlay under it — they would draw over the
+     * search field otherwise.
      */
     var captionsSearchPlacement: KinescopeCaptionsSearchPlacement = KinescopeCaptionsSearchPlacement.BOTTOM
         set(value) {
@@ -876,7 +878,10 @@ class KinescopePlayerView @JvmOverloads constructor(
             seekView?.hideSeekFeedback()
             hideVideoSubtitlesForScrub()
             enterScrubOverlayMode()
-            seekView?.showScrubOverlay()
+            // A top-docked search panel sits where the hint header draws.
+            if (!(isCaptionsSearchActive() && isCaptionsSearchPinnedToTop())) {
+                seekView?.showScrubOverlay()
+            }
 
             if (isLiveState) {
                 scrubbingLiveDurationCached = activePlaybackPlayer?.duration ?: 0
@@ -3178,7 +3183,7 @@ class KinescopePlayerView @JvmOverloads constructor(
 
     private fun isCaptionsSearchActive(): Boolean = captionsSearchView?.isVisible == true
 
-    /** Inline, top-docked: the panel owns the top edge. */
+    /** Inline, top-docked: the panel owns the top edge — where the scrub hint header draws. */
     private fun isCaptionsSearchPinnedToTop(): Boolean {
         return !isVideoFullscreen && captionsSearchPlacement == KinescopeCaptionsSearchPlacement.TOP
     }
@@ -3920,7 +3925,13 @@ class KinescopePlayerView @JvmOverloads constructor(
 
         val density = resources.displayMetrics.density
         controlElevationBeforeScrub = controlView?.elevation ?: 0f
-        controlView?.elevation = SCRUB_MODE_CONTROL_ELEVATION_DP * density
+        // The lift puts the overlay above the search panel — wanted with the
+        // panel at the bottom (the scaled seek bar stays visible), not with
+        // it docked to the top: the overlay, opaque in the wide chrome, would
+        // cover the search field.
+        if (!(captionsSearchActive && isCaptionsSearchPinnedToTop())) {
+            controlView?.elevation = SCRUB_MODE_CONTROL_ELEVATION_DP * density
+        }
 
         timeBar?.let { bar ->
             bar.setScrubVisualExpanded(expanded = true)

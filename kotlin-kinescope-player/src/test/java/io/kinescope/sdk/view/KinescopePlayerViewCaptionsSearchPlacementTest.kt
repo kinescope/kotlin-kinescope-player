@@ -3,6 +3,8 @@ package io.kinescope.sdk.view
 import android.app.Activity
 import android.graphics.Rect
 import android.os.Looper
+import android.os.SystemClock
+import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
 import androidx.core.graphics.Insets
@@ -198,7 +200,57 @@ class KinescopePlayerViewCaptionsSearchPlacementTest {
         assertPanelEndsAtControlBar()
     }
 
+    /**
+     * Scrubbing raises a hint header along the top edge and lifts the control
+     * overlay above the panel. With the panel docked to the top both would draw
+     * over the search field — so neither happens while it is up.
+     */
+    @Test
+    fun topPlacement_scrubKeepsChromeUnderThePanel() {
+        view.captionsSearchPlacement = KinescopeCaptionsSearchPlacement.TOP
+        showSearch()
 
+        startScrub()
+
+        assertFalse("scrub hint header over the search field", child(R.id.scrub_top_bar).isVisible)
+        assertEquals("control overlay lifted over the panel", 0f, overlay().elevation)
+        assertPinnedToTop()
+
+        stopScrub()
+        assertEquals(0f, overlay().elevation)
+        assertPinnedToTop()
+    }
+
+    /** The bottom panel keeps the scrub chrome as it was: header up, overlay lifted. */
+    @Test
+    fun defaultPlacement_scrubRaisesHintHeader() {
+        showSearch()
+
+        startScrub()
+
+        assertTrue(child(R.id.scrub_top_bar).isVisible)
+        assertTrue(overlay().elevation > 0f)
+
+        stopScrub()
+        assertFalse(child(R.id.scrub_top_bar).isVisible)
+        assertEquals(0f, overlay().elevation)
+    }
+
+    /** Wide (non-mobile) chrome: same docking, and the opaque scrub overlay stays under the panel. */
+    @Test
+    @Config(qualifiers = "w1080dp-h1920dp-mdpi")
+    fun topPlacement_inWideChrome_docksAndScrubStaysUnder() {
+        assertFalse("test needs the wide chrome", child(R.id.kinescope_options_dots).isVisible)
+        view.captionsSearchPlacement = KinescopeCaptionsSearchPlacement.TOP
+        showSearch()
+        assertPinnedToTop()
+
+        startScrub()
+
+        assertFalse(child(R.id.scrub_top_bar).isVisible)
+        assertEquals(0f, overlay().elevation)
+        assertPinnedToTop()
+    }
 
     private fun assertPinnedToTop(expectedTop: Int = 0) {
         val panel = bounds(R.id.captions_search_panel)
@@ -247,7 +299,36 @@ class KinescopePlayerViewCaptionsSearchPlacementTest {
         return (insetTop - location[1]).coerceAtLeast(0)
     }
 
+    private fun startScrub() {
+        val bar = child(R.id.kinescope_progress) as KinescopeTimeBar
+        bar.setDuration(SCRUB_DURATION_MS)
+        val now = SystemClock.uptimeMillis()
+        bar.dispatchTouchEvent(
+            MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, bar.width / 2f, bar.height / 2f, 0),
+        )
+        pumpFrames(FRAMES_TO_SETTLE)
+        assertTrue("scrub did not start", scrubbing())
+    }
 
+    private fun stopScrub() {
+        val bar = child(R.id.kinescope_progress) as KinescopeTimeBar
+        // The chrome refresh on scrub start re-reads the (empty) engine timeline
+        // and zeroes the bar's duration, after which it ignores touches.
+        bar.setDuration(SCRUB_DURATION_MS)
+        val now = SystemClock.uptimeMillis()
+        bar.dispatchTouchEvent(
+            MotionEvent.obtain(now, now, MotionEvent.ACTION_UP, bar.width / 2f, bar.height / 2f, 0),
+        )
+        pumpFrames(FRAMES_TO_SETTLE)
+        assertFalse("scrub did not stop", scrubbing())
+    }
+
+    private fun scrubbing(): Boolean {
+        return KinescopePlayerView::class.java.getDeclaredField("scrubbing").run {
+            isAccessible = true
+            getBoolean(view)
+        }
+    }
 
     private fun listHeight(): Int = child(R.id.captions_search_list).height
 
@@ -304,6 +385,7 @@ class KinescopePlayerViewCaptionsSearchPlacementTest {
         const val STATUS_BAR_PX = 150
         const val CUTOUT_PX = 210
         const val HOST_INSET_PX = 120
+        const val SCRUB_DURATION_MS = 60_000L
 
         const val UNREACHABLE_VTT = "http://127.0.0.1:9/subtitles.vtt"
     }
