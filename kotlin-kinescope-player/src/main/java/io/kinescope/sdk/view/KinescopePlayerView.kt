@@ -17,6 +17,7 @@ import android.view.GestureDetector
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewTreeObserver
 import android.view.WindowInsets
 import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
@@ -388,6 +389,10 @@ class KinescopePlayerView @JvmOverloads constructor(
      * to clear. Fed by the same insets and location.
      */
     private var chromeTopSafeInsetPx = 0
+
+    /** Insets last dispatched to this view, and the screen Y they were resolved against. */
+    private var lastWindowInsets: WindowInsetsCompat? = null
+    private var chromeTopScreenY = Int.MIN_VALUE
 
 
     /**
@@ -1901,14 +1906,28 @@ class KinescopePlayerView @JvmOverloads constructor(
     private val chromeTopOverlapLayoutListener =
         OnLayoutChangeListener { _, _, top, _, _, _, oldTop, _, _ ->
             if (top != oldTop) {
-                updateChromeTopOverlap(ViewCompat.getRootWindowInsets(this))
+                updateChromeTopOverlap(currentWindowInsets())
             }
         }
+
+    /**
+     * A translated view, or one inside a scrolled ancestor, moves on screen
+     * without a layout of its own (the player band riding a sheet). The
+     * overlap is re-read when the screen position changes — one location
+     * read per frame, nothing more while the view stays put.
+     */
+    private val screenPositionPreDrawListener = ViewTreeObserver.OnPreDrawListener {
+        if (screenY() != chromeTopScreenY) {
+            updateChromeTopOverlap(currentWindowInsets())
+        }
+        true
+    }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         addOnLayoutChangeListener(chromeTopOverlapLayoutListener)
-        updateChromeTopOverlap(ViewCompat.getRootWindowInsets(this))
+        viewTreeObserver.addOnPreDrawListener(screenPositionPreDrawListener)
+        updateChromeTopOverlap(currentWindowInsets())
         applyPlayerChromeLayout()
         updateAll()
         refreshCaptionsSearchChrome()
@@ -1916,8 +1935,16 @@ class KinescopePlayerView @JvmOverloads constructor(
 
     override fun onDetachedFromWindow() {
         removeOnLayoutChangeListener(chromeTopOverlapLayoutListener)
+        viewTreeObserver.removeOnPreDrawListener(screenPositionPreDrawListener)
         super.onDetachedFromWindow()
     }
+
+    /** The insets last dispatched to this view; the root's before any dispatch. */
+    private fun currentWindowInsets(): WindowInsetsCompat? {
+        return lastWindowInsets ?: ViewCompat.getRootWindowInsets(this)
+    }
+
+    private fun screenY(): Int = IntArray(2).also { getLocationOnScreen(it) }[1]
 
     /**
      * The overlap is read on the dispatch path rather than through a listener
@@ -1932,6 +1959,7 @@ class KinescopePlayerView @JvmOverloads constructor(
 
     private fun updateChromeTopOverlap(insets: WindowInsetsCompat?) {
         insets ?: return
+        lastWindowInsets = insets
         val statusBarBottom = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
         val safeAreaBottom = insets.getInsets(
             WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.displayCutout(),
@@ -1940,10 +1968,10 @@ class KinescopePlayerView @JvmOverloads constructor(
         // edge-to-edge) window the content already starts below the status bar
         // yet sits at window Y=0, which would fake a full-bar overlap. The
         // status bar itself is always anchored to screen Y=0.
-        val location = IntArray(2)
-        getLocationOnScreen(location)
-        val overlap = (statusBarBottom - location[1]).coerceAtLeast(0)
-        val safeInset = (safeAreaBottom - location[1]).coerceAtLeast(0)
+        val screenY = screenY()
+        chromeTopScreenY = screenY
+        val overlap = (statusBarBottom - screenY).coerceAtLeast(0)
+        val safeInset = (safeAreaBottom - screenY).coerceAtLeast(0)
         if (overlap != chromeTopOverlapPx || safeInset != chromeTopSafeInsetPx) {
             chromeTopOverlapPx = overlap
             chromeTopSafeInsetPx = safeInset

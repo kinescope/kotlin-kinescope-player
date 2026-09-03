@@ -84,6 +84,23 @@ class KinescopePlayerViewInsetsTest {
         assertEquals("panel should clear the status bar", expected, panelTop())
     }
 
+    /**
+     * The band rides a sheet: the view moves on screen through its ancestors
+     * (translation, scroll) with no layout of its own — the overlap follows.
+     */
+    @Test
+    fun topPlacement_followsTheViewsScreenPosition() {
+        dispatchTopInsets(statusBar = STATUS_BAR_PX)
+        val before = panelTop()
+        assertTrue("test needs a real overlap", before > SHIFT_PX)
+
+        container.translationY = SHIFT_PX.toFloat()
+        pumpFrames(FRAMES_TO_SETTLE)
+
+        assertEquals(expectedSafeInset(STATUS_BAR_PX), panelTop())
+        assertEquals(before - SHIFT_PX, panelTop())
+    }
+
     private fun dispatchTopInsets(statusBar: Int) {
         val insets = WindowInsetsCompat.Builder()
             .setInsets(WindowInsetsCompat.Type.statusBars(), Insets.of(0, statusBar, 0, 0))
@@ -123,6 +140,7 @@ class KinescopePlayerViewInsetsTest {
         const val BAND_HEIGHT_PX = 1200
         // Larger than the decor offset of the view on this screen, so it really overlaps.
         const val STATUS_BAR_PX = 300
+        const val SHIFT_PX = 60
         const val UNREACHABLE_VTT = "http://127.0.0.1:9/subtitles.vtt"
     }
 }
