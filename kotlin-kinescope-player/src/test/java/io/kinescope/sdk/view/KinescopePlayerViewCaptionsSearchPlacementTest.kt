@@ -293,6 +293,20 @@ class KinescopePlayerViewCaptionsSearchPlacementTest {
         assertPinnedToTop()
     }
 
+    /** The public layout query answers for the top-docked panel too — it uses the fullscreen layout. */
+    @Test
+    fun isFullscreenLayout_reportsTheTopDockedPanel() {
+        showSearch()
+        assertFalse(search().isFullscreenLayout())
+
+        view.captionsSearchPlacement = KinescopeCaptionsSearchPlacement.TOP
+        assertTrue(search().isFullscreenLayout())
+
+        view.captionsSearchPlacement = KinescopeCaptionsSearchPlacement.BOTTOM
+        view.setIsFullscreen(true)
+        assertTrue(search().isFullscreenLayout())
+    }
+
     private fun assertPinnedToTop(expectedTop: Int = 0) {
         val panel = bounds(R.id.captions_search_panel)
         assertFalse("panel not laid out", panel.isEmpty)

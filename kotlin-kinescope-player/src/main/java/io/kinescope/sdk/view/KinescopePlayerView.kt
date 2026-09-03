@@ -4542,7 +4542,7 @@ class KinescopePlayerView @JvmOverloads constructor(
                 return@post
             }
             val layoutParams = searchView.layoutParams as? FrameLayout.LayoutParams ?: return@post
-            val fullscreen = searchView.fillsPlayer()
+            val fullscreen = searchView.isFullscreenLayout()
             layoutParams.width = ViewGroup.LayoutParams.MATCH_PARENT
             layoutParams.height = if (fullscreen) {
                 ViewGroup.LayoutParams.MATCH_PARENT

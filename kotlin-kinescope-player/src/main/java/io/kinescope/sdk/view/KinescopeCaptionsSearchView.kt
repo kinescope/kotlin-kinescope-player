@@ -133,7 +133,12 @@ class KinescopeCaptionsSearchView @JvmOverloads constructor(
         applyModeLayout()
     }
 
-    fun isFullscreenLayout(): Boolean = isFullscreenMode
+    /**
+     * Whether the panel spans the player height: the fullscreen layout, or the
+     * inline panel docked to the top by
+     * [KinescopePlayerView.captionsSearchPlacement], which uses the same one.
+     */
+    fun isFullscreenLayout(): Boolean = isFullscreenMode || isPinnedToTop
 
     /**
      * Inline placement: docked to the top edge with the list filling down to
@@ -151,11 +156,8 @@ class KinescopeCaptionsSearchView @JvmOverloads constructor(
         applyModeLayout()
     }
 
-    /** Whether the panel spans the player height (fullscreen, or pinned to the top inline). */
-    internal fun fillsPlayer(): Boolean = isFullscreenMode || isPinnedToTop
-
     private fun applyModeLayout() {
-        val fills = fillsPlayer()
+        val fills = isFullscreenLayout()
         val sideInset = when {
             isFullscreenMode && isPortraitFullscreenMode -> {
                 resources.getDimensionPixelSize(
