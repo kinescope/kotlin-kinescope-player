@@ -2799,6 +2799,12 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     private fun animateCompactOptionsBarExpand() {
+        // Re-entered through post(); the bar may have been collapsed meanwhile
+        // (overlay fade end, chrome mode change, view switch) — see the same
+        // guard in the deferred pass below.
+        if (!isOptionsBarExpanded) {
+            return
+        }
         cancelCompactOptionsBarTransition()
         updateExpandedButtonsChildVisibility()
 
@@ -2818,6 +2824,13 @@ class KinescopePlayerView @JvmOverloads constructor(
 
         (controlBar as? ViewGroup)?.requestLayout()
         controlBar?.post {
+            // Whoever collapsed the bar since the tap has already restored the
+            // progress chrome; finishing the expansion here would hide the
+            // progress row and the timer on a bar that is no longer expanded
+            // (the strip target measures 0 with its buttons gone).
+            if (!isOptionsBarExpanded) {
+                return@post
+            }
             val progressStartWidth = if (progressContainer?.isVisible == true) {
                 progressContainer?.width ?: 0
             } else {
@@ -3508,6 +3521,22 @@ class KinescopePlayerView @JvmOverloads constructor(
         if (!usesCompactOptionsChrome()) {
             return
         }
+        // The dots stay clickable while the overlay fades out (auto-hide, tap on
+        // the video). Left alone, the fade's end action hides the overlay and
+        // force-collapses the bar right after this toggle — the tap looks
+        // swallowed: no strip, chrome gone. A press that lands during the fade
+        // and is released after it arrives here later still: the overlay is
+        // already hidden and the flag cleared, and the strip would expand on
+        // hidden chrome — the next tap on the video raises the overlay with the
+        // strip open instead of the progress row. A tap on a control means
+        // "keep the chrome": raise it before toggling.
+        if (controlOverlayHiding || !isControlOverlayVisible()) {
+            showControlOverlay(animated = false)
+            // PiP and frame preview own their chrome: nothing to expand on.
+            if (!isControlOverlayVisible()) {
+                return
+            }
+        }
         if (settingsMenuView?.isVisible == true) {
             settingsMenuView?.dismiss()
         }
@@ -3956,13 +3985,17 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
         val overlay = controlView ?: return
         controlOverlayHiding = false
+        // A hide fade may already be running without having rendered a frame
+        // yet (alpha still 1): cancel it before the fully-visible fast path,
+        // otherwise its end action would still hide the overlay and collapse
+        // the options bar right after this call.
+        overlay.animate().cancel()
         if (overlay.isVisible && overlay.alpha >= 1f) {
             updateAll()
             applySubtitleStyle()
             scheduleControlOverlayAutoHide()
             return
         }
-        overlay.animate().cancel()
         overlay.isVisible = true
         updateMobileBackgroundGradients(animated = animated, controlsVisible = true)
         applySubtitleStyle(controlsVisibleOverride = true)
