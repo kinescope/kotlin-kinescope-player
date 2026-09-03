@@ -27,6 +27,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowChoreographer
+import org.robolectric.util.ReflectionHelpers
 import java.time.Duration
 
 /**
@@ -359,11 +360,19 @@ class KinescopePlayerViewCaptionsSearchPlacementTest {
 
     private fun searchTopMargin(): Int = (search().layoutParams as ViewGroup.MarginLayoutParams).topMargin
 
+    /**
+     * The insets arrive the way the window's do: the root holds them (what the
+     * view reads its overlap from) and they travel down the tree (what tells
+     * the view they changed). Robolectric has no way to hand insets to the
+     * root; ViewRootImpl keeps the ones last computed and serves them until
+     * the next request, which nothing here makes.
+     */
     private fun dispatchTopInsets(statusBar: Int, cutout: Int = 0) {
         val insets = WindowInsetsCompat.Builder()
             .setInsets(WindowInsetsCompat.Type.statusBars(), Insets.of(0, statusBar, 0, 0))
             .setInsets(WindowInsetsCompat.Type.displayCutout(), Insets.of(0, cutout, 0, 0))
             .build()
+        ReflectionHelpers.setField(view.rootView.parent, "mLastWindowInsets", insets.toWindowInsets())
         ViewCompat.dispatchApplyWindowInsets(view, insets)
         pumpFrames(FRAMES_TO_SETTLE)
     }

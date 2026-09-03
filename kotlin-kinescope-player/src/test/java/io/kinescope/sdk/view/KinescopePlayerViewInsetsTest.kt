@@ -4,6 +4,7 @@ import android.app.Activity
 import android.graphics.Rect
 import android.os.Looper
 import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
@@ -22,6 +23,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowChoreographer
+import org.robolectric.util.ReflectionHelpers
 import java.time.Duration
 
 /**
@@ -101,12 +103,54 @@ class KinescopePlayerViewInsetsTest {
         assertEquals(before - SHIFT_PX, panelTop())
     }
 
-    private fun dispatchTopInsets(statusBar: Int) {
+    /**
+     * An ancestor that takes the status bar inset for itself (a host padding
+     * its own toolbar) passes the rest down with the bar zeroed. The bar is
+     * still where it was on screen: the band sliding under it with the sheet
+     * has to clear it all the same.
+     */
+    @Test
+    fun ancestorConsumedStatusBar_viewSlidingUnderIt_stillClearsTheBar() {
+        ViewCompat.setOnApplyWindowInsetsListener(container) { _, insets ->
+            WindowInsetsCompat.Builder(insets)
+                .setInsets(WindowInsetsCompat.Type.statusBars(), Insets.NONE)
+                .build()
+        }
+        // A bar the band starts just clear of; the slide takes it under.
+        val statusBar = screenY() - SHIFT_PX / 2
+        dispatchTopInsets(statusBar, through = container)
+        assertEquals("band should start clear of the bar", 0, panelTop())
+
+        container.translationY = -SHIFT_PX.toFloat()
+        pumpFrames(FRAMES_TO_SETTLE)
+
+        val expected = expectedSafeInset(statusBar)
+        assertTrue("test needs a real overlap", expected > 0)
+        assertEquals("panel should clear the status bar", expected, panelTop())
+        assertEquals("title chrome should clear the status bar", expected, titleChromeOverlap())
+    }
+
+    /**
+     * The insets arrive the way the window's do: the root holds them (what the
+     * view reads its overlap from) and they travel down the tree from
+     * [through] (what tells the view they changed). Robolectric has no way to
+     * hand insets to the root; ViewRootImpl keeps the ones last computed and
+     * serves them until the next request, which nothing here makes.
+     */
+    private fun dispatchTopInsets(statusBar: Int, through: View = view) {
         val insets = WindowInsetsCompat.Builder()
             .setInsets(WindowInsetsCompat.Type.statusBars(), Insets.of(0, statusBar, 0, 0))
             .build()
-        ViewCompat.dispatchApplyWindowInsets(view, insets)
+        ReflectionHelpers.setField(view.rootView.parent, "mLastWindowInsets", insets.toWindowInsets())
+        ViewCompat.dispatchApplyWindowInsets(through, insets)
         pumpFrames(FRAMES_TO_SETTLE)
+    }
+
+    /** What the title block is pushed down by, over its own margin. */
+    private fun titleChromeOverlap(): Int {
+        val block = view.findViewById<View>(R.id.kinescope_description_block)
+        val margin = view.resources.getDimensionPixelSize(R.dimen.kinescope_mobile_control_margin_horizontal)
+        return (block.layoutParams as ViewGroup.MarginLayoutParams).topMargin - margin
     }
 
     /** The overlap the view computes: inset measured from the screen top, minus where the view starts. */

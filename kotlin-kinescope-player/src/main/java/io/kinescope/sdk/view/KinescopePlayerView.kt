@@ -390,7 +390,10 @@ class KinescopePlayerView @JvmOverloads constructor(
      */
     private var chromeTopSafeInsetPx = 0
 
-    /** Insets last dispatched to this view, and the screen Y they were resolved against. */
+    /**
+     * Insets last dispatched to this view — the fallback source, see
+     * [currentWindowInsets] — and the screen Y the overlap was resolved against.
+     */
     private var lastWindowInsets: WindowInsetsCompat? = null
     private var chromeTopScreenY = Int.MIN_VALUE
 
@@ -1937,9 +1940,17 @@ class KinescopePlayerView @JvmOverloads constructor(
         super.onDetachedFromWindow()
     }
 
-    /** The insets last dispatched to this view; the root's before any dispatch. */
+    /**
+     * The insets the overlap is read from: the root's, raw. The formula in
+     * [updateChromeTopOverlap] is a screen one, and the status bar sits where
+     * it sits no matter what an ancestor consumed on the way down — a host
+     * padding its own toolbar and passing the rest on with the bar zeroed
+     * would otherwise leave the band blind to the bar it slides under with
+     * the sheet. The insets last dispatched to this view stand in where there
+     * are no root insets to read (before API 23, or detached).
+     */
     private fun currentWindowInsets(): WindowInsetsCompat? {
-        return lastWindowInsets ?: ViewCompat.getRootWindowInsets(this)
+        return ViewCompat.getRootWindowInsets(this) ?: lastWindowInsets
     }
 
     /** Reused across pre-draw checks: they run every frame. */
@@ -1954,16 +1965,18 @@ class KinescopePlayerView @JvmOverloads constructor(
      * The overlap is read on the dispatch path rather than through a listener
      * on this view: that listener slot is the host's (a host setting its own
      * would silently replace ours, or we theirs). super still routes the
-     * insets to the host's listener, if any, and down to the children.
+     * insets to the host's listener, if any, and down to the children. What
+     * arrives here is the signal that the insets changed, and the fallback
+     * source; the overlap itself comes from [currentWindowInsets].
      */
     override fun dispatchApplyWindowInsets(insets: WindowInsets): WindowInsets {
-        updateChromeTopOverlap(WindowInsetsCompat.toWindowInsetsCompat(insets, this))
+        lastWindowInsets = WindowInsetsCompat.toWindowInsetsCompat(insets, this)
+        updateChromeTopOverlap(currentWindowInsets())
         return super.dispatchApplyWindowInsets(insets)
     }
 
     private fun updateChromeTopOverlap(insets: WindowInsetsCompat?) {
         insets ?: return
-        lastWindowInsets = insets
         val statusBarBottom = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
         val safeAreaBottom = insets.getInsets(
             WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.displayCutout(),
