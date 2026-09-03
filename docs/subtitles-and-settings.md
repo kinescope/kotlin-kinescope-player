@@ -40,6 +40,17 @@ Available when the video has external subtitle tracks.
 
 The panel sits above the control bar; bottom player icons stay visible and clickable.
 
+Inline placement is a view-level choice, `KinescopePlayerView.captionsSearchPlacement`:
+
+| Placement | Layout |
+|-----------|--------|
+| `BOTTOM` (default) | Fixed-height panel docked above the control bar |
+| `TOP` | Panel docked to the top edge, list fills down to the control bar — for hosts whose player band changes height (a draggable sheet), so the panel stays put |
+
+A top-docked panel clears the system safe area at the top (status bar, display cutout) on its own; `captionsSearchTopInset` (px) adds the host's own header drawn over the band. While the panel is docked to the top, scrubbing the seek bar does not raise the scrub hint header or lift the control overlay over the panel.
+
+Fullscreen layout is unaffected; the choice is kept across fullscreen toggles, orientation changes and resizes.
+
 Closes automatically on Picture-in-Picture entry.
 
 ## Progressive subtitles overlay
