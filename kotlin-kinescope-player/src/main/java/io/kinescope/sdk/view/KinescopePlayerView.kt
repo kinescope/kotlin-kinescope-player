@@ -1192,7 +1192,6 @@ class KinescopePlayerView @JvmOverloads constructor(
             if ((widthChanged || heightChanged) && width > 0 && height > 0) {
                 syncCaptionsSearchFullscreenMode()
                 applySubtitleStyle()
-                updateCaptionsSearchInsets()
             }
         }
         setUIListeners()
@@ -1943,7 +1942,13 @@ class KinescopePlayerView @JvmOverloads constructor(
         return lastWindowInsets ?: ViewCompat.getRootWindowInsets(this)
     }
 
-    private fun screenY(): Int = IntArray(2).also { getLocationOnScreen(it) }[1]
+    /** Reused across pre-draw checks: they run every frame. */
+    private val screenLocation = IntArray(2)
+
+    private fun screenY(): Int {
+        getLocationOnScreen(screenLocation)
+        return screenLocation[1]
+    }
 
     /**
      * The overlap is read on the dispatch path rather than through a listener
@@ -2007,9 +2012,6 @@ class KinescopePlayerView @JvmOverloads constructor(
         updateFullscreenButton()
         updatePlayPauseButton()
         applySubtitleStyle()
-        if (isCaptionsSearchActive()) {
-            updateCaptionsSearchInsets()
-        }
         syncScrubChromePresentation()
     }
 
