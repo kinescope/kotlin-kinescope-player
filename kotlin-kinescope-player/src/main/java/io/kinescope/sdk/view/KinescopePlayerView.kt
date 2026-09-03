@@ -3524,10 +3524,18 @@ class KinescopePlayerView @JvmOverloads constructor(
         // The dots stay clickable while the overlay fades out (auto-hide, tap on
         // the video). Left alone, the fade's end action hides the overlay and
         // force-collapses the bar right after this toggle — the tap looks
-        // swallowed: no strip, chrome gone. A tap on a control means "keep the
-        // chrome": cancel the fade before toggling.
-        if (controlOverlayHiding) {
+        // swallowed: no strip, chrome gone. A press that lands during the fade
+        // and is released after it arrives here later still: the overlay is
+        // already hidden and the flag cleared, and the strip would expand on
+        // hidden chrome — the next tap on the video raises the overlay with the
+        // strip open instead of the progress row. A tap on a control means
+        // "keep the chrome": raise it before toggling.
+        if (controlOverlayHiding || !isControlOverlayVisible()) {
             showControlOverlay(animated = false)
+            // PiP and frame preview own their chrome: nothing to expand on.
+            if (!isControlOverlayVisible()) {
+                return
+            }
         }
         if (settingsMenuView?.isVisible == true) {
             settingsMenuView?.dismiss()

@@ -1,6 +1,7 @@
 package io.kinescope.sdk.view
 
 import android.app.Activity
+import android.graphics.Rect
 import android.os.Looper
 import android.os.SystemClock
 import android.view.MotionEvent
@@ -113,6 +114,76 @@ class KinescopePlayerViewOptionsBarTest {
     }
 
     /**
+     * A press that lands during the fade is released after it: the button was
+     * hit-tested while visible, so the release (and the click it posts) still
+     * reaches it once the fade's end action has hidden the overlay, cleared
+     * the "hiding" flag and force-collapsed the bar. The handler saw neither a
+     * fade to cancel nor a visible overlay to check and expanded the strip on
+     * hidden chrome; the next tap on the video raised the overlay with the
+     * strip open instead of the progress row. A finger stays down 80–120 ms,
+     * the fade runs 200 ms — the window is real.
+     */
+    @Test
+    fun dotsPressedDuringFade_releasedAfterFadeEnd_showsOverlayAndExpandsStrip() {
+        tapVideo()
+        pumpUntil { overlay().alpha < 1f }
+        pumpFrames(5)
+        assertTrue("fade-out should be running", overlay().isVisible && overlay().alpha in 0.01f..0.99f)
+
+        pressDots()
+        pumpUntil { !overlay().isVisible }
+        releaseDots()
+        pumpFrames(FRAMES_TO_SETTLE)
+
+        assertTrue("overlay left hidden", overlay().isVisible)
+        assertEquals(1f, overlay().alpha)
+        assertStripExpanded()
+        assertFalse("progress row should give way to the strip", child(R.id.kinescope_progress_container).isVisible)
+        assertFalse("timer should give way to the strip", child(R.id.kinescope_time_container).isVisible)
+    }
+
+    /**
+     * Same race, then the user closes the strip: the progress row and the timer
+     * come back, and auto-hide — held off while the strip is open — is armed
+     * again by the collapse. A plain tap on the video keeps toggling the chrome.
+     */
+    @Test
+    fun dotsPressedDuringFade_releasedAfterFadeEnd_collapseRestoresProgressChromeAndAutoHide() {
+        markPlaybackStarted()
+        tapVideo()
+        pumpUntil { overlay().alpha < 1f }
+        pumpFrames(5)
+
+        pressDots()
+        pumpUntil { !overlay().isVisible }
+        releaseDots()
+        pumpFrames(FRAMES_TO_SETTLE)
+        assertTrue("overlay left hidden", overlay().isVisible)
+        assertStripExpanded()
+
+        pumpFrames(AUTO_HIDE_FRAMES + FRAMES_TO_SETTLE)
+        assertTrue("open strip must hold the chrome", overlay().isVisible)
+        assertStripExpanded()
+
+        clickDots()
+        pumpFrames(FRAMES_TO_SETTLE)
+        assertTrue("overlay hidden by the collapse", overlay().isVisible)
+        assertFalse("strip left on", child(R.id.kinescope_options_expandable_strip).isVisible)
+        assertTrue("progress row not restored", child(R.id.kinescope_progress_container).isVisible)
+        assertTrue("timer not restored", child(R.id.kinescope_time_container).isVisible)
+
+        pumpFrames(AUTO_HIDE_FRAMES + FRAMES_TO_SETTLE)
+        assertFalse("auto-hide not re-armed by the collapse", overlay().isVisible)
+
+        tapVideo()
+        pumpFrames(FRAMES_TO_SETTLE)
+        assertTrue("tap on the video should raise the chrome", overlay().isVisible)
+        assertEquals(1f, overlay().alpha)
+        assertFalse("strip should stay closed", child(R.id.kinescope_options_expandable_strip).isVisible)
+        assertTrue("progress row should be back", child(R.id.kinescope_progress_container).isVisible)
+    }
+
+    /**
      * The expansion finishes in a deferred pass. When the bar gets collapsed in
      * between — an overlay fade end, a chrome mode change, a view switch; here
      * the host flips the view to fullscreen, which re-applies the chrome — the
@@ -145,6 +216,46 @@ class KinescopePlayerViewOptionsBarTest {
 
     private fun clickDots() {
         child(R.id.kinescope_options_dots).performClick()
+    }
+
+    private var dotsDownTime = 0L
+
+    /** Finger down on the dots through the real pipeline: root → overlay → button. */
+    private fun pressDots() {
+        dotsDownTime = SystemClock.uptimeMillis()
+        touchDots(MotionEvent.ACTION_DOWN)
+    }
+
+    /** Release goes to the view captured on press, whatever the overlay is by now. */
+    private fun releaseDots() {
+        touchDots(MotionEvent.ACTION_UP)
+    }
+
+    private fun touchDots(action: Int) {
+        val dots = child(R.id.kinescope_options_dots)
+        val bounds = Rect()
+        dots.getDrawingRect(bounds)
+        view.offsetDescendantRectToMyCoords(dots, bounds)
+        view.dispatchTouchEvent(
+            MotionEvent.obtain(
+                dotsDownTime,
+                SystemClock.uptimeMillis(),
+                action,
+                bounds.exactCenterX(),
+                bounds.exactCenterY(),
+                0,
+            ),
+        )
+    }
+
+    /**
+     * Auto-hide arms only once playback has started, and Robolectric has no
+     * media to play: flip the flag the way `onIsPlayingChanged(true)` would.
+     */
+    private fun markPlaybackStarted() {
+        KinescopePlayerView::class.java.getDeclaredField("hasStartedPlayback")
+            .apply { isAccessible = true }
+            .setBoolean(view, true)
     }
 
     /** Single tap on the video area: toggles the control overlay. */
@@ -180,6 +291,9 @@ class KinescopePlayerViewOptionsBarTest {
         const val HELD_FRAME_MS = 1000L
         const val FRAMES_TO_SETTLE = 40
         const val MAX_WAIT_FRAMES = 400
+
+        // KinescopePlayerView.CONTROL_OVERLAY_AUTO_HIDE_MS in frames.
+        const val AUTO_HIDE_FRAMES = (3000L / FRAME_MS).toInt()
 
         // xxhdpi, 360 dp wide: compact (mobile) chrome with the dots button.
         const val PORTRAIT_WIDTH_PX = 1080
