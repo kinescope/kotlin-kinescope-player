@@ -474,7 +474,7 @@ class KinescopePlayerView @JvmOverloads constructor(
      * ([KinescopeCaptionsSearchPlacement.TOP]) — the host's own header drawn
      * over the top of the player band. Added on top of the system safe area,
      * which the panel clears on its own. Ignored for the bottom placement and
-     * in fullscreen.
+     * in fullscreen. Negative values are clamped to 0.
      */
     var captionsSearchTopInset: Int = 0
         set(value) {

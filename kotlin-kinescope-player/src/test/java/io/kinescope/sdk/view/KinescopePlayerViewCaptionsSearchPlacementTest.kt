@@ -187,6 +187,12 @@ class KinescopePlayerViewCaptionsSearchPlacementTest {
         pumpFrames(FRAMES_TO_SETTLE)
 
         assertPinnedToTop(expectedTop = HOST_INSET_PX)
+
+        view.captionsSearchTopInset = -HOST_INSET_PX
+        pumpFrames(FRAMES_TO_SETTLE)
+
+        assertEquals("negative inset clamps to 0", 0, view.captionsSearchTopInset)
+        assertPinnedToTop(expectedTop = 0)
     }
 
     /** Insets and the host inset are a top-placement affair; the bottom panel keeps its geometry. */
