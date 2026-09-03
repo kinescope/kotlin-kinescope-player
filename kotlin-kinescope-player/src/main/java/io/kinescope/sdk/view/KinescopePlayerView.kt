@@ -465,7 +465,6 @@ class KinescopePlayerView @JvmOverloads constructor(
             if (field == value) return
             field = value
             syncCaptionsSearchFullscreenMode()
-            updateCaptionsSearchInsets()
             syncScrubChromePresentation()
         }
 
@@ -5218,7 +5217,10 @@ class KinescopePlayerView @JvmOverloads constructor(
         return isPortraitContent
     }
 
-    /** The one place the panel learns its layout; every re-sync path goes through here. */
+    /**
+     * The one place the panel learns its layout — mode, pin and the margins
+     * that go with them; every re-sync path goes through here.
+     */
     private fun syncCaptionsSearchFullscreenMode() {
         val search = captionsSearchView ?: return
         search.setFullscreenMode(
@@ -5226,6 +5228,7 @@ class KinescopePlayerView @JvmOverloads constructor(
             portrait = isPortraitCaptionsSearchLayout(),
         )
         search.setPinnedToTop(captionsSearchPlacement == KinescopeCaptionsSearchPlacement.TOP)
+        updateCaptionsSearchInsets()
     }
 
     private fun resolveSubtitleBottomPaddingPx(

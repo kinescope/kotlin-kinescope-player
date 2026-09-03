@@ -6,11 +6,13 @@ import android.os.Looper
 import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
+import androidx.core.view.updateLayoutParams
 import io.kinescope.sdk.R
 import io.kinescope.sdk.player.KinescopeVideoPlayer
 import org.junit.After
@@ -109,45 +111,39 @@ class KinescopePlayerViewCaptionsSearchPlacementTest {
     /** The band grows under a sheet: the resize re-syncs the panel, and the list fills the room. */
     @Test
     fun topPlacement_survivesBandResize() {
-        view.captionsSearchPlacement = KinescopeCaptionsSearchPlacement.TOP
-        showSearch()
-        knockPinOut()
+        val expectedTop = pinUnderInsetsThenKnockOut()
 
         view.layoutParams = FrameLayout.LayoutParams(WIDTH_PX, TALL_BAND_PX)
         pumpFrames(FRAMES_TO_SETTLE)
 
         assertEquals(TALL_BAND_PX, view.height)
-        assertPinnedToTop()
+        assertPinnedToTop(expectedTop = expectedTop)
         assertTrue("list should fill the tall band", listHeight() > fixedListHeightPx())
     }
 
     @Test
     fun topPlacement_survivesFullscreenRoundTrip() {
-        view.captionsSearchPlacement = KinescopeCaptionsSearchPlacement.TOP
-        showSearch()
-        knockPinOut()
+        val expectedTop = pinUnderInsetsThenKnockOut()
 
         view.setIsFullscreen(true)
         pumpFrames(FRAMES_TO_SETTLE)
         view.setIsFullscreen(false)
         pumpFrames(FRAMES_TO_SETTLE)
 
-        assertPinnedToTop()
+        assertPinnedToTop(expectedTop = expectedTop)
     }
 
     /** Inline ↔ fullscreen view switch copies the content orientation and re-syncs the panel. */
     @Test
     fun topPlacement_survivesContentOrientationAdoption() {
-        view.captionsSearchPlacement = KinescopeCaptionsSearchPlacement.TOP
-        showSearch()
-        knockPinOut()
+        val expectedTop = pinUnderInsetsThenKnockOut()
         val portraitPeer = KinescopePlayerView(activity, null).also { it.setPortraitContentForTest(true) }
 
         view.adoptContentOrientationFrom(portraitPeer)
         pumpFrames(FRAMES_TO_SETTLE)
 
         assertTrue("orientation should have been adopted", view.isPortraitContent)
-        assertPinnedToTop()
+        assertPinnedToTop(expectedTop = expectedTop)
     }
 
     /** Edge-to-edge: the top edge is under the status bar and the cutout — the panel clears both. */
@@ -321,12 +317,33 @@ class KinescopePlayerViewCaptionsSearchPlacementTest {
         pumpFrames(FRAMES_TO_SETTLE)
     }
 
-    /** Drops the panel's own pin; only a path going through the view's sync can restore it. */
+    /**
+     * Drops the panel's own pin and the top margin the view gave it, and checks
+     * the panel really is a bottom one again — margin 0, hanging below the top
+     * edge. Only a path going through the view's sync can put it back at the
+     * top, margin included.
+     */
     private fun knockPinOut() {
         search().setPinnedToTop(false)
+        search().updateLayoutParams<FrameLayout.LayoutParams> { topMargin = 0 }
         pumpFrames(FRAMES_TO_SETTLE)
+        assertEquals("knock-out should have cleared the margin", 0, searchTopMargin())
         assertTrue("knock-out should have dropped the panel", bounds(R.id.captions_search_panel).top > 0)
     }
+
+    /** TOP placement under real insets, then knocked out: returns the top the path under test must restore. */
+    private fun pinUnderInsetsThenKnockOut(): Int {
+        view.captionsSearchPlacement = KinescopeCaptionsSearchPlacement.TOP
+        showSearch()
+        dispatchTopInsets(statusBar = STATUS_BAR_PX)
+        val expected = expectedSafeInset(STATUS_BAR_PX)
+        assertTrue("test needs a real overlap", expected > 0)
+        assertPinnedToTop(expectedTop = expected)
+        knockPinOut()
+        return expected
+    }
+
+    private fun searchTopMargin(): Int = (search().layoutParams as ViewGroup.MarginLayoutParams).topMargin
 
     private fun dispatchTopInsets(statusBar: Int, cutout: Int = 0) {
         val insets = WindowInsetsCompat.Builder()
