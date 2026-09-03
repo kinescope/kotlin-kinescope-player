@@ -172,7 +172,9 @@ class KinescopePlayerViewCaptionsSearchPlacementTest {
 
         dispatchTopInsets(statusBar = STATUS_BAR_PX)
 
-        assertPinnedToTop(expectedTop = expectedSafeInset(STATUS_BAR_PX) + HOST_INSET_PX)
+        val safeInset = expectedSafeInset(STATUS_BAR_PX)
+        assertTrue("test needs a real overlap", safeInset > 0)
+        assertPinnedToTop(expectedTop = safeInset + HOST_INSET_PX)
     }
 
     @Test
@@ -219,6 +221,43 @@ class KinescopePlayerViewCaptionsSearchPlacementTest {
         stopScrub()
         assertEquals(0f, overlay().elevation)
         assertPinnedToTop()
+    }
+
+    /** Closing the panel mid-scrub hands the top edge back: header up, overlay lifted, for the rest of the gesture. */
+    @Test
+    fun topPlacement_panelClosedMidScrub_restoresScrubChrome() {
+        view.captionsSearchPlacement = KinescopeCaptionsSearchPlacement.TOP
+        showSearch()
+        startScrub()
+        assertFalse(child(R.id.scrub_top_bar).isVisible)
+
+        search().dismiss()
+        pumpFrames(FRAMES_TO_SETTLE)
+
+        assertTrue("hint header should be back", child(R.id.scrub_top_bar).isVisible)
+        assertTrue("overlay should be lifted again", overlay().elevation > 0f)
+
+        stopScrub()
+        assertFalse(child(R.id.scrub_top_bar).isVisible)
+        assertEquals(0f, overlay().elevation)
+    }
+
+    @Test
+    fun topPlacement_switchedToBottomMidScrub_raisesScrubChrome() {
+        view.captionsSearchPlacement = KinescopeCaptionsSearchPlacement.TOP
+        showSearch()
+        startScrub()
+        assertEquals(0f, overlay().elevation)
+
+        view.captionsSearchPlacement = KinescopeCaptionsSearchPlacement.BOTTOM
+        pumpFrames(FRAMES_TO_SETTLE)
+
+        assertTrue(child(R.id.scrub_top_bar).isVisible)
+        assertTrue(overlay().elevation > 0f)
+
+        stopScrub()
+        assertFalse(child(R.id.scrub_top_bar).isVisible)
+        assertEquals(0f, overlay().elevation)
     }
 
     /** The bottom panel keeps the scrub chrome as it was: header up, overlay lifted. */
@@ -382,8 +421,9 @@ class KinescopePlayerViewCaptionsSearchPlacementTest {
         /** Sheet dragged down — the band well taller than the fixed 280 dp list. */
         const val TALL_BAND_PX = 2100
 
-        const val STATUS_BAR_PX = 150
-        const val CUTOUT_PX = 210
+        // Larger than the decor offset of the view on this screen, so they really overlap.
+        const val STATUS_BAR_PX = 300
+        const val CUTOUT_PX = 360
         const val HOST_INSET_PX = 120
         const val SCRUB_DURATION_MS = 60_000L
 

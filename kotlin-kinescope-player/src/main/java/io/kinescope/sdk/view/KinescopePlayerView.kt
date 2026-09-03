@@ -457,7 +457,8 @@ class KinescopePlayerView @JvmOverloads constructor(
      * display cutout) on its own; [captionsSearchTopInset] adds the host's own
      * chrome on top of that. While it is up, scrubbing keeps the scrub hint
      * header and the control overlay under it — they would draw over the
-     * search field otherwise.
+     * search field otherwise; both come back if the panel closes or the
+     * placement changes mid-scrub.
      */
     var captionsSearchPlacement: KinescopeCaptionsSearchPlacement = KinescopeCaptionsSearchPlacement.BOTTOM
         set(value) {
@@ -465,6 +466,7 @@ class KinescopePlayerView @JvmOverloads constructor(
             field = value
             syncCaptionsSearchFullscreenMode()
             updateCaptionsSearchInsets()
+            syncScrubChromePresentation()
         }
 
     /**
@@ -884,10 +886,7 @@ class KinescopePlayerView @JvmOverloads constructor(
             seekView?.hideSeekFeedback()
             hideVideoSubtitlesForScrub()
             enterScrubOverlayMode()
-            // A top-docked search panel sits where the hint header draws.
-            if (!(isCaptionsSearchActive() && isCaptionsSearchPinnedToTop())) {
-                seekView?.showScrubOverlay()
-            }
+            syncScrubChromePresentation()
 
             if (isLiveState) {
                 scrubbingLiveDurationCached = activePlaybackPlayer?.duration ?: 0
@@ -1155,6 +1154,7 @@ class KinescopePlayerView @JvmOverloads constructor(
             } else {
                 restoreControlOverlayAfterCaptionsSearch()
             }
+            syncScrubChromePresentation()
         }
 
         chaptersMenuView = findViewById(R.id.chapters_menu)
@@ -2011,6 +2011,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         if (isCaptionsSearchActive()) {
             updateCaptionsSearchInsets()
         }
+        syncScrubChromePresentation()
     }
 
     private fun updateContentOrientation(width: Int, height: Int) {
@@ -3223,6 +3224,28 @@ class KinescopePlayerView @JvmOverloads constructor(
         return !isVideoFullscreen && captionsSearchPlacement == KinescopeCaptionsSearchPlacement.TOP
     }
 
+    /**
+     * Scrub chrome: the hint header along the top edge and the overlay lifted
+     * above the captions search panel (so the scaled seek bar stays visible
+     * over a bottom panel). Off while a top-docked panel is up — the header
+     * would draw over the search field and the overlay, opaque in the wide
+     * chrome, would cover the panel. Decided on scrub start and again
+     * whenever that changes mid-scrub: panel shown or closed, placement or
+     * fullscreen switched.
+     */
+    private fun syncScrubChromePresentation() {
+        if (!scrubbing) {
+            return
+        }
+        if (isCaptionsSearchActive() && isCaptionsSearchPinnedToTop()) {
+            seekView?.hideScrubOverlay()
+            controlView?.elevation = controlElevationBeforeScrub
+        } else {
+            seekView?.showScrubOverlay()
+            controlView?.elevation = SCRUB_MODE_CONTROL_ELEVATION_DP * resources.displayMetrics.density
+        }
+    }
+
     private fun pinsExpandedOptionsToBarEnd(): Boolean {
         return usesCompactOptionsChrome() && isOptionsBarExpanded
     }
@@ -3958,15 +3981,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
         seekView?.isVisible = true
 
-        val density = resources.displayMetrics.density
         controlElevationBeforeScrub = controlView?.elevation ?: 0f
-        // The lift puts the overlay above the search panel — wanted with the
-        // panel at the bottom (the scaled seek bar stays visible), not with
-        // it docked to the top: the overlay, opaque in the wide chrome, would
-        // cover the search field.
-        if (!(captionsSearchActive && isCaptionsSearchPinnedToTop())) {
-            controlView?.elevation = SCRUB_MODE_CONTROL_ELEVATION_DP * density
-        }
 
         timeBar?.let { bar ->
             bar.setScrubVisualExpanded(expanded = true)
