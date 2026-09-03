@@ -17,6 +17,7 @@ import android.view.GestureDetector
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.view.WindowInsets
 import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
@@ -1906,10 +1907,6 @@ class KinescopePlayerView @JvmOverloads constructor(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
-            updateChromeTopOverlap(insets)
-            insets
-        }
         addOnLayoutChangeListener(chromeTopOverlapLayoutListener)
         updateChromeTopOverlap(ViewCompat.getRootWindowInsets(this))
         applyPlayerChromeLayout()
@@ -1919,8 +1916,18 @@ class KinescopePlayerView @JvmOverloads constructor(
 
     override fun onDetachedFromWindow() {
         removeOnLayoutChangeListener(chromeTopOverlapLayoutListener)
-        ViewCompat.setOnApplyWindowInsetsListener(this, null)
         super.onDetachedFromWindow()
+    }
+
+    /**
+     * The overlap is read on the dispatch path rather than through a listener
+     * on this view: that listener slot is the host's (a host setting its own
+     * would silently replace ours, or we theirs). super still routes the
+     * insets to the host's listener, if any, and down to the children.
+     */
+    override fun dispatchApplyWindowInsets(insets: WindowInsets): WindowInsets {
+        updateChromeTopOverlap(WindowInsetsCompat.toWindowInsetsCompat(insets, this))
+        return super.dispatchApplyWindowInsets(insets)
     }
 
     private fun updateChromeTopOverlap(insets: WindowInsetsCompat?) {
