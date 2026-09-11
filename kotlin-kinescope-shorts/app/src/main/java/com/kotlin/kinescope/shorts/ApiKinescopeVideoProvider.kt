@@ -5,6 +5,8 @@ import io.kinescope.sdk.shorts.models.DrmInfo
 import io.kinescope.sdk.shorts.models.VideoData
 import io.kinescope.sdk.shorts.models.VideoQualityMapEntry
 import io.kinescope.sdk.shorts.models.WidevineInfo
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -19,8 +21,8 @@ class ApiKinescopeVideoProvider(
 
     private val httpClient = OkHttpClient()
 
-    override suspend fun loadVideo(videoId: String): VideoData? {
-        return loadPlaybackVideo(videoId)?.toVideoData()
+    override suspend fun loadVideo(videoId: String): VideoData? = withContext(Dispatchers.IO) {
+        loadPlaybackVideo(videoId)?.toVideoData(apiToken)
     }
 
     private fun loadPlaybackVideo(videoId: String): PlaybackVideo? {
@@ -43,8 +45,8 @@ class ApiKinescopeVideoProvider(
         folderId: String?,
         limit: Int,
         offset: Int,
-    ): List<VideoData> {
-        if (apiToken.isBlank()) return emptyList()
+    ): List<VideoData> = withContext(Dispatchers.IO) {
+        if (apiToken.isBlank()) return@withContext emptyList()
 
         val page = (offset / limit) + 1
         val url = buildString {
@@ -57,14 +59,14 @@ class ApiKinescopeVideoProvider(
             .header("Authorization", "Bearer $apiToken")
             .build()
 
-        return runCatching {
+        runCatching {
             httpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return emptyList()
+                if (!response.isSuccessful) return@runCatching emptyList()
                 val body = response.body?.string().orEmpty()
                 val catalog = AppJson.decodeFromString(CatalogResponse.serializer(), body)
                 catalog.data
                     .mapNotNull { item -> loadPlaybackVideo(item.id) }
-                    .mapNotNull { it.toVideoData() }
+                    .mapNotNull { it.toVideoData(apiToken) }
             }
         }.getOrDefault(emptyList())
     }
@@ -92,9 +94,18 @@ class ApiKinescopeVideoProvider(
         val drm: PlaybackDrm? = null,
         @SerialName("quality_map") val qualityMap: List<PlaybackQuality>? = null,
     ) {
-        fun toVideoData(): VideoData? {
+        fun toVideoData(apiKey: String): VideoData? {
             val hls = hlsLink?.takeIf { it.isNotBlank() } ?: return null
-            val licenseUrl = drm?.widevine?.licenseUrl?.takeIf { it.isNotBlank() }
+            val licenseUrl = drm?.widevine?.licenseUrl
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { url ->
+                    when {
+                        url.endsWith("token=") -> url + apiKey
+                        url.contains("token=") -> url
+                        else -> url
+                    }
+                }
             return VideoData(
                 hlsLink = hls,
                 drm = licenseUrl?.let { DrmInfo(widevine = WidevineInfo(licenseUrl = it)) },
