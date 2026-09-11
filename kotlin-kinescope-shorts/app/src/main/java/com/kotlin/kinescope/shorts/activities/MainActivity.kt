@@ -25,6 +25,7 @@ import io.kinescope.sdk.shorts.models.VideoData
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.InternalSerializationApi
 
 @UnstableApi @InternalSerializationApi
@@ -63,13 +64,15 @@ class MainActivity : AppCompatActivity(), ActivityProvider {
 
     private fun loadVideos() {
         CoroutineScope(Dispatchers.Main).launch {
-            val provider = ApiKinescopeVideoProvider(KinescopeShortsConfig.API_KEY)
-            val videoUrls = KinescopeUrls(
-                videoProvider = provider,
-                projectId = KinescopeShortsConfig.PROJECT_ID,
-                folderId = KinescopeShortsConfig.FOLDER_ID,
-                limit = KinescopeShortsConfig.FEED_LIMIT,
-            ).getVideosFromApi()
+            val videoUrls = withContext(Dispatchers.IO) {
+                val provider = ApiKinescopeVideoProvider(KinescopeShortsConfig.API_KEY)
+                KinescopeUrls(
+                    videoProvider = provider,
+                    projectId = KinescopeShortsConfig.PROJECT_ID,
+                    folderId = KinescopeShortsConfig.FOLDER_ID,
+                    limit = KinescopeShortsConfig.FEED_LIMIT,
+                ).getVideosFromApi()
+            }
 
             adapter = ViewPager2Adapter(
                 context = this@MainActivity,
@@ -150,8 +153,8 @@ class MainActivity : AppCompatActivity(), ActivityProvider {
 
     override fun onLowMemory() {
         super.onLowMemory()
-        VideoCache.release()
-        VideoCache.initialize(this)
+        // Do not VideoCache.release() here: live players still hold CacheDataSource on the
+        // same SimpleCache. Releasing mid-playback stalls playback and leaves sources on a dead cache.
     }
     
     private fun setupViewPager2ForFastScroll() {

@@ -79,15 +79,18 @@ class DemoKinescopeVideoProvider(
                     index to resolveCatalogItem(item)
                 }
             }
+            // null slot = still pending; resolved[i]=true means slot finished (video may be null).
             val byIndex = arrayOfNulls<VideoData>(catalog.size)
+            val resolved = BooleanArray(catalog.size)
             var nextToEmit = 0
             deferred.forEach { job ->
                 val (index, video) = job.await()
                 byIndex[index] = video
-                while (nextToEmit < byIndex.size) {
-                    val ready = byIndex[nextToEmit] ?: break
+                resolved[index] = true
+                while (nextToEmit < byIndex.size && resolved[nextToEmit]) {
+                    val ready = byIndex[nextToEmit]
                     nextToEmit++
-                    onVideo(ready)
+                    if (ready != null) onVideo(ready)
                 }
             }
         }
@@ -105,8 +108,8 @@ class DemoKinescopeVideoProvider(
                 apiHelper.getAllVideos(
                     page = page,
                     perPage = limit,
-                    projectId = projectId,
-                    folderId = folderId,
+                    projectId = projectId?.takeIf { it.isNotBlank() },
+                    folderId = folderId?.takeIf { it.isNotBlank() },
                 ).first().data
             } catch (_: Exception) {
                 null
@@ -133,8 +136,7 @@ class DemoKinescopeVideoProvider(
                 videoId = item.id,
                 posterUrl = item.poster?.thumbnailUrl(),
             )
-            if (!item.description.isNullOrBlank()) return fromCatalog
-            // Catalog HLS is enough to start, but pull playback JSON for description/DRM when missing.
+            // Always pull playback JSON for DRM / richer metadata; catalog HLS is fallback only.
             return playbackSemaphore.withPermit { fetchPlayback(item.id) } ?: fromCatalog
         }
         return playbackSemaphore.withPermit { fetchPlayback(item.id) }

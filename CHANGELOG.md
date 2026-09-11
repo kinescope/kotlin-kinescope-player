@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.7] — 11.09.2026
+- **Maven Central** — canonical coordinates: `io.kinescope:kotlin-kinescope-player:0.1.6`; **JitPack is no longer supported** for new integrations (legacy `com.github.kinescope:...` pins remain documented so existing apps are not forced to break)
+
+
+### Fixed
+- **Demo Shorts progressive feed** — failed catalog items no longer stall ordered emission; later videos still reach the pager
+- **Demo catalog filters** — `PROJECT_ID` / `FOLDER_ID` default to `null`; blank strings are stripped before Dashboard `getAllVideos`
+- **Demo Shorts DRM** — catalog HLS + description no longer skips playback JSON (Widevine license preserved)
+- **Captions search insets** — top search panel refreshes when status-bar / safe-area overlap changes
+- **Shorts sample feed** — Dashboard/playback OkHttp work runs on `Dispatchers.IO`; Widevine `token=` license URLs append the API key
+- **Shorts onLowMemory** — no longer `VideoCache.release()` while players are reading the cache (avoids mid-playback stalls)
+
 ## [0.1.6] — 04.09.2026
 
 ### Distribution

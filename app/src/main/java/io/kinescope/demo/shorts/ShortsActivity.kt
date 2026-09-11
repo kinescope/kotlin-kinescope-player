@@ -161,9 +161,8 @@ class ShortsActivity : AppCompatActivity(), ActivityProvider {
 
     override fun onLowMemory() {
         super.onLowMemory()
-        // Keep the cache instance alive; only drop disk contents by recreating after release.
-        VideoCache.release()
-        VideoCache.initialize(this)
+        // Do not VideoCache.release() here: live players still hold CacheDataSource on the
+        // same SimpleCache. Releasing mid-playback stalls playback and leaves sources on a dead cache.
     }
     
     private fun setupViewPager2ForFastScroll() {

@@ -11,11 +11,11 @@ object KinescopeDemoConfig {
     /** Kinescope API token (Dashboard API, playlist, offline downloads). */
     const val API_KEY = "bc50167b-e868-47e4-a55c-07208ef15b22"
 
-    /** Shorts feed filter — passed to Dashboard `GET /v1/videos?project_id=`. */
-    val PROJECT_ID: String? = ""
+    /** Shorts feed filter — Dashboard `project_id`. Null = no filter (do not use ""). */
+    val PROJECT_ID: String? = null
 
-    /** Shorts feed filter — passed to Dashboard `GET /v1/videos?folder_id=`. Null = any folder. */
-    val FOLDER_ID: String? = ""
+    /** Shorts feed filter — Dashboard `folder_id`. Null = any folder (do not use ""). */
+    val FOLDER_ID: String? = null
 
     /** Max videos to load into the Shorts feed (`per_page` for Dashboard catalog). */
     const val SHORTS_FEED_LIMIT = 100

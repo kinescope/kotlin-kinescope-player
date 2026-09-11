@@ -13,7 +13,7 @@ This guide helps you integrate the Kinescope video playback library into your An
 ```groovy
 // build.gradle
 dependencies {
-    implementation 'io.kinescope:kotlin-kinescope-player:0.1.6'
+    implementation 'io.kinescope:kotlin-kinescope-player:0.1.7'
 }
 ```
 
