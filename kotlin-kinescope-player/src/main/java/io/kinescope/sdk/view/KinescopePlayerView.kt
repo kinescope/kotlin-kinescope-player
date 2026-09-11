@@ -1906,6 +1906,9 @@ class KinescopePlayerView @JvmOverloads constructor(
             chromeTopOverlapPx = overlap
             chromeTopSafeInsetPx = safeInset
             applyPlayerChromeLayout()
+            // Title chrome moves via applyPlayerChromeLayout; captions search top margin
+            // reads chromeTopSafeInsetPx separately and must be refreshed too.
+            updateCaptionsSearchInsets()
         }
     }
 

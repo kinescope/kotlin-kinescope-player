@@ -15,8 +15,8 @@ class KinescopeApiHelperImpl (private val  apiService: KinescopeApi) : Kinescope
             apiService.getAll(
                 page = page,
                 perPage = perPage,
-                projectId = projectId,
-                folderId = folderId,
+                projectId = projectId?.takeIf { it.isNotBlank() },
+                folderId = folderId?.takeIf { it.isNotBlank() },
             ),
         )
     }

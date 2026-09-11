@@ -20,7 +20,7 @@ dependencyResolutionManagement {
 
 ```groovy
 dependencies {
-    implementation 'io.kinescope:kotlin-kinescope-player:0.1.6'
+    implementation 'io.kinescope:kotlin-kinescope-player:0.1.7'
 }
 ```
 
@@ -28,15 +28,13 @@ Kotlin DSL:
 
 ```kotlin
 dependencies {
-    implementation("io.kinescope:kotlin-kinescope-player:0.1.6")
+    implementation("io.kinescope:kotlin-kinescope-player:0.1.7")
 }
 ```
 
 This single artifact includes the player, Shorts (`io.kinescope.sdk.shorts`), and offline download helpers.
 
 See [features.md](features.md) for what is included in the dependency.
-
-How to upload releases: [publishing.md](publishing.md).
 
 ---
 
@@ -62,4 +60,4 @@ dependencies {
 }
 ```
 
-No new releases or support are guaranteed on JitPack. Migrate to `io.kinescope:kotlin-kinescope-player:0.1.6` on Maven Central when you can.
+No new releases or support are guaranteed on JitPack. Migrate to `io.kinescope:kotlin-kinescope-player:0.1.7` on Maven Central when you can.
