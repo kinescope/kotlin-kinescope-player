@@ -9,7 +9,12 @@ import io.kinescope.sdk.models.players.KinescopeUpdatePlayerRequest
 import kotlinx.coroutines.flow.Flow
 
 interface KinescopeApiHelper {
-    fun getAllVideos(): Flow<KinescopeAllVideosResponse>
+    fun getAllVideos(
+        page: Int? = null,
+        perPage: Int? = null,
+        projectId: String? = null,
+        folderId: String? = null,
+    ): Flow<KinescopeAllVideosResponse>
 
     fun getPlayers(): Flow<KinescopePlayersListResponse>
 

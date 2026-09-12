@@ -13,8 +13,8 @@ import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.offline.Download
-import io.kinescope.sdk.shorts.databinding.ActivitySaveVideoPlayerBinding
-import io.kinescope.sdk.shorts.databinding.ListVideoBinding
+import io.kinescope.sdk.shorts.databinding.ShortsActivitySaveVideoPlayerBinding
+import io.kinescope.sdk.shorts.databinding.ShortsListVideoBinding
 import io.kinescope.sdk.shorts.download.VideoDownloadManager
 import io.kinescope.sdk.shorts.drm.DrmConfigurator
 import io.kinescope.sdk.shorts.managers.PlayerFactory
@@ -54,9 +54,15 @@ class OfflinePlayer(
 
         try {
             val playerView = when (binding) {
-                is ListVideoBinding -> binding.playerView
-                is ActivitySaveVideoPlayerBinding -> binding.playerView
-                else -> throw IllegalArgumentException("Unsupported binding type")
+                is ShortsListVideoBinding -> binding.playerView
+                is ShortsActivitySaveVideoPlayerBinding -> binding.playerView
+                is androidx.media3.ui.PlayerView -> binding
+                else -> runCatching {
+                    binding.javaClass.getMethod("getPlayerView").invoke(binding)
+                        as androidx.media3.ui.PlayerView
+                }.getOrElse {
+                    throw IllegalArgumentException("Unsupported binding type: ${binding.javaClass.name}")
+                }
             }
 
             val keySetId = if (hasDrm) {

@@ -39,7 +39,7 @@ playerView.applyTemplateOptions()
 
 | Method | Endpoint |
 |--------|----------|
-| `getAllVideos()` | `GET /v1/videos/` |
+| `getAllVideos(page, perPage, projectId, folderId)` | `GET /v1/videos/?…` |
 | `getPlayers()` | `GET /v1/players` |
 | `getPlayer(id)` | `GET /v1/players/{id}` |
 | `createPlayer(request)` | `POST /v1/players` |
@@ -101,7 +101,21 @@ curl "https://api.kinescope.io/v1/videos?page=2&per_page=25" \
   -H "Authorization: Bearer YOUR_API_TOKEN"
 ```
 
-`getAllVideos()` returns pagination metadata in `response.meta.pagination`. The built-in SDK method does not pass `page` / `per_page` yet — it fetches the default first page.
+`getAllVideos()` accepts optional filters and pagination:
+
+```kotlin
+apiHelper.getAllVideos(
+    page = 1,
+    perPage = 50,
+    projectId = "your-project-id", // optional
+    folderId = "your-folder-id",   // optional
+).collect { response ->
+    val videos = response.data
+    val pagination = response.meta.pagination
+}
+```
+
+Pagination metadata is in `response.meta.pagination`. Omit `page` / `perPage` / filters to use Dashboard defaults (first page, `per_page=10`, no project/folder filter).
 
 ## API versions
 

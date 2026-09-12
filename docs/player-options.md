@@ -67,7 +67,7 @@ kinescopePlayer.setReferer("https://your-domain.com/")
 
 ### Settings icon quality badge
 
-When playback resolution is **1080p or higher**, the settings button shows an **HD** or **4K** badge on the gear icon (including under **auto** quality, based on the current `videoSize`). No extra configuration is required.
+When playback resolution is **1080p or higher**, the settings button shows an **HD** or **4K** badge on the gear icon (including under **auto** quality, based on the current `videoSize`). Below 1080p the plain gear (`ic_settings`) is used. No extra configuration is required.
 
 > **Note.** If the Kinescope dashboard adds player settings that are not yet implemented in the SDK, they are ignored when a template is fetched and applied on the device.
 

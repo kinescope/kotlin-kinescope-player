@@ -1,6 +1,21 @@
 # Kinescope API Integration
 
-The library provides interfaces to connect to the Kinescope API. You implement them yourself. When using `com.github.kinescope:kotlin-kinescope-player`, the `io.kinescope.sdk.shorts` package is available along with the player.
+The library provides interfaces to connect to the Kinescope API. You implement them yourself. When using `io.kinescope:kotlin-kinescope-player`, the `io.kinescope.sdk.shorts` package is available along with the player.
+
+## Configuration (`KinescopeShortsConfig`)
+
+```kotlin
+import io.kinescope.sdk.shorts.KinescopeShortsConfig
+
+KinescopeShortsConfig.API_KEY = "your-dashboard-api-token"
+KinescopeShortsConfig.PROJECT_ID = null
+KinescopeShortsConfig.FOLDER_ID = null
+KinescopeShortsConfig.FEED_LIMIT = 50
+```
+
+Pass these values into your `KinescopeVideoProvider` / `KinescopeUrls` (see below).
+
+A Dashboard OkHttp example (`ApiKinescopeVideoProvider`) is in the sample app module only — not in this library AAR.
 
 ## Architecture
 
@@ -26,13 +41,16 @@ The `KinescopeUrls` class uses the provider to fetch videos:
 
 ```kotlin
 val kinescopeVideo = KinescopeUrls(
-    videoProvider = yourVideoProvider, // Your KinescopeVideoProvider implementation
-    projectId = "your-project-id",
-    folderId = "your-folder-id"
+    videoProvider = yourVideoProvider,
+    projectId = KinescopeShortsConfig.PROJECT_ID,
+    folderId = KinescopeShortsConfig.FOLDER_ID,
+    limit = KinescopeShortsConfig.FEED_LIMIT,
 )
 
 val videos = kinescopeVideo.getVideosFromApi()
 ```
+
+`KinescopeUrls` is provider-only and does not ship with a built-in sample feed. `limit` maps to Dashboard `per_page` when the provider forwards it (demo / sample providers do).
 
 ## Implementing the provider
 
@@ -79,7 +97,8 @@ class MyKinescopeVideoProvider(
             },
             title = kinescopeData.title ?: "Untitled",
             subtitle = kinescopeData.subtitle,
-            description = kinescopeData.description
+            description = kinescopeData.description,
+            posterUrl = kinescopeData.player?.poster
         )
     }
 }
@@ -94,7 +113,9 @@ val videoProvider = MyKinescopeVideoProvider(apiToken = "your-token")
 // Use with KinescopeUrls
 val kinescopeVideo = KinescopeUrls(
     videoProvider = videoProvider,
-    projectId = "your-project-id"
+    projectId = "your-project-id",
+    folderId = "your-folder-id", // optional
+    limit = 50,                  // optional, default 50
 )
 
 // Load videos
@@ -119,7 +140,7 @@ Real endpoints used by the SDK (there is no `GET /v1/vod/{videoId}` on `api.kine
 
 **Dashboard API** — `https://api.kinescope.io/`
 
-- **Video catalog:** `GET /v1/videos/?page={page}&per_page={per_page}` — `KinescopeApiHelper.getAllVideos()`
+- **Video catalog:** `GET /v1/videos/?page=&per_page=&project_id=&folder_id=` — `KinescopeApiHelper.getAllVideos(page, perPage, projectId, folderId)`
 - **Player templates:** `GET/POST/PUT/DELETE /v1/players`
 
 **Playback metadata** — `https://kinescope.io/`

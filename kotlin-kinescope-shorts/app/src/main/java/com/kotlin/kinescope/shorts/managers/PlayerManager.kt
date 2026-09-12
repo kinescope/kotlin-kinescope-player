@@ -3,7 +3,7 @@ package com.kotlin.kinescope.shorts.managers
 import android.content.Context
 import android.widget.Toast
 import io.kinescope.sdk.shorts.adapters.ViewPager2Adapter
-import com.kotlin.kinescope.shorts.databinding.ListVideoBinding
+import com.kotlin.kinescope.shorts.databinding.ShortsListVideoBinding
 import io.kinescope.sdk.shorts.drm.DrmConfigurator
 import io.kinescope.sdk.shorts.models.PlayerItem
 import io.kinescope.sdk.shorts.models.VideoData
@@ -37,7 +37,7 @@ class PlayerManager(
         get() = drmHelper
 
     private var lastVideoData: VideoData? = null
-    private var lastBinding: ListVideoBinding? = null
+    private var lastBinding: ShortsListVideoBinding? = null
     private var lastPosition: Int = -1
     private var hasSuccessfullyPlayed = false
 
@@ -53,7 +53,7 @@ class PlayerManager(
         OnlinePlayer(context, InternetConnection(context), drmHelper, playerFactory)
     private val offlinePlayer = OfflinePlayer(context, DrmConfigurator(context))
 
-    fun setupOnlinePlayer(videoData: VideoData, position: Int, binding: ListVideoBinding) {
+    fun setupOnlinePlayer(videoData: VideoData, position: Int, binding: ShortsListVideoBinding) {
         releasePlayer()
 
         lastVideoData = videoData
@@ -75,7 +75,7 @@ class PlayerManager(
     fun setupOfflinePlayer(
         videoData: VideoData,
         position: Int,
-        binding: ListVideoBinding,
+        binding: ShortsListVideoBinding,
         download: Download?
     ) {
         releasePlayer()
@@ -123,6 +123,7 @@ class PlayerManager(
         }
 
         override fun onPlayerError(error: PlaybackException) {
+            videoViewHolder.showThumbnail()
             val isRuntimeError = error.message?.contains("runtime", ignoreCase = true) == true ||
                     error.message?.contains("Unexpected", ignoreCase = true) == true ||
                     error.cause?.message?.contains("runtime", ignoreCase = true) == true

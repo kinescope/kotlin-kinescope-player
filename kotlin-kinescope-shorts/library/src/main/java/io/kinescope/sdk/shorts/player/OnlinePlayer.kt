@@ -10,7 +10,7 @@ import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import io.kinescope.sdk.shorts.cache.VideoCache
-import io.kinescope.sdk.shorts.databinding.ListVideoBinding
+import io.kinescope.sdk.shorts.databinding.ShortsListVideoBinding
 import io.kinescope.sdk.shorts.drm.DrmContentProtection
 import io.kinescope.sdk.shorts.drm.DrmHelper
 import io.kinescope.sdk.shorts.managers.PlayerFactory
@@ -34,7 +34,7 @@ class OnlinePlayer(
     fun setupPlayer(
         player: ExoPlayer,
         videoData: VideoData,
-        binding: ListVideoBinding,
+        binding: ShortsListVideoBinding,
         onPrepared: () -> Unit
     ) {
 
@@ -53,7 +53,7 @@ class OnlinePlayer(
         onPrepared()
         player.prepare()
     }
-    private fun setupDrmPlayer(player: ExoPlayer, videoData: VideoData, binding: ListVideoBinding) {
+    private fun setupDrmPlayer(player: ExoPlayer, videoData: VideoData, binding: ShortsListVideoBinding) {
         val contentId = generateContentId(videoData.hlsLink)
         val drmData = DrmContentProtection(
             schemeUri = C.WIDEVINE_UUID.toString(),
@@ -72,7 +72,7 @@ class OnlinePlayer(
         drmHelper.attachToPlayer(player)
     }
 
-    private fun setupClearPlayer(player: ExoPlayer, videoData: VideoData, binding: ListVideoBinding) {
+    private fun setupClearPlayer(player: ExoPlayer, videoData: VideoData, binding: ShortsListVideoBinding) {
         val dataSourceFactory = CacheDataSource.Factory()
             .setCache(VideoCache.getCache())
             .setUpstreamDataSourceFactory(DefaultHttpDataSource.Factory())

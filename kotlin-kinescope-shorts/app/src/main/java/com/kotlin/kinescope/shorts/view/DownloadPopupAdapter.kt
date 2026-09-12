@@ -54,7 +54,7 @@ class DownloadPopupAdapter(
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-        val view = LayoutInflater.from(context).inflate(R.layout.item_download_popup, parent, false)
+        val view = LayoutInflater.from(context).inflate(R.layout.shorts_item_download_popup, parent, false)
         return ViewHolder(view)
     }
 

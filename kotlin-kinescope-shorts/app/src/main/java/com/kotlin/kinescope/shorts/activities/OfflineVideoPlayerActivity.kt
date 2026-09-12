@@ -11,7 +11,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.offline.Download
 import com.kotlin.kinescope.shorts.R
-import com.kotlin.kinescope.shorts.databinding.ActivitySaveVideoPlayerBinding
+import com.kotlin.kinescope.shorts.databinding.ShortsActivitySaveVideoPlayerBinding
 import io.kinescope.sdk.shorts.download.VideoDownloadManager
 import io.kinescope.sdk.shorts.drm.DrmConfigurator
 import io.kinescope.sdk.shorts.managers.PlayerFactory
@@ -26,7 +26,7 @@ import kotlinx.serialization.InternalSerializationApi
 @UnstableApi
 class OfflineVideoPlayerActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivitySaveVideoPlayerBinding
+    private lateinit var binding: ShortsActivitySaveVideoPlayerBinding
     private var exoPlayer: ExoPlayer? = null
     private lateinit var offlinePlayer: OfflinePlayer
     private lateinit var seekBarWrap: OfflineSeekBarWrap
@@ -39,7 +39,7 @@ class OfflineVideoPlayerActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivitySaveVideoPlayerBinding.inflate(layoutInflater)
+        binding = ShortsActivitySaveVideoPlayerBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         offlinePlayer = OfflinePlayer(this, io.kinescope.sdk.shorts.drm.DrmConfigurator(this))

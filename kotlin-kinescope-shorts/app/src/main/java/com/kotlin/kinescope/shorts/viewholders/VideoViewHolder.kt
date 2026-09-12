@@ -20,7 +20,7 @@ import androidx.core.net.toUri
 import androidx.recyclerview.widget.RecyclerView
 import com.kotlin.kinescope.shorts.R
 import io.kinescope.sdk.shorts.adapters.ViewPager2Adapter
-import com.kotlin.kinescope.shorts.databinding.ListVideoBinding
+import com.kotlin.kinescope.shorts.databinding.ShortsListVideoBinding
 import io.kinescope.sdk.shorts.drm.DrmConfigurator
 import io.kinescope.sdk.shorts.drm.DrmContentProtection
 import com.kotlin.kinescope.shorts.managers.PlayerManager
@@ -56,7 +56,7 @@ import java.util.UUID
 
 @OptIn(androidx.media3.common.util.UnstableApi::class)
 class VideoViewHolder(
-    val binding: ListVideoBinding,
+    val binding: ShortsListVideoBinding,
     private val context: Context,
     private val videoPreparedListener: ViewPager2Adapter.OnVideoPreparedListener,
     val exoPlayer: ExoPlayer,
@@ -214,9 +214,14 @@ class VideoViewHolder(
     }
     
     fun showThumbnail() {
-        binding.thumbnailView.visibility = android.view.View.VISIBLE
-        val placeholder = ThumbnailLoader.createPlaceholder()
-        binding.thumbnailView.setImageBitmap(placeholder)
+        val placeholderRes = ThumbnailLoader.placeholderRes()
+        if (placeholderRes == 0) {
+            binding.thumbnailView.setImageDrawable(null)
+            binding.thumbnailView.visibility = android.view.View.GONE
+        } else {
+            binding.thumbnailView.visibility = android.view.View.VISIBLE
+            binding.thumbnailView.setImageResource(placeholderRes)
+        }
     }
     
     fun hideThumbnail() {
@@ -386,7 +391,7 @@ class VideoViewHolder(
     private fun showOfflineVideosPopup() {
         io.kinescope.sdk.shorts.download.VideoDownloadManager.initialize(context)
         val inflater = context.getSystemService(Context.LAYOUT_INFLATER_SERVICE) as LayoutInflater
-        val popupView = inflater.inflate(R.layout.popup_offline_videos, null)
+        val popupView = inflater.inflate(R.layout.shorts_popup_offline_videos, null)
         val recyclerView = popupView.findViewById<RecyclerView>(R.id.recyclerOffline)
         val closeButton = popupView.findViewById<Button>(R.id.btnClose)
 

@@ -7,7 +7,7 @@ import android.widget.SeekBar
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import com.kotlin.kinescope.shorts.R
-import com.kotlin.kinescope.shorts.databinding.ListVideoBinding
+import com.kotlin.kinescope.shorts.databinding.ShortsListVideoBinding
 import io.kinescope.sdk.shorts.managers.PoolPlayers
 import io.kinescope.sdk.shorts.models.PlayerItem
 import io.kinescope.sdk.shorts.models.VideoData
@@ -60,7 +60,7 @@ class ViewPager2Adapter(
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VideoViewHolder {
-        val view = ListVideoBinding.inflate(LayoutInflater.from(context), parent, false)
+        val view = ShortsListVideoBinding.inflate(LayoutInflater.from(context), parent, false)
         val player = PoolPlayers.get().acquirePlayer()
         return VideoViewHolder(view, context, videoPreparedListener, player, activityProvider)
     }
@@ -68,6 +68,10 @@ class ViewPager2Adapter(
     override fun onBindViewHolder(holder: VideoViewHolder, position: Int) {
         val videoData = videos[position]
         holder.binding.TitleVideo.text = videoData.title
+        val description = videoData.description?.trim().orEmpty()
+        holder.binding.descriptionVideo.text = description
+        holder.binding.descriptionVideo.visibility =
+            if (description.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
         val contentId = holder.generateStableContentId(videoData.hlsLink)
         val downloadManager = io.kinescope.sdk.shorts.download.VideoDownloadManager.getDownloadManager(context)
         val download = io.kinescope.sdk.shorts.download.VideoDownloadManager.getDownloadIndex(context).getDownload(contentId)

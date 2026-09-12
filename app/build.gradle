@@ -81,4 +81,5 @@ dependencies {
     implementation "com.google.guava:guava:31.1-android"
     implementation "androidx.viewpager2:viewpager2:1.0.0"
     implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2"
+    implementation "com.squareup.okhttp3:okhttp:4.10.0"
 }

@@ -5,10 +5,9 @@ import android.os.Looper
 import android.widget.SeekBar
 import androidx.media3.exoplayer.ExoPlayer
 
-
 class SeekPlayerControl(
     private var exoPlayer: ExoPlayer? = null,
-    private val seekBar: SeekBar
+    private val seekBar: SeekBar,
 ) {
 
     private val handler = Handler(Looper.getMainLooper())
@@ -33,10 +32,11 @@ class SeekPlayerControl(
 
     fun updateSeekBarProgress() {
         exoPlayer?.let { player ->
-            seekBar.progress = player.currentPosition.toInt()
+            if (!seekBar.isPressed) {
+                seekBar.progress = player.currentPosition.toInt()
+            }
+            val buffered = player.bufferedPosition.toInt().coerceAtLeast(seekBar.progress)
+            seekBar.secondaryProgress = buffered
         }
     }
 }
-
-
-

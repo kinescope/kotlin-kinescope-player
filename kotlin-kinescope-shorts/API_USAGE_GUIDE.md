@@ -37,7 +37,7 @@ apiHelper.getPlayers().collect { response ->
 
 | Method | Endpoint | Base URL |
 |--------|----------|----------|
-| `getAllVideos()` | `GET /v1/videos/` | `https://api.kinescope.io/` |
+| `getAllVideos(page, perPage, projectId, folderId)` | `GET /v1/videos/?…` | `https://api.kinescope.io/` |
 | `getPlayers()` | `GET /v1/players` | `https://api.kinescope.io/` |
 | `getPlayer(id)` | `GET /v1/players/{id}` | `https://api.kinescope.io/` |
 | `createPlayer(request)` | `POST /v1/players` | `https://api.kinescope.io/` |
@@ -106,17 +106,22 @@ curl "https://api.kinescope.io/v1/videos?page=2&per_page=25" \
   -H "Authorization: Bearer YOUR_API_TOKEN"
 ```
 
-In the SDK, `getAllVideos()` parses pagination into `response.meta.pagination`:
+In the SDK, `getAllVideos()` accepts optional pagination and filters:
 
 ```kotlin
-apiHelper.getAllVideos().collect { response ->
+apiHelper.getAllVideos(
+    page = 1,
+    perPage = 50,
+    projectId = "your-project-id", // optional
+    folderId = "your-folder-id",   // optional
+).collect { response ->
     val videos = response.data
     val pagination = response.meta.pagination
     // pagination?.page, pagination?.perPage, pagination?.total
 }
 ```
 
-> The current `KinescopeApiHelper.getAllVideos()` does not accept `page` / `per_page` parameters — it requests the default first page. For custom pagination, extend `KinescopeApi` or call the REST API directly.
+Omit parameters to use Dashboard defaults (first page, `per_page=10`).
 
 ### API versions
 
@@ -137,10 +142,10 @@ For the **Shorts vertical feed**, implement `KinescopeVideoProvider` yourself an
 
 | Task | Endpoint | Base URL | Used by |
 |------|----------|----------|---------|
-| Video catalog (ids, titles) | `GET /v1/videos/?page=&per_page=` | `https://api.kinescope.io/` | `KinescopeApiHelper.getAllVideos()` |
+| Video catalog (ids, titles, optional `hls_link`) | `GET /v1/videos/?page=&per_page=&project_id=&folder_id=` | `https://api.kinescope.io/` | `KinescopeApiHelper.getAllVideos(page, perPage, projectId, folderId)` |
 | Single video (HLS, metadata) | `GET /{video_id}.json?sdk=android` | `https://kinescope.io/` | `KinescopeFetch` / `KinescopeVideoPlayer.loadVideo()` |
 
-`GET /v1/videos/` returns a lightweight catalog (`id`, `title`). For Shorts you need `hlsLink` — fetch each video via `/{video_id}.json` or call `loadVideo(videoId)` in your provider.
+`GET /v1/videos/` returns a catalog (`id`, `title`, and often `hls_link` / poster). When `hls_link` is missing, fetch playback via `/{video_id}.json` (or `loadVideo(videoId)` in your provider).
 
 ### Step 1: Recommended — delegate to built-in SDK clients
 
@@ -196,6 +201,7 @@ class SdkKinescopeVideoProvider(
             title = video.title,
             subtitle = video.subtitle,
             description = video.description,
+            posterUrl = video.poster?.url,
         )
     }
 }
@@ -233,7 +239,7 @@ interface KinescopePlaybackApi {
 }
 ```
 
-> **Note.** `projectId` / `folderId` in `KinescopeVideoProvider.loadVideos()` are not used by `GET /v1/videos/` in the current SDK. Filter on the client side if needed, or extend the API client when the backend supports those query params.
+> **Note.** `projectId` / `folderId` are passed through to Dashboard `GET /v1/videos?project_id=&folder_id=` when using `KinescopeApiHelper.getAllVideos(...)` (demo `DemoKinescopeVideoProvider` and standalone Shorts sample). Custom providers should forward the same query params (or filter client-side).
 
 > API errors (401, 404, …): see [API_TROUBLESHOOTING.md](API_TROUBLESHOOTING.md).
 
@@ -255,28 +261,61 @@ private fun loadVideos() {
             val kinescopeVideo = KinescopeUrls(
                 videoProvider = videoProvider,
                 projectId = "your-project-id",
-                folderId = "your-folder-id" // optional
+                folderId = "your-folder-id", // optional
+                limit = 50,                  // optional, default 50 (max useful value 100)
             )
 
             val videos = kinescopeVideo.getVideosFromApi()
-
-            if (videos.isEmpty()) {
-                val fallbackVideos = kinescopeVideo.getNextVideoUrls()
-                setupViewPager(fallbackVideos)
-            } else {
-                setupViewPager(videos)
-            }
+            setupViewPager(videos)
         } catch (e: Exception) {
             Log.e("MainActivity", "Error loading videos", e)
-            val kinescopeVideo = KinescopeUrls()
-            val fallbackVideos = kinescopeVideo.getNextVideoUrls()
-            setupViewPager(fallbackVideos)
         }
     }
 }
 ```
 
-Without a provider, `KinescopeUrls()` falls back to a built-in hardcoded video list.
+### Shorts config (`KinescopeShortsConfig`)
+
+Public object in the Shorts SDK: [`io.kinescope.sdk.shorts.KinescopeShortsConfig`](library/src/main/java/io/kinescope/sdk/shorts/KinescopeShortsConfig.kt).
+
+Assign at runtime before loading the feed:
+
+```kotlin
+import io.kinescope.sdk.shorts.KinescopeShortsConfig
+
+KinescopeShortsConfig.API_KEY = "your-dashboard-api-token"
+KinescopeShortsConfig.PROJECT_ID = null   // optional: GET /v1/videos?project_id=
+KinescopeShortsConfig.FOLDER_ID = null    // optional: GET /v1/videos?folder_id=
+KinescopeShortsConfig.FEED_LIMIT = 50     // catalog per_page (max 100)
+```
+
+| Field | Purpose |
+|-------|---------|
+| `API_KEY` | Dashboard Bearer token (required for Dashboard catalog) |
+| `PROJECT_ID` | Optional project filter |
+| `FOLDER_ID` | Optional folder filter |
+| `FEED_LIMIT` | Max videos in the feed (default `50`) |
+
+Wire into your provider / `KinescopeUrls`:
+
+```kotlin
+KinescopeUrls(
+    videoProvider = MyProvider(KinescopeShortsConfig.API_KEY),
+    projectId = KinescopeShortsConfig.PROJECT_ID,
+    folderId = KinescopeShortsConfig.FOLDER_ID,
+    limit = KinescopeShortsConfig.FEED_LIMIT,
+)
+```
+
+The standalone sample (`kotlin-kinescope-shorts/app`) reads the same object. Leave `API_KEY` empty and the Dashboard feed stays empty.
+
+> **Note.** A ready-made Dashboard HTTP provider (`ApiKinescopeVideoProvider`) lives only in the sample app  
+> (`kotlin-kinescope-shorts/app/.../ApiKinescopeVideoProvider.kt`) and is **not** shipped in the published AAR.  
+> Host apps implement `KinescopeVideoProvider` themselves (or copy that sample class).
+
+Adaptive preload depth (buffer / bandwidth / network) is documented in [LIBRARY_USAGE_GUIDE — Preload, pool, and cache](LIBRARY_USAGE_GUIDE.md#preload-pool-and-cache).
+
+`KinescopeUrls` does not ship a built-in hardcoded feed. If the provider is missing or returns no playable videos, `getVideosFromApi()` returns an empty list.
 
 ### Step 4: Loading a single video by ID
 
@@ -326,7 +365,7 @@ Used by both `KinescopeApiHelper` and your `KinescopeVideoProvider`.
 
 Base URL: `https://api.kinescope.io/`
 
-- **Video catalog:** `GET /v1/videos/?page={page}&per_page={per_page}`
+- **Video catalog:** `GET /v1/videos/?page={page}&per_page={per_page}&project_id={id}&folder_id={id}`
 - **Player templates:** `GET/POST/PUT/DELETE /v1/players`
 
 ### Video playback (`KinescopeVideoPlayer` / Shorts `loadVideo`)
@@ -368,9 +407,6 @@ lifecycleScope.launch {
     } catch (e: Exception) {
         Log.e("API", "Error loading videos", e)
         showError("Failed to load videos: ${e.message}")
-
-        val fallback = KinescopeUrls().getNextVideoUrls()
-        adapter.updateVideos(fallback)
     }
 }
 ```

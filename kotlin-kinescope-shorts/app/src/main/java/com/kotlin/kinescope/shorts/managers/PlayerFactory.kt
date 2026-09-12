@@ -2,6 +2,7 @@ package com.kotlin.kinescope.shorts.managers
 
 import android.content.Context
 import android.os.Build
+import androidx.media3.common.C
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -81,6 +82,8 @@ class PlayerFactory(private val context: Context) {
                     .setAllowVideoNonSeamlessAdaptiveness(true)
                     .setAllowMultipleAdaptiveSelections(true)
                     .setAllowVideoMixedMimeTypeAdaptiveness(false)
+                    // Shorts PlayerView paints cues full-bleed; keep captions off by default.
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, /* disabled= */ true)
             )
         }
     }

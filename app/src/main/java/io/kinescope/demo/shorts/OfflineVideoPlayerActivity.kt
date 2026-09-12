@@ -3,30 +3,28 @@
 package io.kinescope.demo.shorts
 
 import android.os.Bundle
-import android.widget.ImageButton
 import android.widget.SeekBar
-import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.offline.Download
-import io.kinescope.demo.R
-import io.kinescope.demo.databinding.ActivitySaveVideoPlayerBinding
+import io.kinescope.sdk.shorts.AppJson
+import io.kinescope.sdk.shorts.databinding.ShortsActivitySaveVideoPlayerBinding
 import io.kinescope.sdk.shorts.download.VideoDownloadManager
 import io.kinescope.sdk.shorts.drm.DrmConfigurator
 import io.kinescope.sdk.shorts.managers.PlayerFactory
 import io.kinescope.sdk.shorts.models.VideoData
 import io.kinescope.sdk.shorts.player.OfflinePlayer
-import io.kinescope.sdk.shorts.AppJson
-import io.kinescope.sdk.shorts.view.SeekPlayerControl
 import io.kinescope.sdk.shorts.view.OfflineSeekBarWrap
+import io.kinescope.sdk.shorts.view.SeekPlayerControl
+import kotlinx.serialization.InternalSerializationApi
 
 @UnstableApi
 class OfflineVideoPlayerActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivitySaveVideoPlayerBinding
+    private lateinit var binding: ShortsActivitySaveVideoPlayerBinding
     private var exoPlayer: ExoPlayer? = null
     private lateinit var offlinePlayer: OfflinePlayer
     private var seekBarWrap: OfflineSeekBarWrap? = null
@@ -39,7 +37,7 @@ class OfflineVideoPlayerActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivitySaveVideoPlayerBinding.inflate(layoutInflater)
+        binding = ShortsActivitySaveVideoPlayerBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         offlinePlayer = OfflinePlayer(this, DrmConfigurator(this))
@@ -70,8 +68,8 @@ class OfflineVideoPlayerActivity : AppCompatActivity() {
             finish()
             return
         }
-        binding.toolbar.findViewById<TextView>(R.id.TitleVideo).text = videoData.title
-        binding.toolbar.findViewById<ImageButton>(R.id.btnBack).setOnClickListener {
+        binding.TitleVideo.text = videoData.title
+        binding.btnBack.setOnClickListener {
             onBackPressedDispatcher.onBackPressed()
         }
 
@@ -81,7 +79,7 @@ class OfflineVideoPlayerActivity : AppCompatActivity() {
         binding.playerView.post {
             try {
                 initPlayerControls()
-                
+
                 offlinePlayer.setupPlayer(
                     videoData = videoData,
                     download = download,
@@ -103,7 +101,7 @@ class OfflineVideoPlayerActivity : AppCompatActivity() {
 
     private fun initPlayerControls() {
         seekBarWrap = OfflineSeekBarWrap(binding.playerView, exoPlayer)
-        val seekBar = binding.playerView.findViewById<SeekBar>(R.id.seekBar)
+        val seekBar = binding.playerView.findViewById<SeekBar>(io.kinescope.sdk.shorts.R.id.seekBar)
         seekPlayerControl = SeekPlayerControl(exoPlayer, seekBar)
         setupControlListeners()
     }

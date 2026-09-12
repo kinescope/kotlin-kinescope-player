@@ -14,6 +14,8 @@ Troubleshooting for **Dashboard API** (`KinescopeApiHelper`) and **Shorts** (`Ki
 
 If **Playlist test** or **Custom Player test** fail, check `KinescopeDemoConfig.API_KEY` first.
 
+For Shorts, set `KinescopeShortsConfig.API_KEY` / `PROJECT_ID` / `FOLDER_ID` / `FEED_LIMIT` before loading the feed (`io.kinescope.sdk.shorts.KinescopeShortsConfig`).
+
 ---
 
 ## HTTP 401 / 403 — unauthorized or forbidden
@@ -66,15 +68,16 @@ apiHelper.getAllVideos().collect { response ->
 
 ### Causes
 
-1. `GET /v1/videos/` returns ids only — Shorts needs a second request to `/{video_id}.json` for `hlsLink`
+1. `GET /v1/videos/` returns ids only — Shorts needs a second request to `/{video_id}.json` for `hlsLink` (unless the catalog item already includes `hls_link`)
 2. Invalid or missing API key
-3. Provider not implemented — `KinescopeUrls()` without provider uses hardcoded fallback
+3. Provider not implemented or returns an empty list
+4. `project_id` / `folder_id` filters exclude all videos on the first page (wrong IDs → empty feed)
 
 ### Solutions
 
 #### Solution 1: Use SDK clients in your provider
 
-See [API_USAGE_GUIDE — SdkKinescopeVideoProvider](API_USAGE_GUIDE.md): catalog via `KinescopeApiHelper`, per-video metadata via `KinescopeFetch`.
+See [API_USAGE_GUIDE — SdkKinescopeVideoProvider](API_USAGE_GUIDE.md): catalog via `KinescopeApiHelper.getAllVideos(projectId=…, folderId=…, perPage=…)`, per-video metadata via playback JSON.
 
 #### Solution 2: Load videos by known IDs
 
@@ -84,11 +87,13 @@ val video = kinescopeUrls.getVideoById("video-id-1")
 // getVideoById is suspend — call from a coroutine
 ```
 
-#### Solution 3: Temporary fallback — hardcoded list
+#### Solution 3: Verify filters and limit
 
-```kotlin
-val videos = KinescopeUrls().getNextVideoUrls()
-```
+Check `KinescopeShortsConfig.API_KEY` / `PROJECT_ID` / `FOLDER_ID` / `FEED_LIMIT`. Temporarily set filters to `null` to confirm the token returns videos.
+
+#### Solution 4: Verify the provider wiring
+
+Make sure `loadVideos()` returns non-empty items and each item contains a valid `hlsLink`.
 
 ---
 

@@ -1,8 +1,14 @@
 # kotlin-kinescope-player
 
-[![JitPack](https://jitpack.io/v/kinescope/kotlin-kinescope-player.svg)](https://jitpack.io/#kinescope/kotlin-kinescope-player)
-
 Android SDK for [Kinescope](https://kinescope.io/) video: player, vertical Shorts feed, and offline downloads with DRM (Widevine) in a single dependency.
+
+```groovy
+implementation 'io.kinescope:kotlin-kinescope-player:0.1.7'
+```
+
+Published on **Maven Central** (`io.kinescope`). See [docs/installation.md](docs/installation.md).
+
+**JitPack is no longer supported** for new projects; existing JitPack pins (`com.github.kinescope:…`) may keep working — details in [installation.md](docs/installation.md).
 
 ---
 
@@ -49,8 +55,8 @@ Android SDK for [Kinescope](https://kinescope.io/) video: player, vertical Short
 
 | Topic | File |
 |-------|------|
+| Quick start + `KinescopeShortsConfig` / `KinescopeUiConfig` | [kotlin-kinescope-shorts/QUICK_START.md](kotlin-kinescope-shorts/QUICK_START.md) |
 | Library usage guide | [kotlin-kinescope-shorts/LIBRARY_USAGE_GUIDE.md](kotlin-kinescope-shorts/LIBRARY_USAGE_GUIDE.md) |
-| Quick start | [kotlin-kinescope-shorts/QUICK_START.md](kotlin-kinescope-shorts/QUICK_START.md) |
 | Kinescope API (`KinescopeVideoProvider`) | [kotlin-kinescope-shorts/API_USAGE_GUIDE.md](kotlin-kinescope-shorts/API_USAGE_GUIDE.md) |
 | API 404 troubleshooting | [kotlin-kinescope-shorts/API_TROUBLESHOOTING.md](kotlin-kinescope-shorts/API_TROUBLESHOOTING.md) |
 

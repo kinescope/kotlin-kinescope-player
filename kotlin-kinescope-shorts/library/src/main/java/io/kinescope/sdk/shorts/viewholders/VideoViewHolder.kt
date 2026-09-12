@@ -16,12 +16,13 @@ import android.widget.Button
 import android.widget.PopupWindow
 import android.widget.SeekBar
 import android.widget.Toast
+import com.bumptech.glide.Glide
 import androidx.appcompat.app.AlertDialog
 import androidx.core.net.toUri
 import androidx.recyclerview.widget.RecyclerView
 import io.kinescope.sdk.shorts.R
 import io.kinescope.sdk.shorts.adapters.ViewPager2Adapter
-import io.kinescope.sdk.shorts.databinding.ListVideoBinding
+import io.kinescope.sdk.shorts.databinding.ShortsListVideoBinding
 import io.kinescope.sdk.shorts.drm.DrmConfigurator
 import io.kinescope.sdk.shorts.drm.DrmContentProtection
 import io.kinescope.sdk.shorts.managers.PlayerManager
@@ -45,6 +46,7 @@ import io.kinescope.sdk.shorts.download.VideoDownloadService
 import io.kinescope.sdk.shorts.view.DownloadPopupAdapter
 import io.kinescope.sdk.shorts.config.KinescopeUiConfig
 import io.kinescope.sdk.shorts.utils.ThumbnailLoader
+import io.kinescope.sdk.shorts.view.ExpandableTextHelper
 import kotlinx.serialization.InternalSerializationApi
 import java.security.MessageDigest
 import java.util.UUID
@@ -54,11 +56,10 @@ import java.util.UUID
 
 @OptIn(androidx.media3.common.util.UnstableApi::class)
 class VideoViewHolder(
-    val binding: ListVideoBinding,
+    val binding: ShortsListVideoBinding,
     private val context: Context,
     private val videoPreparedListener: ViewPager2Adapter.OnVideoPreparedListener,
-    val exoPlayer: ExoPlayer,
-    private val activityProvider: ActivityProvider? = null
+    private val activityProvider: ActivityProvider? = null,
 ) : RecyclerView.ViewHolder(binding.root) {
 
     var videoData: VideoData? = null
@@ -69,9 +70,20 @@ class VideoViewHolder(
     private val drmConfigurator = DrmConfigurator(context)
     private val internetConnection = InternetConnection(context)
 
+    private val titleExpand = ExpandableTextHelper(binding.TitleVideo, expandedMaxLines = 5)
+    private val descriptionExpand =
+        ExpandableTextHelper(binding.descriptionVideo, expandedMaxLines = 10)
+
     private var popupWindow: PopupWindow? = null
     private val progressUpdateHandler = Handler(Looper.getMainLooper())
     private var progressUpdateRunnable: Runnable? = null
+
+    /** Optional: pause Shorts preload while this page rebuffers. */
+    var onRebufferingChanged: ((Boolean) -> Unit)? = null
+        set(value) {
+            field = value
+            playerManager.onRebufferingChanged = value
+        }
 
     private val downloadListener = object : DownloadManager.Listener {
         private val handler = Handler(Looper.getMainLooper())
@@ -109,8 +121,8 @@ class VideoViewHolder(
         seekPlayerControl,
         seekBarWrap,
         this,
+    )
 
-        )
     private fun showToast(message: String) {
         Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
     }
@@ -118,8 +130,8 @@ class VideoViewHolder(
     private fun updateDownloadStatus(message: String) {
         showToast(message)
     }
+
     init {
-        binding.playerView.player = exoPlayer
         val layoutParams = binding.root.layoutParams
         layoutParams.height = ViewGroup.LayoutParams.MATCH_PARENT
         layoutParams.width = ViewGroup.LayoutParams.MATCH_PARENT
@@ -138,26 +150,51 @@ class VideoViewHolder(
             showOfflineVideosPopup()
         }
     }
-    fun bindOnlineVideos(videoData: VideoData) {
+
+    fun bindOnlineVideos(videoData: VideoData, preloadedPlayer: ExoPlayer? = null) {
         binding.playerView.player = null
-        exoPlayer.clearVideoSurface()
         this.videoData = videoData
         playerManager.exposedDrmHelper.reset()
         val surfaceView = binding.playerView.videoSurfaceView as? SurfaceView
         surfaceView?.holder?.setFixedSize(1, 1)
 
+        bindTextChrome(videoData)
         showThumbnail()
 
         updateDownloadProgressForVideo(videoData)
 
-        playerManager.exoPlayer = exoPlayer
-        playerManager.setupOnlinePlayer(videoData, absoluteAdapterPosition, binding)
+        playerManager.setupOnlinePlayer(
+            videoData,
+            absoluteAdapterPosition,
+            binding,
+            preloadedPlayer = preloadedPlayer,
+        )
     }
     
     fun showThumbnail() {
+        val placeholderRes = ThumbnailLoader.placeholderRes()
+        val posterUrl = videoData?.posterUrl
+
+        if (posterUrl.isNullOrBlank()) {
+            if (placeholderRes == 0) {
+                binding.thumbnailView.setImageDrawable(null)
+                binding.thumbnailView.visibility = android.view.View.GONE
+            } else {
+                binding.thumbnailView.visibility = android.view.View.VISIBLE
+                binding.thumbnailView.setImageResource(placeholderRes)
+            }
+            return
+        }
+
         binding.thumbnailView.visibility = android.view.View.VISIBLE
-        val placeholder = ThumbnailLoader.createPlaceholder()
-        binding.thumbnailView.setImageBitmap(placeholder)
+        // Load poster until the first playback frame arrives (hideThumbnail() is called on Player.STATE_READY).
+        val request = Glide.with(context)
+            .load(posterUrl)
+            .centerCrop()
+        if (placeholderRes != 0) {
+            request.placeholder(placeholderRes).error(placeholderRes)
+        }
+        request.into(binding.thumbnailView)
     }
     
     fun hideThumbnail() {
@@ -203,6 +240,10 @@ class VideoViewHolder(
     
     fun onDetached() {
         stopProgressUpdates()
+        titleExpand.onDetached()
+        descriptionExpand.onDetached()
+        titleExpand.collapse(animate = false)
+        descriptionExpand.collapse(animate = false)
         VideoDownloadManager.removeDownloadListener(downloadListener)
     }
 
@@ -267,16 +308,18 @@ class VideoViewHolder(
                 return
             }
 
-            val currentPosition = exoPlayer.currentPosition
-            val wasPlaying = exoPlayer.isPlaying
+            val player = playerManager.exoPlayer
+            val currentPosition = player?.currentPosition ?: 0L
+            val wasPlaying = player?.isPlaying == true
 
             playerManager.exposedDrmHelper.callback = { videoData, pssh ->
                 updateDownloadStatus("Ключ получен, начинаем загрузку…")
                 downloadLicense(videoData.copy(selectedQualityLabel = quality.label), pssh, quality.height) { keySetId ->
                     if (keySetId != null) {
-                        if (wasPlaying && exoPlayer.playbackState != androidx.media3.common.Player.STATE_IDLE) {
-                            exoPlayer.seekTo(currentPosition)
-                            exoPlayer.playWhenReady = true
+                        val active = playerManager.exoPlayer
+                        if (wasPlaying && active != null && active.playbackState != androidx.media3.common.Player.STATE_IDLE) {
+                            active.seekTo(currentPosition)
+                            active.playWhenReady = true
                         }
                     } else {
                         updateDownloadStatus("Ошибка загрузки лицензии")
@@ -286,7 +329,7 @@ class VideoViewHolder(
 
             var availablePssh = playerManager.exposedDrmHelper.psshData
             if (availablePssh == null) {
-                availablePssh = exoPlayer.videoFormat?.drmInitData?.let { drmInitData ->
+                availablePssh = player?.videoFormat?.drmInitData?.let { drmInitData ->
                     for (i in 0 until drmInitData.schemeDataCount) {
                         val schemeData = drmInitData.get(i)
                         if (schemeData.matches(C.WIDEVINE_UUID) && schemeData.hasData()) {
@@ -298,7 +341,7 @@ class VideoViewHolder(
             }
             if (availablePssh == null) {
                 try {
-                    exoPlayer.currentTracks.groups.forEach { group ->
+                    player?.currentTracks?.groups?.forEach { group ->
                         if (group.mediaTrackGroup.length > 0) {
                             group.mediaTrackGroup.getFormat(0).drmInitData?.let { drmInitData ->
                                 for (i in 0 until drmInitData.schemeDataCount) {
@@ -457,9 +500,21 @@ class VideoViewHolder(
 
     fun bindOfflineVideos(videoData: VideoData, download: Download?) {
         this.videoData = videoData
+        bindTextChrome(videoData)
         showThumbnail()
-        playerManager.exoPlayer = exoPlayer
         playerManager.setupOfflinePlayer(videoData, absoluteAdapterPosition, binding, download)
+    }
+
+    fun bindTextChrome(videoData: VideoData) {
+        titleExpand.bind(videoData.title)
+        val description = videoData.description?.trim().orEmpty()
+        if (description.isEmpty()) {
+            binding.descriptionVideo.visibility = android.view.View.GONE
+            descriptionExpand.bind("")
+        } else {
+            binding.descriptionVideo.visibility = android.view.View.VISIBLE
+            descriptionExpand.bind(description)
+        }
     }
 
     fun generateStableContentId(url: String, heightPx: Int = 0): String {
@@ -479,7 +534,7 @@ class VideoViewHolder(
     private fun showOfflineVideosPopup() {
         VideoDownloadManager.initialize(context)
         val inflater = context.getSystemService(Context.LAYOUT_INFLATER_SERVICE) as LayoutInflater
-        val popupView = inflater.inflate(R.layout.popup_offline_videos, null)
+        val popupView = inflater.inflate(R.layout.shorts_popup_offline_videos, null)
         val recyclerView = popupView.findViewById<RecyclerView>(R.id.recyclerOffline)
         val closeButton = popupView.findViewById<Button>(R.id.btnClose)
 

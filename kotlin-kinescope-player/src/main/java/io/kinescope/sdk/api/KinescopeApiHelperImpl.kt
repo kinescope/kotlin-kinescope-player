@@ -5,8 +5,20 @@ import io.kinescope.sdk.models.players.KinescopeUpdatePlayerRequest
 import kotlinx.coroutines.flow.flow
 
 class KinescopeApiHelperImpl (private val  apiService: KinescopeApi) : KinescopeApiHelper {
-    override fun getAllVideos() = flow {
-        emit(apiService.getAll())
+    override fun getAllVideos(
+        page: Int?,
+        perPage: Int?,
+        projectId: String?,
+        folderId: String?,
+    ) = flow {
+        emit(
+            apiService.getAll(
+                page = page,
+                perPage = perPage,
+                projectId = projectId?.takeIf { it.isNotBlank() },
+                folderId = folderId?.takeIf { it.isNotBlank() },
+            ),
+        )
     }
 
     override fun getPlayers() = flow {

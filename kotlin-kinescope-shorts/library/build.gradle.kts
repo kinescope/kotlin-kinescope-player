@@ -2,11 +2,11 @@ plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.serialization") version "1.9.24"
-    id("maven-publish")
+    id("com.vanniktech.maven.publish")
 }
 
-group = "com.github.kinescope"
-version = "0.1.5"
+group = "io.kinescope"
+version = "0.1.7"
 
 android {
     namespace = "io.kinescope.sdk.shorts"
@@ -54,6 +54,9 @@ dependencies {
     implementation("androidx.media3:media3-database:$media3Version")
     implementation("androidx.media3:media3-cast:$media3Version")
 
+    // Poster thumbnails (thumbnailView)
+    implementation("com.github.bumptech.glide:glide:4.16.0")
+
     implementation("androidx.collection:collection-ktx:1.5.0")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("androidx.core:core-ktx:1.12.0")
@@ -67,15 +70,34 @@ dependencies {
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
 }
 
-afterEvaluate {
-    publishing {
-        publications {
-            create<MavenPublication>("release") {
-                groupId = "com.github.kinescope"
-                artifactId = "kotlin-kinescope-shorts"
-                version = "0.1.5"
-                from(components["release"])
+mavenPublishing {
+    // Explicit Central Portal — default in 0.30.0 is legacy OSSRH (402 on stagingProfiles).
+    publishToMavenCentral(com.vanniktech.maven.publish.SonatypeHost.CENTRAL_PORTAL)
+    signAllPublications()
+    coordinates("io.kinescope", "kotlin-kinescope-shorts", "0.1.7")
+    pom {
+        name.set("kotlin-kinescope-shorts")
+        description.set("Kinescope Shorts: vertical video feed for Android")
+        inceptionYear.set("2022")
+        url.set("https://github.com/kinescope/kotlin-kinescope-player")
+        licenses {
+            license {
+                name.set("The Apache Software License, Version 2.0")
+                url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+                distribution.set("repo")
             }
+        }
+        developers {
+            developer {
+                id.set("kinescope")
+                name.set("Kinescope")
+                url.set("https://kinescope.io")
+            }
+        }
+        scm {
+            url.set("https://github.com/kinescope/kotlin-kinescope-player")
+            connection.set("scm:git:git://github.com/kinescope/kotlin-kinescope-player.git")
+            developerConnection.set("scm:git:ssh://git@github.com/kinescope/kotlin-kinescope-player.git")
         }
     }
 }

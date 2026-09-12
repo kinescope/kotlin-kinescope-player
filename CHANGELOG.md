@@ -1,5 +1,48 @@
 # Changelog
 
+## [0.1.7] — 11.09.2026
+- **Maven Central** — canonical coordinates: `io.kinescope:kotlin-kinescope-player:0.1.6`; **JitPack is no longer supported** for new integrations (legacy `com.github.kinescope:...` pins remain documented so existing apps are not forced to break)
+
+
+### Fixed
+- **Demo Shorts progressive feed** — failed catalog items no longer stall ordered emission; later videos still reach the pager
+- **Demo catalog filters** — `PROJECT_ID` / `FOLDER_ID` default to `null`; blank strings are stripped before Dashboard `getAllVideos`
+- **Demo Shorts DRM** — catalog HLS + description no longer skips playback JSON (Widevine license preserved)
+- **Captions search insets** — top search panel refreshes when status-bar / safe-area overlap changes
+- **Shorts sample feed** — Dashboard/playback OkHttp work runs on `Dispatchers.IO`; Widevine `token=` license URLs append the API key
+- **Shorts onLowMemory** — no longer `VideoCache.release()` while players are reading the cache (avoids mid-playback stalls)
+
+## [0.1.6] — 04.09.2026
+
+### Distribution
+- **Maven Central** — canonical coordinates: `io.kinescope:kotlin-kinescope-player:0.1.6`; **JitPack is no longer supported** for new integrations (legacy `com.github.kinescope:...` pins remain documented so existing apps are not forced to break)
+
+### Added
+- **Shorts description** — `description` from catalog/playback is bound under the title (18 Medium / 14 Regular, Figma Shorts)
+- **Shorts posters** — `VideoData.posterUrl` is now rendered in the Shorts thumbnail overlay until the first playback frame arrives
+- **Shorts API-only sample flow** — hardcoded Shorts videos were removed from the SDK/demo path; demo Shorts screens now load via `KinescopeVideoProvider`
+- **Shorts feed filters** — `project_id` / `folder_id` / `per_page` on `KinescopeApiHelper.getAllVideos(...)`; demo config: `PROJECT_ID`, `FOLDER_ID`, `SHORTS_FEED_LIMIT` (default `50`)
+- **Configurable feed size** — `KinescopeUrls(limit = …)` (default `50`)
+- **`KinescopeShortsConfig`** — public runtime config in the Shorts SDK (`API_KEY`, `PROJECT_ID`, `FOLDER_ID`, `FEED_LIMIT`) for host apps; sample Dashboard provider stays in `kotlin-kinescope-shorts/app` only (not in the AAR)
+- **`KinescopeUiConfig`** — show/hide Shorts side actions, play overlay, scrub/timeline, and preload stub; swap icons (`*IconResId`), sizes (`actionButtonSizeDp` / `playButtonSizeDp`), seek bar colours, and custom stub (`preloadImageResId`)
+- **Adaptive Shorts preload** — `PlaybackHealthMonitor` + `PreloadHealth` tiers (`CRITICAL` / `LOW` / `MEDIUM` / `HIGH`) from buffer ahead, bandwidth estimate, Wi‑Fi/metered network, and weak-device caps; depth of `+1` player preload and segment prefetch scales with health
+
+### Changed
+- **Shorts scrub UX** — timeline visible on pause / while scrubbing; seek only after hold+drag (tap alone does not seek); time chip follows progress while scrubbing
+- **Shorts preload / pooling** — visible pages now reuse the player pool; `+1` prepared player is handed off to the bound page instead of being recreated
+- **Shorts cache warmup** — `+2` (and one back item on stronger devices) now warms `VideoCache` by fetching HLS playlists / first segments without creating a second player
+- **Shorts current-playback priority** — non-essential preload pauses while the current page rebuffers or while the feed is actively scrolling/flinging, then resumes with debounce
+- **Shorts lifecycle** — backgrounding only pauses playback (no `releaseAll` / `clearMediaItems`); resume restores the current page
+- **Demo Shorts startup** — progressive feed (`loadVideosProgressive`): pager opens with the first ready video; remaining items append while playback metadata loads in parallel (catalog `hls_link` preferred when present; playback JSON fetched when description is missing)
+- **Dashboard catalog client** — `getAllVideos` can filter by project/folder instead of only client-side filtering after the first unfiltered page; `KinescopeVideoApi` includes optional `subtitle` / `description`
+- **Shorts layout resource** — renamed to `shorts_*` layouts/drawables/colors so demo/player resources cannot override Shorts UI; removed leftover Shorts assets from the main player module and demo (`custom_player_control_view`, old `list_video` / `activity_save_video_player`)
+
+### Fixed
+- **Player settings gear (non-HD)** — restored a valid `evenOdd` vector so the gear no longer renders with a missing quadrant below 1080p
+- **Shorts reopen playback** — `VideoCache.release()` no longer leaves a released cache that blocked playback on the next Shorts open; pool shutdown clears players cleanly
+- **Shorts domain-restriction toast** — HTTP 403 / Dashboard `4030403` («forbidden») shows a domain-restriction message instead of a generic Source error
+
+
 ## [0.1.5] — 17.08.2026
 
 ### Added

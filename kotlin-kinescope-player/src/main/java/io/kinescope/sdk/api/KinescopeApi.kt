@@ -12,10 +12,16 @@ import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 interface KinescopeApi {
     @GET(KinescopeApiConfig.VIDEOS)
-    suspend fun getAll(): KinescopeAllVideosResponse
+    suspend fun getAll(
+        @Query("page") page: Int? = null,
+        @Query("per_page") perPage: Int? = null,
+        @Query("project_id") projectId: String? = null,
+        @Query("folder_id") folderId: String? = null,
+    ): KinescopeAllVideosResponse
 
     @GET(KinescopeApiConfig.PLAYERS)
     suspend fun getPlayers(): KinescopePlayersListResponse

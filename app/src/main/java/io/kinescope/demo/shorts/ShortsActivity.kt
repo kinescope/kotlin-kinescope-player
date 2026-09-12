@@ -1,24 +1,20 @@
 @file:OptIn(kotlinx.serialization.InternalSerializationApi::class)
 package io.kinescope.demo.shorts
 
-import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.ActivityInfo
-import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import java.util.ArrayList
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.util.Log
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.offline.Download
 import androidx.media3.exoplayer.offline.DownloadManager
 import io.kinescope.sdk.shorts.models.PlayerItem
-import io.kinescope.sdk.shorts.utils.KinescopeUrls
 import io.kinescope.sdk.shorts.adapters.ViewPager2Adapter
 import io.kinescope.sdk.shorts.cache.VideoCache
+import io.kinescope.demo.KinescopeDemoConfig
 import io.kinescope.demo.databinding.ActivityShortsBinding
 import io.kinescope.sdk.shorts.download.VideoDownloadManager
 import io.kinescope.sdk.shorts.drm.DrmConfigurator
@@ -27,17 +23,14 @@ import io.kinescope.sdk.shorts.managers.PoolPlayers
 import io.kinescope.sdk.shorts.interfaces.ActivityProvider
 import io.kinescope.sdk.shorts.models.VideoData
 import io.kinescope.sdk.shorts.AppJson
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.serialization.InternalSerializationApi
-import kotlin.OptIn
 
 @OptIn(InternalSerializationApi::class)
 class ShortsActivity : AppCompatActivity(), ActivityProvider {
 
     private lateinit var binding: ActivityShortsBinding
-    private lateinit var adapter: ViewPager2Adapter
+    private var adapter: ViewPager2Adapter? = null
     private val exoPlayerItems = ArrayList<PlayerItem>()
     private val drmConfigurator = DrmConfigurator(this)
     private lateinit var notificationHelper: NotificationHelper
@@ -59,65 +52,53 @@ class ShortsActivity : AppCompatActivity(), ActivityProvider {
         VideoDownloadManager.initialize(this)
         VideoDownloadManager.addDownloadListener(this, listener)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this,
-                    arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
-            }
-        }
         loadVideos()
     }
 
+    private val feedVideos = ArrayList<VideoData>()
+
     private fun loadVideos() {
-        CoroutineScope(Dispatchers.Main).launch {
+        lifecycleScope.launch {
             try {
-
-                val kinescopeVideo = KinescopeUrls()
-                val videoUrls = kinescopeVideo.getNextVideoUrls()
-                if (videoUrls.isEmpty()) {
-                    return@launch
+                val provider = DemoKinescopeVideoProvider(this@ShortsActivity)
+                provider.loadVideosProgressive(
+                    projectId = KinescopeDemoConfig.PROJECT_ID,
+                    folderId = KinescopeDemoConfig.FOLDER_ID,
+                    limit = KinescopeDemoConfig.SHORTS_FEED_LIMIT,
+                ) { video ->
+                    if (adapter == null) {
+                        feedVideos.add(video)
+                        setupViewPager(feedVideos)
+                    } else {
+                        adapter?.appendVideos(listOf(video))
+                    }
                 }
-                
-                adapter = ViewPager2Adapter(
-                    context = this@ShortsActivity,
-                    videos = videoUrls,
-                    videoPreparedListener = object : ViewPager2Adapter.OnVideoPreparedListener {
-                        override fun onVideoPrepared(exoPlayerItem: PlayerItem) {
-                            exoPlayerItems.add(exoPlayerItem)
-                        }
-                    },
-                    exoPlayerItems = exoPlayerItems,
-                    activityProvider = this@ShortsActivity
-                )
-
-                binding.viewPager2.adapter = adapter
-                adapter.attachToViewPager(binding.viewPager2)
-                setupViewPager2ForFastScroll()
-                binding.viewPager2.setCurrentItem(0, false)
+                if (adapter == null) {
+                    Log.w(TAG, "Shorts feed is empty")
+                }
             } catch (e: Exception) {
-                e.printStackTrace()
-                val kinescopeVideo = KinescopeUrls()
-                val videoUrls = kinescopeVideo.getNextVideoUrls()
-                
-                adapter = ViewPager2Adapter(
-                    context = this@ShortsActivity,
-                    videos = videoUrls,
-                    videoPreparedListener = object : ViewPager2Adapter.OnVideoPreparedListener {
-                        override fun onVideoPrepared(exoPlayerItem: PlayerItem) {
-                            exoPlayerItems.add(exoPlayerItem)
-                        }
-                    },
-                    exoPlayerItems = exoPlayerItems,
-                    activityProvider = this@ShortsActivity
-                )
-                
-                binding.viewPager2.adapter = adapter
-                adapter.attachToViewPager(binding.viewPager2)
-                setupViewPager2ForFastScroll()
-                binding.viewPager2.setCurrentItem(0, false)
+                Log.e(TAG, "Provider failed to load Shorts feed", e)
             }
         }
+    }
+
+    private fun setupViewPager(videos: MutableList<VideoData>) {
+        adapter = ViewPager2Adapter(
+            context = this,
+            videos = videos,
+            videoPreparedListener = object : ViewPager2Adapter.OnVideoPreparedListener {
+                override fun onVideoPrepared(exoPlayerItem: PlayerItem) {
+                    exoPlayerItems.add(exoPlayerItem)
+                }
+            },
+            exoPlayerItems = exoPlayerItems,
+            activityProvider = this,
+        )
+
+        binding.viewPager2.adapter = adapter
+        adapter?.attachToViewPager(binding.viewPager2)
+        setupViewPager2ForFastScroll()
+        binding.viewPager2.setCurrentItem(0, false)
     }
 
     @OptIn(UnstableApi::class)
@@ -161,23 +142,18 @@ class ShortsActivity : AppCompatActivity(), ActivityProvider {
 
     override fun onPause() {
         super.onPause()
-        exoPlayerItems.forEach{ it.exoPlayer.playWhenReady = false}
-        PoolPlayers.get().releaseAll()
+        adapter?.pausePlayback()
     }
 
     override fun onResume() {
         super.onResume()
-        val currentItem = binding.viewPager2.currentItem
-        val exoPlayerItem = exoPlayerItems.find { it.position == currentItem }
-        exoPlayerItem?.let { item ->
-            item.exoPlayer.playWhenReady = true
-        }
+        adapter?.resumePlayback()
     }
 
     override fun onDestroy() {
         adapter?.cleanup()
-        PoolPlayers.get().cleanup()
-        VideoCache.clearCache()
+        adapter = null
+        PoolPlayers.shutdown()
         VideoCache.release()
         VideoDownloadManager.removeDownloadListener(listener)
         super.onDestroy()
@@ -185,7 +161,8 @@ class ShortsActivity : AppCompatActivity(), ActivityProvider {
 
     override fun onLowMemory() {
         super.onLowMemory()
-        VideoCache.clearCache()
+        // Do not VideoCache.release() here: live players still hold CacheDataSource on the
+        // same SimpleCache. Releasing mid-playback stalls playback and leaves sources on a dead cache.
     }
     
     private fun setupViewPager2ForFastScroll() {
@@ -250,5 +227,9 @@ class ShortsActivity : AppCompatActivity(), ActivityProvider {
             page.alpha = 1f - kotlin.math.abs(position) * 0.3f
             page.scaleY = 1f - kotlin.math.abs(position) * 0.1f
         }
+    }
+
+    companion object {
+        private const val TAG = "ShortsActivity"
     }
 }

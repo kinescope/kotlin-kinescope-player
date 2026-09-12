@@ -13,9 +13,11 @@ This guide helps you integrate the Kinescope video playback library into your An
 ```groovy
 // build.gradle
 dependencies {
-    implementation 'com.github.kinescope:kotlin-kinescope-player:<VERSION>'
+    implementation 'io.kinescope:kotlin-kinescope-player:0.1.7'
 }
 ```
+
+Maven Central is recommended. **JitPack is no longer supported** for new apps; legacy `com.github.kinescope:…` pins are documented in [installation.md](../docs/installation.md#legacy--jitpack-unsupported).
 ---
 
 ## Basic setup
@@ -99,6 +101,7 @@ class MyKinescopeVideoProvider(
 ### 2. Loading videos via API
 
 ```kotlin
+import io.kinescope.sdk.shorts.KinescopeShortsConfig
 import io.kinescope.sdk.shorts.utils.KinescopeUrls
 import io.kinescope.sdk.shorts.interfaces.KinescopeVideoProvider
 import kotlinx.coroutines.CoroutineScope
@@ -108,71 +111,45 @@ import kotlinx.coroutines.launch
 private fun loadVideosFromApi() {
     CoroutineScope(Dispatchers.Main).launch {
         try {
-            // Create provider
-            val videoProvider: KinescopeVideoProvider = MyKinescopeVideoProvider(apiToken = "your-api-token")
-            
-            // Use with KinescopeUrls
+            val videoProvider: KinescopeVideoProvider =
+                MyKinescopeVideoProvider(apiToken = KinescopeShortsConfig.API_KEY)
+
             val kinescopeVideo = KinescopeUrls(
                 videoProvider = videoProvider,
-                projectId = "your-project-id"
+                projectId = KinescopeShortsConfig.PROJECT_ID,
+                folderId = KinescopeShortsConfig.FOLDER_ID,
+                limit = KinescopeShortsConfig.FEED_LIMIT,
             )
             
             val videoUrls = kinescopeVideo.getVideosFromApi()
-            
-            if (videoUrls.isEmpty()) {
-                // Fallback to hardcoded list if API returns empty
-                val fallbackVideos = kinescopeVideo.getNextVideoUrls()
-                setupViewPager(fallbackVideos)
-            } else {
-                setupViewPager(videoUrls)
-            }
+            setupViewPager(videoUrls)
         } catch (e: Exception) {
             Log.e("MainActivity", "Error loading videos", e)
-            // Fallback to hardcoded on error
-            val kinescopeVideo = KinescopeUrls()
-            val fallbackVideos = kinescopeVideo.getNextVideoUrls()
-            setupViewPager(fallbackVideos)
         }
     }
 }
 ```
 
----
+`KinescopeUrls` is provider-only. If `KinescopeVideoProvider` is missing or returns no playable items, the Shorts feed stays empty.
 
-## Using without API (hardcoded)
+Configure feed credentials via [`KinescopeShortsConfig`](library/src/main/java/io/kinescope/sdk/shorts/KinescopeShortsConfig.kt) (`API_KEY`, optional `PROJECT_ID` / `FOLDER_ID`, `FEED_LIMIT`). Implement your own `KinescopeVideoProvider` (sample Dashboard OkHttp provider is under `kotlin-kinescope-shorts/app` only).
 
-If you do not want to use the API, you can use hardcoded videos:
+### UI customization (`KinescopeUiConfig`)
 
-```kotlin
-import io.kinescope.sdk.shorts.utils.KinescopeUrls
-
-private fun loadVideosFromHardcode() {
-    val kinescopeVideo = KinescopeUrls()
-    val videoUrls = kinescopeVideo.getNextVideoUrls()
-    setupViewPager(videoUrls)
-}
-```
-
-Or build your own list:
+Hide or restyle Shorts chrome before opening the feed:
 
 ```kotlin
-import io.kinescope.sdk.shorts.models.VideoData
-import io.kinescope.sdk.shorts.models.DrmInfo
-import io.kinescope.sdk.shorts.models.WidevineInfo
+import io.kinescope.sdk.shorts.config.KinescopeUiConfig
 
-val videos = listOf(
-    VideoData(
-        hlsLink = "https://kinescope.io/.../master.m3u8?token=...",
-        drm = DrmInfo(
-            widevine = WidevineInfo(
-                licenseUrl = "https://license.kinescope.io/.../widevine?token=..."
-            )
-        ),
-        title = "Video title"
-    ),
-    // ... other videos
-)
+KinescopeUiConfig.showLikeButton = false
+KinescopeUiConfig.showPlayButton = true
+KinescopeUiConfig.showSeekBar = true
+KinescopeUiConfig.showPreloadImage = false   // no stub; black until poster / first frame
+KinescopeUiConfig.actionButtonSizeDp = 28
+KinescopeUiConfig.playButtonSizeDp = 46
 ```
+
+Full table and seek-bar colour options: [QUICK_START — UI customization](QUICK_START.md#ui-customization-kinescopeuiconfig).
 
 ---
 
@@ -405,23 +382,15 @@ class MainActivity : AppCompatActivity(), ActivityProvider {
                 
                 val kinescopeVideo = KinescopeUrls(
                     videoProvider = videoProvider,
-                    projectId = "your-project-id"
+                    projectId = "your-project-id",
+                    folderId = "your-folder-id", // optional
+                    limit = 50,                  // optional, default 50
                 )
 
                 val videoUrls = kinescopeVideo.getVideosFromApi()
-
-                if (videoUrls.isEmpty()) {
-                    Log.w("MainActivity", "API returned empty list, using fallback")
-                    val fallbackVideos = kinescopeVideo.getNextVideoUrls()
-                    setupViewPager(fallbackVideos)
-                } else {
-                    setupViewPager(videoUrls)
-                }
+                setupViewPager(videoUrls)
             } catch (e: Exception) {
                 Log.e("MainActivity", "Error loading videos", e)
-                val kinescopeVideo = KinescopeUrls()
-                val fallbackVideos = kinescopeVideo.getNextVideoUrls()
-                setupViewPager(fallbackVideos)
             }
         }
     }
@@ -496,6 +465,35 @@ class MainActivity : AppCompatActivity(), ActivityProvider {
     }
 }
 ```
+
+---
+
+## Preload, pool, and cache
+
+Shorts feed warmup (handled inside `ViewPager2Adapter` / `VideoPreloader`):
+
+| Slot | Mechanism |
+|------|-----------|
+| **Current** | Pooled `ExoPlayer` from `PoolPlayers` (recycle returns to pool — no `release()` until `cleanup`) |
+| **+1** | Full preload `ExoPlayer` → handed off via `getPreloadedPlayer` when the page binds (when health allows) |
+| **+2 / back** | `MediaCachePrefetcher` — HLS playlist + first segments into `VideoCache` (no player; skipped for DRM; depth depends on health tier) |
+
+**Hard pause:** ViewPager2 scrolling/flinging pauses non-essential preload (debounced ~180 ms after settle). Already prepared `+1` players are kept for handoff.
+
+**Adaptive health** (`PlaybackHealthMonitor` + `PreloadHealth`): samples buffer ahead, bandwidth estimate, Wi‑Fi/metered, and rebuffer state ~every 500 ms. Tiers:
+
+| Tier | Preload behaviour |
+|------|-------------------|
+| `CRITICAL` | Pause non-essential preload (keep ready `+1` if present) |
+| `LOW` | `+1` player only |
+| `MEDIUM` | `+1` player + limited forward segment cache |
+| `HIGH` | `+1` player + forward/back segment cache (more segments/bytes) |
+
+Weak devices are capped at most at `MEDIUM`. Online playback still uses ExoPlayer ABR under a ~480p / lowest-bitrate cap in `PlayerFactory`.
+
+**Subtitles / captions:** disabled by default in Shorts. `PlayerFactory` sets `TrackSelectionParameters.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)` so HLS/DASH text tracks are not selected. The Shorts `PlayerView` would otherwise paint cues full-bleed over the vertical feed. To enable captions later, clear that disable (or set it to `false`) on the player’s `DefaultTrackSelector` parameters after creating the player.
+
+`VideoData.posterUrl` is rendered over the player until the first frame is ready.
 
 ---
 

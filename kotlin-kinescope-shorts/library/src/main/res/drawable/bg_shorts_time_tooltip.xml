@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Figma Surface/player/tooltip/default: rgba(17,17,17,0.8), radius 4 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#CC111111" />
+    <corners android:radius="4dp" />
+</shape>

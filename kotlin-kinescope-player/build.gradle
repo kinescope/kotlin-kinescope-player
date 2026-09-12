@@ -3,8 +3,8 @@ plugins {
     id 'org.jetbrains.kotlin.android'
     id 'kotlin-kapt'
     id "com.google.protobuf" version "0.9.4"
-    id "maven-publish"
     id 'org.jetbrains.kotlin.plugin.serialization' version '1.9.24'
+    id 'com.vanniktech.maven.publish'
 }
 
 android {
@@ -18,7 +18,7 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles "consumer-rules.pro"
 
-        versionName "0.1.5"
+        versionName "0.1.7"
     }
 
     buildTypes {
@@ -43,6 +43,15 @@ android {
     buildFeatures {
         viewBinding true
         buildConfig true
+    }
+    testOptions {
+        unitTests {
+            includeAndroidResources = true
+            all {
+                // Robolectric view tests inflate the whole player chrome per test.
+                maxHeapSize = "4g"
+            }
+        }
     }
 }
 
@@ -72,16 +81,34 @@ protobuf {
     }
 }
 
-afterEvaluate {
-    publishing {
-        publications {
-            release(MavenPublication) {
-                groupId = 'com.github.kinescope'
-                artifactId = 'kotlin-kinescope-player'
-                version = findProperty('kinescopeSdkVersion') ?: '0.1.5'
-                
-                from components.release
+mavenPublishing {
+    // Explicit Central Portal — default in 0.30.0 is legacy OSSRH (402 on stagingProfiles).
+    publishToMavenCentral(com.vanniktech.maven.publish.SonatypeHost.CENTRAL_PORTAL)
+    signAllPublications()
+    coordinates('io.kinescope', 'kotlin-kinescope-player', findProperty('kinescopeSdkVersion') ?: '0.1.7')
+    pom {
+        name = 'kotlin-kinescope-player'
+        description = 'Kinescope Android SDK: video player, Shorts feed, and offline downloads with Widevine DRM'
+        inceptionYear = '2022'
+        url = 'https://github.com/kinescope/kotlin-kinescope-player'
+        licenses {
+            license {
+                name = 'The Apache Software License, Version 2.0'
+                url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                distribution = 'repo'
             }
+        }
+        developers {
+            developer {
+                id = 'kinescope'
+                name = 'Kinescope'
+                url = 'https://kinescope.io'
+            }
+        }
+        scm {
+            url = 'https://github.com/kinescope/kotlin-kinescope-player'
+            connection = 'scm:git:git://github.com/kinescope/kotlin-kinescope-player.git'
+            developerConnection = 'scm:git:ssh://git@github.com/kinescope/kotlin-kinescope-player.git'
         }
     }
 }
@@ -136,4 +163,6 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.mockito:mockito-core:5.14.2'
     testImplementation 'org.mockito.kotlin:mockito-kotlin:5.4.0'
+    testImplementation 'org.robolectric:robolectric:4.13'
+    testImplementation 'androidx.test:core:1.6.1'
 }

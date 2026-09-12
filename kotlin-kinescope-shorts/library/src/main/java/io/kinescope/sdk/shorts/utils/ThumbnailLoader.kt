@@ -1,33 +1,24 @@
 package io.kinescope.sdk.shorts.utils
 
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
+import android.content.Context
+import android.graphics.drawable.Drawable
+import androidx.annotation.DrawableRes
+import androidx.core.content.ContextCompat
+import io.kinescope.sdk.shorts.config.KinescopeUiConfig
 
+/**
+ * Shorts poster fallback — Figma Player stub (Type=Shorts / Video fill),
+ * overridable via [KinescopeUiConfig.showPreloadImage] / [KinescopeUiConfig.preloadImageResId].
+ */
 object ThumbnailLoader {
 
-    fun createPlaceholder(width: Int = 1080, height: Int = 1920): Bitmap {
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
+    /** `0` when preload stub is disabled. */
+    @DrawableRes
+    fun placeholderRes(): Int = KinescopeUiConfig.resolvePreloadImageResId()
 
-        canvas.drawColor(Color.parseColor("#1a1a1a"))
-
-        val paint = Paint().apply {
-            color = Color.parseColor("#666666")
-            textSize = 48f
-            textAlign = Paint.Align.CENTER
-        }
-
-        val centerX = width / 2f
-        val centerY = height / 2f
-        canvas.drawCircle(centerX, centerY, 30f, paint.apply { 
-            color = Color.parseColor("#888888")
-            style = Paint.Style.STROKE
-            strokeWidth = 4f
-        })
-        
-        return bitmap
+    fun getPlaceholder(context: Context): Drawable? {
+        val res = placeholderRes()
+        if (res == 0) return null
+        return ContextCompat.getDrawable(context, res)
     }
 }
-
