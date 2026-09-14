@@ -20,7 +20,7 @@ dependencyResolutionManagement {
 
 ```groovy
 dependencies {
-    implementation 'io.kinescope:kotlin-kinescope-player:0.1.7'
+    implementation 'io.kinescope:kotlin-kinescope-player:0.1.17'
 }
 ```
 
@@ -28,7 +28,7 @@ Kotlin DSL:
 
 ```kotlin
 dependencies {
-    implementation("io.kinescope:kotlin-kinescope-player:0.1.7")
+    implementation("io.kinescope:kotlin-kinescope-player:0.1.17")
 }
 ```
 
@@ -60,4 +60,4 @@ dependencies {
 }
 ```
 
-No new releases or support are guaranteed on JitPack. Migrate to `io.kinescope:kotlin-kinescope-player:0.1.7` on Maven Central when you can.
+No new releases or support are guaranteed on JitPack. Migrate to `io.kinescope:kotlin-kinescope-player:0.1.17` on Maven Central when you can.

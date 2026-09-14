@@ -251,6 +251,13 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
 
         override fun onDoubleTapEvent(e: MotionEvent): Boolean {
+            // Some OEMs deliver touches into the PiP window: a double tap then
+            // raised the seek feedback + control chrome over the SYSTEM PiP
+            // controls. In PiP the system owns all gestures — swallow ours.
+            // Frame preview likewise: the host owns the whole chrome.
+            if (isPictureInPictureActive || framePreviewActive) {
+                return true
+            }
             KinescopeLogger.log(
                 KinescopeLoggerLevel.PLAYER_VIEW,
                 "double tap event, action=${e.action}, isForward=${isForward(e)}"
@@ -283,6 +290,9 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
 
         override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+            if (isPictureInPictureActive || framePreviewActive) {
+                return true
+            }
             KinescopeLogger.log(KinescopeLoggerLevel.PLAYER_VIEW, "single tap confirmed")
             if (tryOpenCaptionsSearchAt(e.x, e.y)) {
                 return true
@@ -468,6 +478,50 @@ class KinescopePlayerView @JvmOverloads constructor(
     private var chromeTopSafeInsetPx = 0
 
     /**
+     * Frame-preview mode: the host scrubs the engine to pick a poster frame
+     * BEFORE playback ever started. Pre-start the video surface is
+     * deliberately INVISIBLE (poster + play own the band), so seeks render
+     * nowhere — this flips the surface on and the poster off without starting
+     * playback, and restores the pre-start chrome on exit.
+     */
+    fun setFramePreviewActive(active: Boolean) {
+        if (framePreviewActive == active) return
+        framePreviewActive = active
+        if (active) {
+            posterView?.isVisible = false
+            exoPlayerView?.visibility = View.VISIBLE
+            // The host draws the entire frame-pick chrome itself (trim-style
+            // header, centre play, timeline) — every piece of ours goes quiet:
+            // overlay, centre play, subtitles; taps are swallowed below.
+            controlView?.animate()?.cancel()
+            controlView?.isVisible = false
+            subtitleView?.isVisible = false
+            findViewById<View?>(R.id.kinescope_progressive_subtitle_container)?.isVisible = false
+            updatePlayPauseButton()
+        } else {
+            findViewById<View?>(R.id.kinescope_progressive_subtitle_container)?.isVisible = true
+            subtitleView?.isVisible = false
+            showControlOverlay(animated = false)
+            updatePlayPauseButton()
+            updateBuffering()
+            applyVideoPoster()
+        }
+    }
+
+    private var framePreviewActive = false
+
+    /**
+     * When false, the built-in title/subtitle block stays hidden so a host can
+     * own that chrome (e.g. an overlay above the player band).
+     */
+    var titleChromeEnabled: Boolean = true
+        set(value) {
+            if (field == value) return
+            field = value
+            updateTitles()
+        }
+
+    /**
      * Insets last dispatched to this view — the fallback source, see
      * [currentWindowInsets] — and the screen Y the overlap was resolved against.
      */
@@ -518,6 +572,11 @@ class KinescopePlayerView @JvmOverloads constructor(
 
     private val hideControlOverlayRunnable = Runnable {
         if (scrubbing || settingsMenuView?.isVisible == true || isCaptionsSearchActive()) {
+            return@Runnable
+        }
+        // Armed before start (or start rolled back to IDLE meanwhile): keep
+        // the chrome — see scheduleControlOverlayAutoHide.
+        if (!hasStartedPlayback) {
             return@Runnable
         }
         hideControlOverlay(animated = true)
@@ -1496,18 +1555,37 @@ class KinescopePlayerView @JvmOverloads constructor(
         if (shouldSuppressPosterDisplay()) {
             return
         }
+        // showDefaultPoster=false suppresses the branded stand-in on EVERY
+        // path: not just the no-URL case, but also the load placeholder and
+        // the error fallback here — otherwise a slow network flashes the
+        // default art while the real poster downloads. The view stays empty
+        // (host background shows through) until the actual image lands.
+        val suppressDefault = kinescopePlayer?.kinescopePlayerOptions?.showDefaultPoster == false
         posterView?.let {
             it.isVisible = true
-            it.setImageResource(placeholder)
-            Glide.with(context)
-                .load(url)
-                .centerCrop()
-                .placeholder(placeholder)
-                .error(errorPlaceholder)
-                .addListener(KinescopeGlideListener { isSuccess ->
-                    onLoadFinished?.invoke(isSuccess)
-                })
-                .into(it)
+            if (suppressDefault && placeholder == R.drawable.default_poster) {
+                Glide.with(context).clear(it)
+                it.setImageDrawable(null)
+                Glide.with(context)
+                    .load(url)
+                    .fitCenter()
+                    .apply { if (errorPlaceholder != R.drawable.default_poster) error(errorPlaceholder) }
+                    .addListener(KinescopeGlideListener { isSuccess ->
+                        onLoadFinished?.invoke(isSuccess)
+                    })
+                    .into(it)
+            } else {
+                it.setImageResource(placeholder)
+                Glide.with(context)
+                    .load(url)
+                    .fitCenter()
+                    .placeholder(placeholder)
+                    .error(errorPlaceholder)
+                    .addListener(KinescopeGlideListener { isSuccess ->
+                        onLoadFinished?.invoke(isSuccess)
+                    })
+                    .into(it)
+            }
         }
     }
 
@@ -1966,12 +2044,29 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     private fun isBufferingSpinnerVisible(): Boolean {
+        // The PiP window shows only the system's own UI. hidePipOverlays()
+        // hides the spinner on entry, but the first rebuffer used to bring it
+        // straight back through updateBuffering() — together with its opaque
+        // black backdrop on the first-playback path. prepareForPictureInPicture
+        // (false) re-runs updateBuffering() on exit, so visibility recovers.
+        if (isPictureInPictureActive) {
+            return false
+        }
         if (shouldShowLiveInformer()) {
             return false
         }
         val player = localExoPlayer ?: return false
-        if (!hasStartedPlayback && player.playbackState == Player.STATE_BUFFERING) {
-            return true
+        if (!hasStartedPlayback && !isLiveState) {
+            // Vimeo's loading pattern: the spinner doubles as the loading
+            // indicator over whatever the band shows (black, then the poster)
+            // until the source is actually ready to start; the play button
+            // takes over at READY. A terminal error stops it — the host's
+            // error surface owns the band from there. Live previews draw
+            // their own chrome (informer / start date) and keep the old rule.
+            if (player.playerError != null) {
+                return false
+            }
+            return player.playbackState != Player.STATE_READY
         }
         return hasStartedPlayback &&
             player.playbackState == Player.STATE_BUFFERING &&
@@ -2011,7 +2106,7 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     private fun applyVideoPoster() {
-        if (hasStartedPlayback || shouldSuppressPosterDisplay()) {
+        if (hasStartedPlayback || framePreviewActive || shouldSuppressPosterDisplay()) {
             return
         }
         val posterUrl = getVideo()?.poster?.url
@@ -2072,7 +2167,7 @@ class KinescopePlayerView @JvmOverloads constructor(
 
         exoPlayerView?.visibility = when {
             kinescopePlayer == null -> View.GONE
-            !hasStartedPlayback -> View.INVISIBLE
+            !hasStartedPlayback && !framePreviewActive -> View.INVISIBLE
             else -> View.VISIBLE
         }
 
@@ -2135,7 +2230,7 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     private fun shouldShowCenterPlayControl(showControls: Boolean): Boolean {
-        if (isPictureInPictureActive) {
+        if (isPictureInPictureActive || framePreviewActive) {
             return false
         }
         if (isCaptionsSearchActive()) {
@@ -3816,11 +3911,11 @@ class KinescopePlayerView @JvmOverloads constructor(
         if (video != null) {
             titleView?.apply {
                 text = video.title
-                isVisible = video.title.isNotEmpty()
+                isVisible = titleChromeEnabled && video.title.isNotEmpty()
             }
             authorView?.apply {
                 text = video.subtitle
-                isVisible = !video.subtitle.isNullOrEmpty()
+                isVisible = titleChromeEnabled && !video.subtitle.isNullOrEmpty()
             }
             enforceLiveTimeChromeIfNeeded()
             applyVideoPoster()
@@ -3854,6 +3949,9 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     private fun showSeekFeedbackChrome() {
+        if (isPictureInPictureActive) {
+            return
+        }
         seekFeedbackActive = true
         controlOverlayHiding = false
         cancelControlOverlayAutoHide()
@@ -3971,6 +4069,13 @@ class KinescopePlayerView @JvmOverloads constructor(
         if (kinescopePlayer?.kinescopePlayerOptions?.controls != true) {
             return
         }
+        // Before playback ever starts there is nothing to declutter: hiding
+        // the overlay also hides the centre play button (its child), leaving
+        // a poster with no affordance at all. The countdown starts with
+        // playback.
+        if (!hasStartedPlayback) {
+            return
+        }
         if (settingsMenuView?.isVisible == true || scrubbing) {
             return
         }
@@ -3988,7 +4093,7 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     private fun showControlOverlay(animated: Boolean) {
-        if (isPictureInPictureActive) {
+        if (isPictureInPictureActive || framePreviewActive) {
             return
         }
         val overlay = controlView ?: return
@@ -4453,7 +4558,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
 
     private fun restoreControlOverlayAfterCaptionsSearch() {
-        descriptionBlock?.isVisible = true
+        descriptionBlock?.isVisible = titleChromeEnabled
         updateTitles()
         ensureControlBarProgressChromeVisible()
         updatePlayPauseButton()

@@ -90,7 +90,7 @@ Via **kotlin-kinescope-player** (recommended; includes Shorts, player, and offli
 
 ```groovy
 dependencies {
-    implementation 'io.kinescope:kotlin-kinescope-player:0.1.7'
+    implementation 'io.kinescope:kotlin-kinescope-player:0.1.17'
 }
 ```
 

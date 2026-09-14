@@ -3,7 +3,7 @@
 Android SDK for [Kinescope](https://kinescope.io/) video: player, vertical Shorts feed, and offline downloads with DRM (Widevine) in a single dependency.
 
 ```groovy
-implementation 'io.kinescope:kotlin-kinescope-player:0.1.7'
+implementation 'io.kinescope:kotlin-kinescope-player:0.1.17'
 ```
 
 Published on **Maven Central** (`io.kinescope`). See [docs/installation.md](docs/installation.md).

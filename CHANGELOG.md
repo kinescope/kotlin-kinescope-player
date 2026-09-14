@@ -1,8 +1,20 @@
 # Changelog
 
-## [0.1.7] — 11.09.2026
-- **Maven Central** — canonical coordinates: `io.kinescope:kotlin-kinescope-player:0.1.6`; **JitPack is no longer supported** for new integrations (legacy `com.github.kinescope:...` pins remain documented so existing apps are not forced to break)
+## [0.1.17] — 14.09.2026
 
+Maven Central version **0.1.17** (skips 0.1.8–0.1.16 so those numbers are not reused after the former JitPack tag line).  
+Do not treat Maven Central `0.1.7` as equivalent to historical JitPack `0.1.7` / commit pins.
+
+### Fixed
+- **Player APIs restored after merge regression** — `titleChromeEnabled`, `setFramePreviewActive` (+ chrome suppression), poster Glide `fitCenter` / `showDefaultPoster` suppress path, and PiP+frame-preview gesture/chrome gates were dropped when resolving `KinescopePlayerView.kt` in favour of the Shorts branch; restored from `e72c3e3` / former `0.1.16` while keeping captions-search placement + safe-area insets
+- **PiP rebuffer chrome** — `isBufferingSpinnerVisible` stays false in PiP; `showSeekFeedbackChrome` gated
+- **Pre-start chrome** — control overlay auto-hide waits for `hasStartedPlayback`; loading spinner stays until `STATE_READY` (non-live)
+- **R8 / analytics** — `consumer-rules.pro` keeps `com.google.protobuf.GeneratedMessageLite` and `io.kinescope.sdk.analytics.proto.**`
+
+## [0.1.7] — 11.09.2026
+
+### Distribution
+- **Maven Central** — first Central publish of this Shorts/player line as `io.kinescope:kotlin-kinescope-player:0.1.7` (**note:** not the same content as historical JitPack tags named `0.1.7`)
 
 ### Fixed
 - **Demo Shorts progressive feed** — failed catalog items no longer stall ordered emission; later videos still reach the pager
