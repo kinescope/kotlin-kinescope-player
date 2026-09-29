@@ -2074,6 +2074,10 @@ class KinescopePlayerView @JvmOverloads constructor(
         if (shouldShowLiveInformer()) {
             return false
         }
+        // While casting, the local ExoPlayer is parked and never reaches READY.
+        if (isCastOverlayVisible) {
+            return false
+        }
         val player = localExoPlayer ?: return false
         if (!hasStartedPlayback && !isLiveState) {
             // Vimeo's loading pattern: the spinner doubles as the loading
@@ -2753,6 +2757,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         val compactExpanded = usesCompactOptionsChrome() && isOptionsBarExpanded
         castButton?.isVisible = showControls &&
             castSupported &&
+            castRouteAvailable &&
             options?.showCastButton == true &&
             (!usesCompactOptionsChrome() || compactExpanded)
     }
@@ -5855,6 +5860,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         castPlayPauseView?.setOnClickListener { toggleCastPlayback() }
         castStopView?.setOnClickListener { onStopCast() }
 
+        updateBuffering()
         refreshCastOverlay()
     }
 
@@ -5862,8 +5868,13 @@ class KinescopePlayerView @JvmOverloads constructor(
         if (!isCastOverlayVisible) return
         val player = activePlaybackPlayer ?: return
 
+        val finished = kinescopePlayer?.castPlaybackFinished?.invoke() == true
         castPlayPauseView?.setImageResource(
-            if (player.isPlaying) R.drawable.ic_pause else R.drawable.ic_play,
+            when {
+                finished -> R.drawable.ic_controls_rewind
+                player.isPlaying -> R.drawable.ic_pause
+                else -> R.drawable.ic_play
+            },
         )
 
         val duration = player.duration
@@ -5887,6 +5898,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         castOverlayView?.isVisible = false
         castPlayPauseView?.setOnClickListener(null)
         castStopView?.setOnClickListener(null)
+        updateBuffering()
     }
 
     private fun toggleCastPlayback() {

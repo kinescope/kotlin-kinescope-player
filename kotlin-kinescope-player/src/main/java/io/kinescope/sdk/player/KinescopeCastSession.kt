@@ -85,6 +85,7 @@ class KinescopeCastSession(
 
         registerMediaRouter(context)
         activity.lifecycle.addObserver(lifecycleObserver)
+        controller.resumeExistingSession()
     }
 
     private fun registerMediaRouter(context: CastContext) {
@@ -148,6 +149,11 @@ class KinescopeCastSession(
         videoPlayer.getVideo()?.toCastData()?.let { controller.load(it, positionMs) }
         videoPlayer.exoPlayer?.pause()
         videoPlayer.switchToCastPlayer(controller.castPlayer)
+        videoPlayer.castPlayHandler = { controller.play() }
+        videoPlayer.castPlaybackFinished = { controller.isRemotePlaybackFinished }
+        videoPlayer.castVideoChangedHandler = { video ->
+            video.toCastData()?.let { controller.load(it, 0L) }
+        }
         showCastOverlayOnAllViews()
         mainHandler.post(refreshRunnable)
     }
@@ -156,6 +162,9 @@ class KinescopeCastSession(
         mainHandler.removeCallbacks(refreshRunnable)
         val videoPlayer = player()
         val positionMs = videoPlayer.playbackPlayer?.currentPosition?.coerceAtLeast(0L) ?: 0L
+        videoPlayer.castPlayHandler = null
+        videoPlayer.castPlaybackFinished = null
+        videoPlayer.castVideoChangedHandler = null
         videoPlayer.switchToLocalPlayer()
         videoPlayer.exoPlayer?.seekTo(positionMs)
         if (resumeLocalAfterCast) {

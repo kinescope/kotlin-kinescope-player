@@ -58,6 +58,7 @@
                 android:layout_marginHorizontal="8dp"
                 android:layout_weight="1"
                 android:max="1000"
+                android:progressBackgroundTint="@android:color/white"
                 android:progressTint="@color/kinescope_primary_color"
                 android:thumbTint="@color/kinescope_primary_color" />
 

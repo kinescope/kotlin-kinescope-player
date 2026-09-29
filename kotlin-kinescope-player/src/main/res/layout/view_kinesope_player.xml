@@ -100,7 +100,6 @@
             android:elevation="16dp" />
 
         <include
-            android:id="@+id/kinescope_cast_overlay_container"
             layout="@layout/view_kinescope_cast_overlay"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
