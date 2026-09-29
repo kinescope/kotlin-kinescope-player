@@ -2,6 +2,8 @@
 
 Cast uses the Kinescope custom receiver (`KinescopeCastOptionsProvider` is merged from the library manifest). Requires Google Play services on the device.
 
+**Android TV as receiver** (SHIELD, Chromecast built-in TVs, Cast-enabled boxes): see [Android TV](android-tv.md).
+
 ## `KinescopeCastSession`
 
 ```kotlin
