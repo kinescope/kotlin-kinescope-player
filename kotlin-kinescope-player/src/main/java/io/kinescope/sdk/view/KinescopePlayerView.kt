@@ -499,12 +499,20 @@ class KinescopePlayerView @JvmOverloads constructor(
             findViewById<View?>(R.id.kinescope_progressive_subtitle_container)?.isVisible = false
             updatePlayPauseButton()
         } else {
-            findViewById<View?>(R.id.kinescope_progressive_subtitle_container)?.isVisible = true
+            // Do not flash captions over the poster before the first play.
+            if (hasStartedPlayback &&
+                trackController?.selectedSubtitleIndex != TrackController.SUBTITLES_OFF_ID
+            ) {
+                findViewById<View?>(R.id.kinescope_progressive_subtitle_container)?.isVisible = true
+            } else {
+                findViewById<View?>(R.id.kinescope_progressive_subtitle_container)?.isVisible = false
+            }
             subtitleView?.isVisible = false
             showControlOverlay(animated = false)
             updatePlayPauseButton()
             updateBuffering()
             applyVideoPoster()
+            applyProgressiveSubtitles()
         }
     }
 
@@ -739,6 +747,15 @@ class KinescopePlayerView @JvmOverloads constructor(
                     }
                 }
                 pendingCueGroup = null
+            }
+            // Buffer cues pre-start, but do not schedule paint / flash SubtitleView yet.
+            if (!hasStartedPlayback || framePreviewActive) {
+                subtitleView?.setCues(emptyList())
+                progressiveSubtitleOverlay?.clear()
+                stopSubtitleUpdates()
+                subtitleView?.isVisible = false
+                findViewById<View?>(R.id.kinescope_progressive_subtitle_container)?.isVisible = false
+                return
             }
             ensureSubtitleUpdatesRunning()
             applyProgressiveSubtitles()
@@ -987,6 +1004,8 @@ class KinescopePlayerView @JvmOverloads constructor(
         )
         progressiveSubtitleOverlay?.setOnEnsureUpdatesRunning { ensureSubtitleUpdatesRunning() }
         exoPlayerView?.subtitleView?.isVisible = false
+        subtitleView?.isVisible = false
+        findViewById<View?>(R.id.kinescope_progressive_subtitle_container)?.isVisible = false
 
         bufferingView = findViewById(R.id.view_buffering)
         bufferingView?.isVisible = false
@@ -4642,7 +4661,9 @@ class KinescopePlayerView @JvmOverloads constructor(
             subtitleView?.isVisible = false
             return
         }
-        if (trackController?.selectedSubtitleIndex != TrackController.SUBTITLES_OFF_ID) {
+        if (hasStartedPlayback &&
+            trackController?.selectedSubtitleIndex != TrackController.SUBTITLES_OFF_ID
+        ) {
             subtitleView?.isVisible = true
             applyProgressiveSubtitles()
         }
@@ -5102,7 +5123,6 @@ class KinescopePlayerView @JvmOverloads constructor(
 
     private fun applySubtitleStyle(controlsVisibleOverride: Boolean? = null) {
         val subtitleView = this.subtitleView ?: return
-        subtitleView.visibility = View.VISIBLE
         val controlsVisible = controlsVisibleOverride ?: (
             controlView?.isVisible == true && (controlView?.alpha ?: 0f) > 0f
             )
@@ -5184,14 +5204,22 @@ class KinescopePlayerView @JvmOverloads constructor(
             endMarginPx = endMarginPx,
         )
 
-        // Progressive overlay owns rendering; flashing cues onto SubtitleView when the control
-        // chrome appears causes a brief double-draw of the next caption.
-        if (shouldApplyProgressiveSubtitles()) {
+        // Progressive overlay owns rendering after playback starts. Before the first play
+        // (and in frame-preview), never paint cues — chrome updates used to flash SubtitleView
+        // for a frame because shouldApplyProgressiveSubtitles() is false pre-start.
+        if (!hasStartedPlayback || framePreviewActive) {
             subtitleView.setCues(emptyList())
+            subtitleView.visibility = View.INVISIBLE
+            findViewById<View?>(R.id.kinescope_progressive_subtitle_container)?.isVisible = false
+            progressiveSubtitleOverlay?.clear()
+        } else if (shouldApplyProgressiveSubtitles()) {
+            subtitleView.setCues(emptyList())
+            subtitleView.visibility = View.INVISIBLE
         } else {
+            subtitleView.visibility = View.VISIBLE
             pendingCueGroup?.let { cueGroup ->
                 subtitleView.setCues(cueGroup.cues)
-            }
+            } ?: subtitleView.setCues(emptyList())
         }
         applyScrubChapterTitleStyle()
     }
@@ -5391,6 +5419,9 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     private fun shouldApplyProgressiveSubtitles(): Boolean {
+        if (!hasStartedPlayback || framePreviewActive) {
+            return false
+        }
         if (trackController?.selectedSubtitleIndex == TrackController.SUBTITLES_OFF_ID) {
             return false
         }
@@ -5467,6 +5498,9 @@ class KinescopePlayerView @JvmOverloads constructor(
         if (videoSubtitlesHiddenForCaptionsSearch) {
             return
         }
+        if (!hasStartedPlayback || framePreviewActive) {
+            return
+        }
         if (trackController?.selectedSubtitleIndex == TrackController.SUBTITLES_OFF_ID) {
             return
         }
@@ -5497,6 +5531,16 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     private fun applyProgressiveSubtitles() {
+        // Keep cues buffered (pendingCueGroup) so the first play can paint immediately,
+        // but never render over the pre-start poster / frame-preview surface.
+        if (!hasStartedPlayback || framePreviewActive) {
+            subtitleView?.setCues(emptyList())
+            progressiveSubtitleOverlay?.clear()
+            stopSubtitleUpdates()
+            subtitleView?.isVisible = false
+            findViewById<View?>(R.id.kinescope_progressive_subtitle_container)?.isVisible = false
+            return
+        }
         if (areVideoSubtitlesSuppressed()) {
             // Keep current overlay pixels while scrub fade-out runs; do not hard-clear.
             subtitleView?.setCues(emptyList())
