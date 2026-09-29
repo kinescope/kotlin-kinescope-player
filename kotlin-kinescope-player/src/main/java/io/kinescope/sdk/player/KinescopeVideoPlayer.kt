@@ -137,8 +137,10 @@ class KinescopeVideoPlayer(
 
         exoPlayer?.setMediaSource(mediaSource)
         applyPlaybackOptions()
-        exoPlayer?.playWhenReady = kinescopePlayerOptions.autoplay
+        val castHandler = castVideoChangedHandler.takeIf { isCasting }
+        exoPlayer?.playWhenReady = kinescopePlayerOptions.autoplay && castHandler == null
         exoPlayer?.prepare()
+        castHandler?.invoke(kinescopeVideo)
     }
 
     /**
@@ -320,8 +322,18 @@ class KinescopeVideoPlayer(
         })
     }
 
+    /** Set by [KinescopeCastSession] while casting; replays finished media on the receiver. */
+    internal var castPlayHandler: (() -> Unit)? = null
+
+    /** Set by [KinescopeCastSession] while casting; sends a newly loaded video to the receiver. */
+    internal var castVideoChangedHandler: ((KinescopeVideo) -> Unit)? = null
+
+    /** Set by [KinescopeCastSession] while casting; the cast overlay shows replay when true. */
+    internal var castPlaybackFinished: (() -> Boolean)? = null
+
     fun play() {
-        playbackPlayer?.play()
+        val castPlay = castPlayHandler
+        if (isCasting && castPlay != null) castPlay() else playbackPlayer?.play()
         KinescopeLogger.log(KinescopeLoggerLevel.PLAYER, "Start playing")
     }
 

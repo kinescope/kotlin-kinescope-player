@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.18] — 29.09.2026
+
+### Added
+- **Docs** — [Android TV](docs/android-tv.md): casting from the phone/tablet SDK to Android TV / Google Cast receivers (e.g. NVIDIA SHIELD)
+
+### Fixed
+- **Pre-start subtitles** — progressive / `SubtitleView` cues stay hidden until `hasStartedPlayback` (no flash over the poster)
+- **Cast overlay never shown** — `android:id` on the `<include>` renamed the overlay root, so `findViewById(R.id.kinescope_cast_overlay)` was `null`
+- **Cast receiver load** — manifests are sent as `application/dash+xml` / `application/x-mpegurl` (was `video/mp4`); HLS is flagged as fMP4 (CMAF); the Widevine license is sent only for DRM videos (from `drm.widevine.licenseUrl`), including HLS
+- **Cast overlay chrome** — no local buffering spinner over the overlay; seek bar track visible; replay icon after the receiver finishes, and play reloads finished media
+- **Cast playlist** — a video loaded while casting is sent to the receiver instead of the parked local player
+- **Cast session resume** — an already connected session switches the screen to casting on `attach()`
+- **Cast button** — hidden while no Cast device is reachable
+
 ## [0.1.17] — 14.09.2026
 
 Maven Central version **0.1.17** (skips 0.1.8–0.1.16 so those numbers are not reused after the former JitPack tag line).  

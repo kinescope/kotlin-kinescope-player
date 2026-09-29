@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "io.kinescope"
-version = "0.1.17"
+version = "0.1.18"
 
 android {
     namespace = "io.kinescope.sdk.shorts"
@@ -74,7 +74,7 @@ mavenPublishing {
     // Explicit Central Portal — default in 0.30.0 is legacy OSSRH (402 on stagingProfiles).
     publishToMavenCentral(com.vanniktech.maven.publish.SonatypeHost.CENTRAL_PORTAL)
     signAllPublications()
-    coordinates("io.kinescope", "kotlin-kinescope-shorts", "0.1.17")
+    coordinates("io.kinescope", "kotlin-kinescope-shorts", "0.1.18")
     pom {
         name.set("kotlin-kinescope-shorts")
         description.set("Kinescope Shorts: vertical video feed for Android")

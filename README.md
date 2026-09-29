@@ -3,7 +3,7 @@
 Android SDK for [Kinescope](https://kinescope.io/) video: player, vertical Shorts feed, and offline downloads with DRM (Widevine) in a single dependency.
 
 ```groovy
-implementation 'io.kinescope:kotlin-kinescope-player:0.1.17'
+implementation 'io.kinescope:kotlin-kinescope-player:0.1.18'
 ```
 
 Published on **Maven Central** (`io.kinescope`). See [docs/installation.md](docs/installation.md).
@@ -34,6 +34,7 @@ Published on **Maven Central** (`io.kinescope`). See [docs/installation.md](docs
 | Fullscreen | [docs/fullscreen.md](docs/fullscreen.md) |
 | Picture-in-Picture | [docs/picture-in-picture.md](docs/picture-in-picture.md) |
 | Chromecast | [docs/chromecast.md](docs/chromecast.md) |
+| Android TV (Cast to TV) | [docs/android-tv.md](docs/android-tv.md) |
 | **Player chrome** (icons, seek bar, gestures) | [docs/player-chrome.md](docs/player-chrome.md) |
 | **Settings menu** (gear → Quality, Speed, Audio…) | [docs/settings-menu.md](docs/settings-menu.md) |
 | Subtitles & captions search | [docs/subtitles-and-settings.md](docs/subtitles-and-settings.md) |

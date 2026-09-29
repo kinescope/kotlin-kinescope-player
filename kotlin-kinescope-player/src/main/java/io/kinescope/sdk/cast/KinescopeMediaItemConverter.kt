@@ -6,6 +6,8 @@ import androidx.media3.cast.DefaultMediaItemConverter
 import androidx.media3.cast.MediaItemConverter
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
+import com.google.android.gms.cast.HlsSegmentFormat
+import com.google.android.gms.cast.HlsVideoSegmentFormat
 import com.google.android.gms.cast.MediaInfo
 import com.google.android.gms.cast.MediaMetadata
 import com.google.android.gms.cast.MediaQueueItem
@@ -49,9 +51,21 @@ class KinescopeMediaItemConverter : MediaItemConverter {
             .setContentUrl(data.manifestUrl)
             .setMetadata(metadata)
             .setCustomData(customData)
+            .apply {
+                // Kinescope HLS is CMAF; the receiver assumes MPEG-TS segments unless told otherwise.
+                if (data.contentType == HLS_CONTENT_TYPE) {
+                    setHlsSegmentFormat(HlsSegmentFormat.FMP4)
+                    setHlsVideoSegmentFormat(HlsVideoSegmentFormat.FMP4)
+                }
+            }
             .build()
 
         return MediaQueueItem.Builder(mediaInfo).build()
+    }
+
+    companion object {
+        const val DASH_CONTENT_TYPE = "application/dash+xml"
+        const val HLS_CONTENT_TYPE = "application/x-mpegurl"
     }
 
     override fun toMediaItem(mediaQueueItem: MediaQueueItem): MediaItem {

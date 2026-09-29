@@ -26,9 +26,20 @@ class KinescopeCastController(
     /** Called when Cast session ends. */
     var onSessionUnavailable: (() -> Unit)? = null
 
+    private var lastData: KinescopeCastData? = null
+    private var hasStartedRemotePlayback = false
+    private var remotePlaybackFinished = false
+
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) = syncState()
-        override fun onPlaybackStateChanged(playbackState: Int) = syncState()
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            when (playbackState) {
+                Player.STATE_BUFFERING, Player.STATE_READY -> hasStartedRemotePlayback = true
+                Player.STATE_ENDED -> remotePlaybackFinished = true
+                Player.STATE_IDLE -> if (hasStartedRemotePlayback) remotePlaybackFinished = true
+            }
+            syncState()
+        }
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) = syncState()
     }
 
@@ -49,15 +60,30 @@ class KinescopeCastController(
         })
     }
 
+    /** Replays [onSessionAvailable] for a session that was already connected before this controller existed. */
+    fun resumeExistingSession() {
+        if (!castPlayer.isCastSessionAvailable || state.isCasting) return
+        state = state.copy(isCasting = true, deviceName = deviceName())
+        publishState()
+        onSessionAvailable?.invoke()
+    }
+
     fun setStateListener(listener: ((KinescopeCastState) -> Unit)?) {
         stateListener = listener
         listener?.invoke(state)
     }
 
+    /** True once the receiver finished (or dropped) the loaded media. */
+    val isRemotePlaybackFinished: Boolean
+        get() = remotePlaybackFinished
+
     val currentState: KinescopeCastState
         get() = state
 
     fun load(data: KinescopeCastData, startPositionMs: Long) {
+        lastData = data
+        hasStartedRemotePlayback = false
+        remotePlaybackFinished = false
         val item = MediaItem.Builder()
             .setUri(data.manifestUrl)
             .setTag(data)
@@ -65,6 +91,16 @@ class KinescopeCastController(
         castPlayer.setMediaItem(item, startPositionMs)
         castPlayer.playWhenReady = true
         castPlayer.prepare()
+    }
+
+    /** The receiver unloads media once it finishes, so a plain play() is a no-op there. */
+    fun play() {
+        val data = lastData
+        if (remotePlaybackFinished && data != null) {
+            load(data, 0L)
+        } else {
+            castPlayer.play()
+        }
     }
 
     fun playPause() {
