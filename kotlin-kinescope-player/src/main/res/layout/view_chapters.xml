@@ -8,6 +8,7 @@
         android:id="@+id/chapters_popup_container"
         android:layout_width="@dimen/kinescope_settings_popup_width"
         android:layout_height="wrap_content"
+        android:layout_gravity="end|bottom"
         android:background="@drawable/bg_options_rect"
         android:clipChildren="true"
         android:clipToPadding="true"

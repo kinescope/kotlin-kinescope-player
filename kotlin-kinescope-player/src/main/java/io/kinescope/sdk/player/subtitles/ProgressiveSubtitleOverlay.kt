@@ -32,6 +32,8 @@ internal class ProgressiveSubtitleOverlay(
     private var styledTypeface: Typeface = Typeface.DEFAULT
     private var textMaxWidthPx = 0
     private var lastResolvedParentWidthPx = 0
+    private var lastParentWidthPx = 0
+    private var lastParentHeightPx = 0
     private var lastBottomPaddingPx = -1
     private var bottomMarginAnimator: ValueAnimator? = null
     private var appliedStyle = SubtitleStyle()
@@ -57,6 +59,11 @@ internal class ProgressiveSubtitleOverlay(
         isLandscapeFullscreen: Boolean = false,
         startMarginPx: Int? = null,
         endMarginPx: Int? = null,
+        /**
+         * Hosts that resize the player every frame (video sheet drag) must pass
+         * false — a 200ms margin animator fights the gesture and the sheet feels stuck.
+         */
+        animateBottomMargin: Boolean = true,
     ) {
         appliedStyle = style
         val roboto = ResourcesCompat.getFont(container.context, R.font.roboto_regular)
@@ -96,6 +103,15 @@ internal class ProgressiveSubtitleOverlay(
             },
         )
 
+        val parent = container.parent as? View
+        val parentWidthPx = parent?.width ?: 0
+        val parentHeightPx = parent?.height ?: 0
+        val parentSizeChanged =
+            (lastParentWidthPx > 0 || lastParentHeightPx > 0) &&
+                (parentWidthPx != lastParentWidthPx || parentHeightPx != lastParentHeightPx)
+        lastParentWidthPx = parentWidthPx
+        lastParentHeightPx = parentHeightPx
+
         (container.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
             if (!hasVisibleContent()) {
                 params.width = FrameLayout.LayoutParams.WRAP_CONTENT
@@ -110,9 +126,12 @@ internal class ProgressiveSubtitleOverlay(
             container.layoutParams = params
         }
 
-        val animateBottomMargin = lastBottomPaddingPx >= 0 && lastBottomPaddingPx != bottomPaddingPx
+        val shouldAnimateBottomMargin = animateBottomMargin &&
+            !parentSizeChanged &&
+            lastBottomPaddingPx >= 0 &&
+            lastBottomPaddingPx != bottomPaddingPx
         lastBottomPaddingPx = bottomPaddingPx
-        setBottomMargin(bottomPaddingPx, animate = animateBottomMargin)
+        setBottomMargin(bottomPaddingPx, animate = shouldAnimateBottomMargin)
         // Reposition immediately so overlay toggles are visible even if size is unchanged.
         if (hasVisibleContent() && isLayoutReady()) {
             syncLayoutNow()
@@ -373,10 +392,14 @@ internal class ProgressiveSubtitleOverlay(
         val params = container.layoutParams as? FrameLayout.LayoutParams ?: return
         val currentPx = params.bottomMargin
         if (currentPx == targetPx) {
+            // Cancel a stale chrome animator so it cannot fight sheet-drag relayout.
+            bottomMarginAnimator?.cancel()
+            bottomMarginAnimator = null
             syncLayoutNow()
             return
         }
         bottomMarginAnimator?.cancel()
+        bottomMarginAnimator = null
         if (!animate) {
             params.bottomMargin = targetPx
             container.layoutParams = params

@@ -1,7 +1,6 @@
 package io.kinescope.sdk.view
 
 import android.app.Activity
-import android.graphics.Rect
 import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
@@ -29,7 +28,8 @@ import java.time.Duration
 /**
  * How the view learns where the system safe area ends: window insets plus
  * its own position on screen. Observed through the top-docked captions search
- * panel, which clears that area.
+ * field, which clears that area via content padding while the panel paints
+ * to the player top.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], qualifiers = "w360dp-h800dp-xxhdpi")
@@ -83,7 +83,11 @@ class KinescopePlayerViewInsetsTest {
         assertEquals(STATUS_BAR_PX, hostInsets!!.getInsets(WindowInsetsCompat.Type.statusBars()).top)
         val expected = expectedSafeInset(STATUS_BAR_PX)
         assertTrue("test needs a real overlap", expected > 0)
-        assertEquals("panel should clear the status bar", expected, panelTop())
+        assertEquals("panel paints to the top edge", 0, panelTop())
+        assertTrue(
+            "search field should clear the status bar",
+            searchFieldTop() >= expected,
+        )
     }
 
     /**
@@ -93,14 +97,18 @@ class KinescopePlayerViewInsetsTest {
     @Test
     fun topPlacement_followsTheViewsScreenPosition() {
         dispatchTopInsets(statusBar = STATUS_BAR_PX)
-        val before = panelTop()
-        assertTrue("test needs a real overlap", before > SHIFT_PX)
+        val before = searchFieldTop()
+        val beforeSafe = expectedSafeInset(STATUS_BAR_PX)
+        assertTrue("test needs a real overlap", beforeSafe > SHIFT_PX)
+        assertTrue("field should clear the bar", before >= beforeSafe)
 
         container.translationY = SHIFT_PX.toFloat()
         pumpFrames(FRAMES_TO_SETTLE)
 
-        assertEquals(expectedSafeInset(STATUS_BAR_PX), panelTop())
-        assertEquals(before - SHIFT_PX, panelTop())
+        val afterSafe = expectedSafeInset(STATUS_BAR_PX)
+        assertEquals(0, panelTop())
+        assertTrue(searchFieldTop() >= afterSafe)
+        assertEquals(before - SHIFT_PX, searchFieldTop())
     }
 
     /**
@@ -120,13 +128,15 @@ class KinescopePlayerViewInsetsTest {
         val statusBar = screenY() - SHIFT_PX / 2
         dispatchTopInsets(statusBar, through = container)
         assertEquals("band should start clear of the bar", 0, panelTop())
+        assertEquals("field needs no safe pad while clear", gapPx(), searchFieldTop())
 
         container.translationY = -SHIFT_PX.toFloat()
         pumpFrames(FRAMES_TO_SETTLE)
 
         val expected = expectedSafeInset(statusBar)
         assertTrue("test needs a real overlap", expected > 0)
-        assertEquals("panel should clear the status bar", expected, panelTop())
+        assertEquals("panel still paints to the top edge", 0, panelTop())
+        assertTrue("search field should clear the status bar", searchFieldTop() >= expected)
         assertEquals("title chrome should clear the status bar", expected, titleChromeOverlap())
     }
 
@@ -158,17 +168,22 @@ class KinescopePlayerViewInsetsTest {
 
     private fun screenY(): Int = IntArray(2).also { view.getLocationOnScreen(it) }[1]
 
-    private fun panelTop(): Int {
-        val panel = view.findViewById<View>(R.id.captions_search_panel)
+    private fun gapPx(): Int = (4f * view.resources.displayMetrics.density).toInt()
+
+    private fun panelTop(): Int = topInView(R.id.captions_search_panel)
+
+    private fun searchFieldTop(): Int = topInView(R.id.captions_search_input_container)
+
+    private fun topInView(id: Int): Int {
+        val target = view.findViewById<View>(id)
         var top = 0
-        var node: View = panel
+        var node: View = target
         while (node !== view) {
             top += node.top
             node = node.parent as View
         }
-        val bounds = Rect(0, top, panel.width, top + panel.height)
-        assertTrue("panel not laid out", !bounds.isEmpty)
-        return bounds.top
+        assertTrue("view not laid out", target.width > 0 || target.height > 0)
+        return top
     }
 
     private fun pumpFrames(count: Int) {

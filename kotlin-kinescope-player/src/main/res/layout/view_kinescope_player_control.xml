@@ -246,7 +246,6 @@
                         android:id="@+id/kinescope_chapters"
                         style="@style/KinescopeMediaButton"
                         android:contentDescription="@string/player_chapters"
-                        android:layout_marginStart="@dimen/kinescope_control_section_gap"
                         android:src="@drawable/ic_chapters"
                         android:visibility="gone" />
 

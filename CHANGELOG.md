@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.19] — 16.10.2026
+
+### Added
+- **Disable subtitles** — `KinescopePlayerView.disableSubtitles()` turns the text track off, clears the overlay and keeps subtitles off on the next video until the viewer picks a track
+- **Enable subtitles** — `KinescopePlayerView.enableSubtitles()` clears the host-off flag set by `disableSubtitles()` and selects the first track
+
+### Fixed
+- **Captions during sheet drag** — subtitle margin is not animated while the player is resized every frame, so a Compose video sheet no longer sticks; unused vertical drags pass through to the host. The captions search panel paints to the top edge and pads its content for the status bar, and `openCaptionsSearchIfHit` opens it from a forwarded tap
+- **Portrait captions** — bottom offset follows the video, not the window. Rotating a tablet no longer lifts captions; in a portrait video they sit just above the control bar only while it is showing
+- **Control icons** — the gap before the trailing icon cluster stays stable when a tablet rotates, including between the seek bar and the first visible button
+- **Chapters popup** — the menu stays transparent until it is anchored, so it no longer flashes at the top-start corner
+
 ## [0.1.18] — 29.09.2026
 
 ### Added
