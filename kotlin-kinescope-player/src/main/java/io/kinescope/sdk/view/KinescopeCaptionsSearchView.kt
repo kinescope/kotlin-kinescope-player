@@ -62,6 +62,9 @@ class KinescopeCaptionsSearchView @JvmOverloads constructor(
     private var isPortraitFullscreenMode = false
     private var isPinnedToTop = false
 
+    /** -1 = layout default (16dp); otherwise panel [paddingTop] for safe-area content. */
+    private var topContentInsetPx: Int = -1
+
     var onDismiss: (() -> Unit)? = null
     var onSeekToMs: ((Long) -> Unit)? = null
     var onVisibilityChanged: ((Boolean) -> Unit)? = null
@@ -153,24 +156,52 @@ class KinescopeCaptionsSearchView @JvmOverloads constructor(
             return
         }
         isPinnedToTop = pinned
+        if (!pinned) {
+            topContentInsetPx = -1
+        }
         applyModeLayout()
+    }
+
+    /**
+     * Top padding inside the panel so the search field clears the status bar /
+     * cutout while the panel background still paints to the player’s top edge
+     * (no empty black strip above a top-docked panel).
+     */
+    internal fun setTopContentInset(px: Int) {
+        val next = px.coerceAtLeast(0)
+        if (topContentInsetPx == next) {
+            return
+        }
+        topContentInsetPx = next
+        applyPanelPadding(sideInset = currentSideInset())
+    }
+
+    private fun currentSideInset(): Int = when {
+        isFullscreenMode && isPortraitFullscreenMode -> {
+            resources.getDimensionPixelSize(
+                R.dimen.kinescope_captions_search_fullscreen_side_inset_portrait,
+            )
+        }
+        isFullscreenMode -> {
+            resources.getDimensionPixelSize(R.dimen.kinescope_captions_search_fullscreen_side_inset)
+        }
+        else -> {
+            resources.getDimensionPixelSize(R.dimen.kinescope_mobile_control_margin_horizontal)
+        }
+    }
+
+    private fun applyPanelPadding(sideInset: Int) {
+        val top = if (topContentInsetPx >= 0) {
+            topContentInsetPx
+        } else {
+            (DEFAULT_PANEL_PADDING_TOP_DP * resources.displayMetrics.density).toInt()
+        }
+        panel.setPaddingRelative(sideInset, top, sideInset, panel.paddingBottom)
     }
 
     private fun applyModeLayout() {
         val fills = isFullscreenLayout()
-        val sideInset = when {
-            isFullscreenMode && isPortraitFullscreenMode -> {
-                resources.getDimensionPixelSize(
-                    R.dimen.kinescope_captions_search_fullscreen_side_inset_portrait,
-                )
-            }
-            isFullscreenMode -> {
-                resources.getDimensionPixelSize(R.dimen.kinescope_captions_search_fullscreen_side_inset)
-            }
-            else -> {
-                resources.getDimensionPixelSize(R.dimen.kinescope_mobile_control_margin_horizontal)
-            }
-        }
+        val sideInset = currentSideInset()
 
         if (layoutParams is FrameLayout.LayoutParams) {
             updateLayoutParams<FrameLayout.LayoutParams> {
@@ -213,12 +244,7 @@ class KinescopeCaptionsSearchView @JvmOverloads constructor(
             panel.layoutParams = params
         }
 
-        panel.setPaddingRelative(
-            sideInset,
-            panel.paddingTop,
-            sideInset,
-            panel.paddingBottom,
-        )
+        applyPanelPadding(sideInset)
 
         val listParams = listView.layoutParams as? LinearLayout.LayoutParams ?: return
         if (fills) {
@@ -394,4 +420,8 @@ class KinescopeCaptionsSearchView @JvmOverloads constructor(
             connection.disconnect()
         }
     }.getOrNull()
+
+    private companion object {
+        const val DEFAULT_PANEL_PADDING_TOP_DP = 16f
+    }
 }

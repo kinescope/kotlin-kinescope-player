@@ -147,7 +147,10 @@ class KinescopePlayerViewCaptionsSearchPlacementTest {
         assertPinnedToTop(expectedTop = expectedTop)
     }
 
-    /** Edge-to-edge: the top edge is under the status bar and the cutout — the panel clears both. */
+    /**
+     * Edge-to-edge: the panel background docks to the player top; the search
+     * field clears the status bar / cutout via content padding (no empty strip).
+     */
     @Test
     fun topPlacement_clearsSystemSafeArea() {
         view.captionsSearchPlacement = KinescopeCaptionsSearchPlacement.TOP
@@ -157,10 +160,11 @@ class KinescopePlayerViewCaptionsSearchPlacementTest {
 
         val safeInset = expectedSafeInset(CUTOUT_PX)
         assertTrue("test needs a real overlap", safeInset > 0)
-        assertPinnedToTop(expectedTop = safeInset)
+        assertPinnedToTop(expectedTop = 0)
+        assertInputClearsSafeArea(minTop = safeInset)
     }
 
-    /** The host draws its own header over the band: its inset stacks on the safe area. */
+    /** The host draws its own header over the band: margin for host, padding for safe area. */
     @Test
     fun topPlacement_addsHostInsetOnTopOfSafeArea() {
         view.captionsSearchPlacement = KinescopeCaptionsSearchPlacement.TOP
@@ -171,7 +175,28 @@ class KinescopePlayerViewCaptionsSearchPlacementTest {
 
         val safeInset = expectedSafeInset(STATUS_BAR_PX)
         assertTrue("test needs a real overlap", safeInset > 0)
-        assertPinnedToTop(expectedTop = safeInset + HOST_INSET_PX)
+        assertPinnedToTop(expectedTop = HOST_INSET_PX)
+        assertInputClearsSafeArea(minTop = HOST_INSET_PX + safeInset)
+    }
+
+    /**
+     * Short band under a raised sheet: a host inset that would leave no room
+     * for the search field is clamped so the panel still ends at the control bar.
+     */
+    @Test
+    fun topPlacement_clampsHostInsetOnShortBand() {
+        view.layoutParams = FrameLayout.LayoutParams(WIDTH_PX, SHORT_BAND_PX)
+        view.captionsSearchPlacement = KinescopeCaptionsSearchPlacement.TOP
+        view.captionsSearchTopInset = SHORT_BAND_PX
+        showSearch()
+
+        val panel = bounds(R.id.captions_search_panel)
+        assertFalse("panel not laid out", panel.isEmpty)
+        assertTrue(
+            "inset should clamp below the full band height",
+            panel.top < SHORT_BAND_PX,
+        )
+        assertPanelEndsAtControlBar()
     }
 
     @Test
@@ -351,11 +376,21 @@ class KinescopePlayerViewCaptionsSearchPlacementTest {
         view.captionsSearchPlacement = KinescopeCaptionsSearchPlacement.TOP
         showSearch()
         dispatchTopInsets(statusBar = STATUS_BAR_PX)
-        val expected = expectedSafeInset(STATUS_BAR_PX)
-        assertTrue("test needs a real overlap", expected > 0)
-        assertPinnedToTop(expectedTop = expected)
+        val safeInset = expectedSafeInset(STATUS_BAR_PX)
+        assertTrue("test needs a real overlap", safeInset > 0)
+        assertPinnedToTop(expectedTop = 0)
+        assertInputClearsSafeArea(minTop = safeInset)
         knockPinOut()
-        return expected
+        return 0
+    }
+
+    private fun assertInputClearsSafeArea(minTop: Int) {
+        val input = bounds(R.id.captions_search_input_container)
+        assertFalse("search field not laid out", input.isEmpty)
+        assertTrue(
+            "search field should clear the safe area (top=$minTop, was ${input.top})",
+            input.top >= minTop,
+        )
     }
 
     private fun searchTopMargin(): Int = (search().layoutParams as ViewGroup.MarginLayoutParams).topMargin
@@ -466,6 +501,9 @@ class KinescopePlayerViewCaptionsSearchPlacementTest {
 
         /** Sheet dragged down — the band well taller than the fixed 280 dp list. */
         const val TALL_BAND_PX = 2100
+
+        /** Sheet raised — barely taller than the control bar + search field. */
+        const val SHORT_BAND_PX = 360
 
         // Larger than the decor offset of the view on this screen, so they really overlap.
         const val STATUS_BAR_PX = 300

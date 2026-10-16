@@ -81,8 +81,11 @@ class KinescopeChaptersView(
 
         isHidingPopup = false
         isVisible = true
+        // Stay transparent until positionPopupWithinBounds — after dismiss the
+        // popup resets to margins (0,0) / top-start, so an opaque first frame
+        // flashes on the left before the post{} re-anchors it to the trailing edge.
+        binding.chaptersPopupContainer.alpha = 0f
         binding.chaptersPopupContainer.isVisible = true
-        binding.chaptersPopupContainer.alpha = 1f
         post { showPopupWhenReady() }
     }
 
@@ -96,6 +99,7 @@ class KinescopeChaptersView(
         }
         rebuildList()
         positionPopupWithinBounds()
+        binding.chaptersPopupContainer.alpha = 1f
     }
 
 

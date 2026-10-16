@@ -17,6 +17,7 @@ import android.view.GestureDetector
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.view.WindowInsets
@@ -228,8 +229,9 @@ class KinescopePlayerView @JvmOverloads constructor(
         /** Hard cap so tall phone screens never produce billboard-sized captions. */
         private const val SUBTITLE_MAX_TEXT_SIZE_SP = 18f
         private const val SUBTITLE_MAX_TEXT_SIZE_FULLSCREEN_SP = 17f
-        private const val TABLET_SMALLEST_WIDTH_DP = 600
         private const val LEGACY_CUSTOM_BUTTON_ID = "legacy_custom"
+        /** Breathing room under the status bar inside a top-docked search panel. */
+        private const val TOP_DOCKED_PANEL_GAP_DP = 4f
         private val optionsBarAnimationInterpolator = DecelerateInterpolator()
         private val timeDurationToggleInterpolator = FastOutSlowInInterpolator()
     }
@@ -293,6 +295,11 @@ class KinescopePlayerView @JvmOverloads constructor(
             if (isPictureInPictureActive || framePreviewActive) {
                 return true
             }
+            // Captions search already opened on tap-up — don't toggle chrome on top.
+            if (captionsSearchOpenedOnTapUp) {
+                captionsSearchOpenedOnTapUp = false
+                return true
+            }
             KinescopeLogger.log(KinescopeLoggerLevel.PLAYER_VIEW, "single tap confirmed")
             if (tryOpenCaptionsSearchAt(e.x, e.y)) {
                 return true
@@ -303,12 +310,28 @@ class KinescopePlayerView @JvmOverloads constructor(
 
         override fun onSingleTapUp(e: MotionEvent): Boolean {
             KinescopeLogger.log(KinescopeLoggerLevel.PLAYER_VIEW, "single tap up")
+            if (isPictureInPictureActive || framePreviewActive) {
+                return super.onSingleTapUp(e)
+            }
+            // Open captions search immediately — waiting for onSingleTapConfirmed
+            // (double-tap timeout) feels like "tap doesn't register first time".
+            if (tryOpenCaptionsSearchAt(e.x, e.y)) {
+                captionsSearchOpenedOnTapUp = true
+                return true
+            }
             return super.onSingleTapUp(e)
         }
     }
 
     var onFullscreenButtonCallback: (() -> Unit)? = null
     var onPictureInPictureButtonCallback: (() -> Unit)? = null
+
+    /**
+     * Host chrome drawn over the player (back / overflow) should clear while
+     * captions search is open — otherwise a top-docked panel stays parked under
+     * those buttons and cannot rise with a shrinking band.
+     */
+    var onCaptionsSearchVisibilityChanged: ((Boolean) -> Unit)? = null
     /**
      * Invoked when the playing video aspect changes.
      * `true` = portrait / vertical (height > width). Use with [KinescopeContentOrientation].
@@ -450,8 +473,23 @@ class KinescopePlayerView @JvmOverloads constructor(
             field = value
         }
 
+    /**
+     * Hosts with a Compose video sheet attach [Modifier.draggable] on/around this
+     * view. We must not claim unused vertical moves — returning true on every
+     * touch (historical default) left the sheet stuck, especially with captions
+     * covering the seam where users swipe.
+     */
+    private var touchDownX = 0f
+    private var touchDownY = 0f
+    private var verticalSheetPassThrough = false
+    private var playerOwnsTouchStream = false
+    /** Captions search opened in [onSingleTapUp] — skip duplicate work in confirmed. */
+    private var captionsSearchOpenedOnTapUp = false
+
     private var hasStartedPlayback = false
     private var initialSubtitlesConfigured = false
+    /** Host called [disableSubtitles]; don't auto-pick the first track on the next video. */
+    private var subtitlesDisabledByHost = false
     /** Ensures the control overlay is shown once per player attach when [controls] is enabled. */
     private var controlOverlayPresentedForCurrentPlayer = false
     private var scrubbing = false
@@ -547,12 +585,12 @@ class KinescopePlayerView @JvmOverloads constructor(
      * by every re-sync of the panel: fullscreen toggles, content orientation
      * changes, view switches, resizes.
      *
-     * A top-docked panel clears the system safe area at the top (status bar,
-     * display cutout) on its own; [captionsSearchTopInset] adds the host's own
-     * chrome on top of that. While it is up, scrubbing keeps the scrub hint
-     * header and the control overlay under it — they would draw over the
-     * search field otherwise; both come back if the panel closes or the
-     * placement changes mid-scrub.
+     * A top-docked panel paints under the status bar / cutout and pads its
+     * content to clear them; [captionsSearchTopInset] is only the host's own
+     * chrome (e.g. a back row) as top margin. While it is up, scrubbing keeps
+     * the scrub hint header and the control overlay under it — they would draw
+     * over the search field otherwise; both come back if the panel closes or
+     * the placement changes mid-scrub.
      */
     var captionsSearchPlacement: KinescopeCaptionsSearchPlacement =
         KinescopeCaptionsSearchPlacement.BOTTOM
@@ -564,11 +602,11 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
 
     /**
-     * Extra top inset, in px, for a panel docked to the top
+     * Extra top margin, in px, for a panel docked to the top
      * ([KinescopeCaptionsSearchPlacement.TOP]) — the host's own header drawn
-     * over the top of the player band. Added on top of the system safe area,
-     * which the panel clears on its own. Ignored for the bottom placement and
-     * in fullscreen. Negative values are clamped to 0.
+     * over the top of the player band. System safe area is content padding
+     * inside the panel (background still fills to the top edge). Ignored for
+     * the bottom placement and in fullscreen. Negative values are clamped to 0.
      */
     var captionsSearchTopInset: Int = 0
         set(value) {
@@ -1167,6 +1205,7 @@ class KinescopePlayerView @JvmOverloads constructor(
                 restoreControlOverlayAfterCaptionsSearch()
             }
             syncScrubChromePresentation()
+            onCaptionsSearchVisibilityChanged?.invoke(visible)
         }
 
         chaptersMenuView = findViewById(R.id.chapters_menu)
@@ -1204,7 +1243,9 @@ class KinescopePlayerView @JvmOverloads constructor(
             val heightChanged = bottom - top != oldBottom - oldTop
             if ((widthChanged || heightChanged) && width > 0 && height > 0) {
                 syncCaptionsSearchFullscreenMode()
-                applySubtitleStyle()
+                // Sheet hosts resize this view every drag frame — never animate
+                // caption margins here or the gesture fights a 200ms animator.
+                applySubtitleStyle(animateCaptionBottomMargin = false)
             }
         }
         setUIListeners()
@@ -2236,8 +2277,11 @@ class KinescopePlayerView @JvmOverloads constructor(
         if (isVideoFullscreen) {
             return false
         }
-        val widthDp = getEffectivePlayerWidthPx() / resources.displayMetrics.density
-        return widthDp <= resources.getDimension(R.dimen.kinescope_mobile_layout_max_width)
+        // Compare px to px. getDimension(…dp) already returns pixels; dividing
+        // only the view width by density (legacy) mixed dp with px and flipped
+        // mobile/wide chrome on tablet rotate at some densities (e.g. xhdpi).
+        return getEffectivePlayerWidthPx() <=
+            resources.getDimensionPixelSize(R.dimen.kinescope_mobile_layout_max_width)
     }
 
     private fun usesGradientChrome(): Boolean {
@@ -2454,7 +2498,9 @@ class KinescopePlayerView @JvmOverloads constructor(
         timeBar?.translationY = 0f
 
         (buttonsContainer?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
-            params.marginStart = 0
+            // Gap between seek bar and the trailing icon cluster (first strip
+            // button itself stays marginStart=0 relative to this container).
+            params.marginStart = sectionGap
             buttonsContainer?.layoutParams = params
         }
 
@@ -2464,34 +2510,6 @@ class KinescopePlayerView @JvmOverloads constructor(
                 params.weight = 0f
             }
             optionsExpandableStrip?.layoutParams = params
-        }
-
-        (optionsButton?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
-            params.marginStart = if (mobile || isVideoFullscreen) sectionGap else 0
-            optionsButton?.layoutParams = params
-        }
-
-        (pictureInPictureButton?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
-            params.marginStart = 0
-            params.marginEnd = 0
-            pictureInPictureButton?.layoutParams = params
-        }
-
-        (subtitlesButton?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
-            params.marginStart = if (pictureInPictureButton?.isVisible == true) {
-                sectionGap
-            } else if (!mobile && !isVideoFullscreen) {
-                0
-            } else {
-                sectionGap
-            }
-            params.marginEnd = 0
-            subtitlesButton?.layoutParams = params
-        }
-
-        (castButton?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
-            params.marginStart = if (mobile || isVideoFullscreen) sectionGap else 0
-            castButton?.layoutParams = params
         }
 
         val trailingGap = resources.getDimensionPixelSize(R.dimen.kinescope_control_trailing_gap)
@@ -2508,6 +2526,47 @@ class KinescopePlayerView @JvmOverloads constructor(
                 else -> 0
             }
             fullscreenButton?.layoutParams = params
+        }
+    }
+
+    private fun refreshExpandableStripButtonGaps() {
+        val sectionGap = resources.getDimensionPixelSize(
+            if (usesMobilePlayerChrome()) {
+                R.dimen.kinescope_mobile_control_gap
+            } else {
+                R.dimen.kinescope_control_section_gap
+            },
+        )
+        applyExpandableStripButtonGaps(sectionGap)
+    }
+
+    /**
+     * Leading gap only when a previous sibling in the expandable strip is
+     * shown — hides (playlist, cast, …) must not collapse spacing between
+     * the buttons that remain.
+     */
+    private fun applyExpandableStripButtonGaps(sectionGap: Int) {
+        val ordered = listOf(
+            optionsExpandedGroup,
+            pictureInPictureButton,
+            subtitlesButton,
+            playlistButton,
+            chaptersButton,
+            castButton,
+            optionsButton,
+        )
+        var priorVisible = false
+        for (button in ordered) {
+            val view = button ?: continue
+            val visible = view.isVisible
+            (view.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
+                params.marginStart = if (visible && priorVisible) sectionGap else 0
+                params.marginEnd = 0
+                view.layoutParams = params
+            }
+            if (visible) {
+                priorVisible = true
+            }
         }
     }
 
@@ -2699,6 +2758,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         updatePlaylistButtonVisibility()
         updateSubtitlesButtonVisibility()
         updateCustomButtonsVisibility()
+        refreshExpandableStripButtonGaps()
     }
 
     private fun updateSubtitlesButtonVisibility() {
@@ -2737,6 +2797,7 @@ class KinescopePlayerView @JvmOverloads constructor(
             hasChapters &&
             !isLiveState &&
             (!usesCompactOptionsChrome() || compactExpanded)
+        refreshExpandableStripButtonGaps()
     }
 
     private fun updatePlaylistButtonVisibility() {
@@ -2749,6 +2810,7 @@ class KinescopePlayerView @JvmOverloads constructor(
             hasPlaylist &&
             !isLiveState &&
             (!usesCompactOptionsChrome() || compactExpanded)
+        refreshExpandableStripButtonGaps()
     }
 
     private fun updateCastButtonVisibility() {
@@ -2760,6 +2822,7 @@ class KinescopePlayerView @JvmOverloads constructor(
             castRouteAvailable &&
             options?.showCastButton == true &&
             (!usesCompactOptionsChrome() || compactExpanded)
+        refreshExpandableStripButtonGaps()
     }
 
     private fun shouldShowCompactExpandedSettings(): Boolean {
@@ -4333,7 +4396,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
         val video = getVideo() ?: return
         trackController?.ensureDefaultSubtitleEnabled(
-            showSubtitles = kinescopePlayer?.getShowSubtitles() == true,
+            showSubtitles = !subtitlesDisabledByHost && kinescopePlayer?.getShowSubtitles() == true,
             subtitles = video.subtitles,
         )
         initialSubtitlesConfigured = true
@@ -4560,6 +4623,13 @@ class KinescopePlayerView @JvmOverloads constructor(
         updateProgressControlsVisibility()
     }
 
+    /**
+     * Opens captions search when [x]/[y] (this view's coordinates) hit the
+     * progressive caption bar. Public for host overlays that steal the first
+     * MotionEvent (Compose sheet-drag strip) and need to forward a tap.
+     */
+    fun openCaptionsSearchIfHit(x: Float, y: Float): Boolean = tryOpenCaptionsSearchAt(x, y)
+
     private fun tryOpenCaptionsSearchAt(x: Float, y: Float): Boolean {
         if (isCaptionsSearchActive() || isPictureInPictureActive) {
             return false
@@ -4573,6 +4643,9 @@ class KinescopePlayerView @JvmOverloads constructor(
         openCaptionsSearch()
         return true
     }
+
+    private fun isTouchOnCaptions(x: Float, y: Float): Boolean =
+        progressiveSubtitleOverlay?.containsTouch(this, x, y) == true
 
     private fun subtitleSizeFractionOfShorterSide(): Float =
         if (isVideoFullscreen) {
@@ -4614,11 +4687,20 @@ class KinescopePlayerView @JvmOverloads constructor(
             } else {
                 Gravity.BOTTOM
             }
-            layoutParams.bottomMargin = barHeight + bar.paddingBottom
-            layoutParams.topMargin = if (isCaptionsSearchPinnedToTop()) {
-                chromeTopSafeInsetPx + captionsSearchTopInset
+            val bottom = barHeight + bar.paddingBottom
+            layoutParams.bottomMargin = bottom
+            // TOP: host chrome as margin; safe area as panel padding so the dark
+            // chrome fills to the player top (no empty black strip under the
+            // status bar). Clamp margin on a short band so the field still fits.
+            if (isCaptionsSearchPinnedToTop()) {
+                val minBody = (48f * resources.displayMetrics.density).toInt()
+                val maxTop = (height - bottom - minBody).coerceAtLeast(0)
+                layoutParams.topMargin = captionsSearchTopInset.coerceAtMost(maxTop)
+                val padTop = chromeTopSafeInsetPx +
+                    (TOP_DOCKED_PANEL_GAP_DP * resources.displayMetrics.density).toInt()
+                searchView.setTopContentInset(padTop)
             } else {
-                0
+                layoutParams.topMargin = 0
             }
             layoutParams.marginStart = 0
             layoutParams.marginEnd = 0
@@ -4830,6 +4912,9 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
 
     private fun applySubtitlesSelection(optionId: Int) {
+        if (optionId != TrackController.SUBTITLES_OFF_ID) {
+            subtitlesDisabledByHost = false
+        }
         trackController?.applySubtitleSelection(optionId)
         pendingCueGroup = null
         subtitleView?.setCues(emptyList())
@@ -4859,14 +4944,72 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
 
         val passThroughTouchListener = View.OnTouchListener { _, _ -> false }
+        val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
         setOnTouchListener { _, event ->
-            if (!isPictureInPictureActive) {
-                videoScaleController?.onTouchEvent(event)
-                if (videoScaleController?.shouldConsumeGestures() != true) {
+            if (isPictureInPictureActive || framePreviewActive) {
+                return@setOnTouchListener false
+            }
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    touchDownX = event.x
+                    touchDownY = event.y
+                    verticalSheetPassThrough = false
+                    captionsSearchOpenedOnTapUp = false
+                    // Tap on captions must stay with the player — even a few px of
+                    // finger jitter must not flip into sheet pass-through.
+                    playerOwnsTouchStream = isTouchOnCaptions(event.x, event.y)
+                    videoScaleController?.onTouchEvent(event)
                     gestureDetector.onTouchEvent(event)
+                    true
+                }
+                MotionEvent.ACTION_POINTER_DOWN -> {
+                    // Pinch / multi-touch belongs to the player.
+                    verticalSheetPassThrough = false
+                    playerOwnsTouchStream = true
+                    videoScaleController?.onTouchEvent(event)
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    videoScaleController?.onTouchEvent(event)
+                    if (videoScaleController?.shouldConsumeGestures() == true) {
+                        playerOwnsTouchStream = true
+                        verticalSheetPassThrough = false
+                        return@setOnTouchListener true
+                    }
+                    if (!playerOwnsTouchStream && !verticalSheetPassThrough) {
+                        val dx = kotlin.math.abs(event.x - touchDownX)
+                        val dy = kotlin.math.abs(event.y - touchDownY)
+                        if (dy > touchSlop && dy > dx) {
+                            // Unused vertical drag → host sheet / Compose drag.
+                            verticalSheetPassThrough = true
+                            parent?.requestDisallowInterceptTouchEvent(false)
+                            return@setOnTouchListener false
+                        }
+                    }
+                    if (verticalSheetPassThrough) {
+                        return@setOnTouchListener false
+                    }
+                    gestureDetector.onTouchEvent(event)
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    val passThrough = verticalSheetPassThrough && !playerOwnsTouchStream
+                    videoScaleController?.onTouchEvent(event)
+                    if (!passThrough && videoScaleController?.shouldConsumeGestures() != true) {
+                        gestureDetector.onTouchEvent(event)
+                    }
+                    verticalSheetPassThrough = false
+                    playerOwnsTouchStream = false
+                    !passThrough
+                }
+                else -> {
+                    videoScaleController?.onTouchEvent(event)
+                    if (videoScaleController?.shouldConsumeGestures() != true) {
+                        gestureDetector.onTouchEvent(event)
+                    }
+                    !verticalSheetPassThrough
                 }
             }
-            true
         }
         seekView?.setOnTouchListener(passThroughTouchListener)
         controlView?.setOnTouchListener(passThroughTouchListener)
@@ -5126,7 +5269,10 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
 
-    private fun applySubtitleStyle(controlsVisibleOverride: Boolean? = null) {
+    private fun applySubtitleStyle(
+        controlsVisibleOverride: Boolean? = null,
+        animateCaptionBottomMargin: Boolean = true,
+    ) {
         val subtitleView = this.subtitleView ?: return
         val controlsVisible = controlsVisibleOverride ?: (
             controlView?.isVisible == true && (controlView?.alpha ?: 0f) > 0f
@@ -5207,6 +5353,7 @@ class KinescopePlayerView @JvmOverloads constructor(
             isLandscapeFullscreen = isLandscapeFullscreenCaptions(),
             startMarginPx = startMarginPx,
             endMarginPx = endMarginPx,
+            animateBottomMargin = animateCaptionBottomMargin,
         )
 
         // Progressive overlay owns rendering after playback starts. Before the first play
@@ -5231,21 +5378,17 @@ class KinescopePlayerView @JvmOverloads constructor(
 
     /**
      * Landscape fullscreen UI for horizontal video.
-     * Prefer content orientation so portrait fullscreen is not misclassified on wide tablets.
+     * Window aspect is ignored: rotating a tablet must not restyle captions.
      */
     private fun isLandscapeFullscreenCaptions(): Boolean {
         if (!isVideoFullscreen) return false
-        if (isPortraitContent) return false
-        if (width > 1 && height > 1) {
-            return width > height
-        }
-        return true
+        return !isPortraitContent
     }
 
-    /** Portrait video fullscreen (content-based, not just view aspect). */
+    /** Portrait video fullscreen. Content orientation only, not the window. */
     private fun isPortraitFullscreenCaptions(): Boolean {
         if (!isVideoFullscreen) return false
-        return isPortraitContent || (width > 1 && height > 1 && height >= width)
+        return isPortraitContent
     }
 
     /** Portrait video / tall player UI (inline or fullscreen). */
@@ -5314,15 +5457,13 @@ class KinescopePlayerView @JvmOverloads constructor(
             )
         }
 
-        // Vertical fullscreen — move with overlay (higher when hidden, lower when shown).
+        // Vertical fullscreen — above the control bar while it is showing (pause),
+        // near the bottom edge while chrome is hidden.
         if (isPortraitFullscreenCaptions()) {
             return if (controlsVisible) {
                 resolvePortraitFullscreenCaptionBottomPx(density)
             } else {
-                resolvePortraitFullscreenCaptionBottomPxHidden(
-                    viewHeight = viewHeight,
-                    density = density,
-                )
+                resolvePortraitFullscreenCaptionBottomPxHidden(density)
             }
         }
 
@@ -5352,19 +5493,13 @@ class KinescopePlayerView @JvmOverloads constructor(
         return barHeight + gapAboveBar
     }
 
-    /** Overlay hidden: sit clearly above the seek-bar zone (higher on tablets). */
-    private fun resolvePortraitFullscreenCaptionBottomPxHidden(
-        viewHeight: Float,
-        density: Float,
-    ): Int {
-        val tablet = isTabletDevice()
-        val fraction = if (tablet) 0.28f else 0.14f
-        val minDp = if (tablet) 132f else 64f
-        return if (viewHeight > 1f) {
-            (fraction * viewHeight).toInt().coerceAtLeast((minDp * density).toInt())
-        } else {
-            ((if (tablet) 140f else 72f) * density).toInt()
-        }
+    /**
+     * Overlay hidden. Fixed distance from the bottom edge, same as horizontal
+     * fullscreen. A fraction of the window height lifts captions when a tablet
+     * is rotated into a taller frame.
+     */
+    private fun resolvePortraitFullscreenCaptionBottomPxHidden(density: Float): Int {
+        return (12f * density).toInt()
     }
 
     /**
@@ -5389,8 +5524,9 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     /**
-     * Portrait fullscreen with overlay: sit near the seek/control bar.
-     * On tablets tuck lower so captions clear the top chrome and sit closer to the bar.
+     * Portrait fullscreen with the control overlay showing (pause).
+     * Sit just above the bar so captions do not cover it. A small gap only —
+     * a fraction of the tall portrait frame would push them up the screen.
      */
     private fun resolvePortraitFullscreenCaptionBottomPx(density: Float): Int {
         val bar = controlBar
@@ -5398,18 +5534,9 @@ class KinescopePlayerView @JvmOverloads constructor(
             bar != null && bar.isVisible && bar.height > 0 -> bar.height
             else -> resources.getDimensionPixelSize(R.dimen.kinescope_control_bar_height)
         }
-        return if (isTabletDevice()) {
-            // Tuck into/near the seek bar when overlay (incl. top chrome) is shown.
-            val tuckPx = (36f * density).toInt()
-            (barHeight - tuckPx).coerceAtLeast((2f * density).toInt())
-        } else {
-            val gapAboveBar = (2f * density).toInt()
-            barHeight + gapAboveBar
-        }
+        val gapAboveBar = (12f * density).toInt()
+        return barHeight + gapAboveBar
     }
-
-    private fun isTabletDevice(): Boolean =
-        resources.configuration.smallestScreenWidthDp >= TABLET_SMALLEST_WIDTH_DP
 
     private fun applyScrubChapterTitleStyle() {
         val titleView = scrubChapterTitleView ?: return
@@ -5713,6 +5840,27 @@ class KinescopePlayerView @JvmOverloads constructor(
         titleView?.isVisible = false
         authorView?.isVisible = false
         setMobileBackgroundGradientsVisible(visible = false, animated = false)
+    }
+
+    /**
+     * Turns subtitles off: disables the text track, clears the overlay and closes
+     * captions search. The host's choice sticks across track updates and the next
+     * video. It is cleared when the viewer picks a track in the player menu, or
+     * when the host calls [enableSubtitles].
+     */
+    fun disableSubtitles() {
+        subtitlesDisabledByHost = true
+        captionsSearchView?.dismiss()
+        applySubtitlesSelection(TrackController.SUBTITLES_OFF_ID)
+    }
+
+    /**
+     * Turns subtitles back on after [disableSubtitles]: drops the host-off flag and
+     * selects the first track. Later videos keep that choice instead of forcing off.
+     */
+    fun enableSubtitles() {
+        subtitlesDisabledByHost = false
+        applySubtitlesSelection(0)
     }
 
     /** Поднимает/опускает progressive-субтитры при показе Compose-контролов. */
