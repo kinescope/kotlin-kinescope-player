@@ -37,6 +37,6 @@
         android:layout_height="24dp"
         android:importantForAccessibility="no"
         android:scaleType="centerInside"
-        android:src="@drawable/ic_arrow_forward" />
+        android:src="@drawable/kinescope_ic_arrow_forward" />
 
 </merge>

@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.20] — 20.10.2026
+
+### Changed
+- **Drawable icons** — all player SDK icons renamed with a `kinescope_` prefix (e.g. `ic_play` → `kinescope_ic_play`) to avoid resource merge clashes in multi-module host apps. Update any direct `R.drawable.ic_*` references to SDK icons accordingly.
+
 ## [0.1.19] — 16.10.2026
 
 ### Added

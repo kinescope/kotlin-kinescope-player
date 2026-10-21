@@ -189,7 +189,7 @@
                 android:hint="@string/custom_player_color"
                 app:boxBackgroundColor="@color/black"
                 app:hintTextColor="@color/white"
-                app:startIconDrawable="@drawable/ic_settings"
+                app:startIconDrawable="@drawable/kinescope_ic_settings"
                 app:startIconTint="@color/kinescope_primary_color">
 
                 <com.google.android.material.textfield.TextInputEditText

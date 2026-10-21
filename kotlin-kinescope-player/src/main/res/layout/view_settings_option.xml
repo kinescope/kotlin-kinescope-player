@@ -47,7 +47,7 @@
         android:layout_height="24dp"
         android:importantForAccessibility="no"
         android:scaleType="centerInside"
-        android:src="@drawable/ic_check"
+        android:src="@drawable/kinescope_ic_check"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"

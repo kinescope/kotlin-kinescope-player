@@ -11,6 +11,6 @@
         android:layout_height="32dp"
         android:layout_gravity="center"
         android:indeterminate="true"
-        android:indeterminateDrawable="@drawable/ic_buffering" />
+        android:indeterminateDrawable="@drawable/kinescope_ic_buffering" />
 
 </FrameLayout>

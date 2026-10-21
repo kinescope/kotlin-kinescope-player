@@ -33,7 +33,7 @@
             android:contentDescription="@null"
             android:importantForAccessibility="no"
             android:scaleType="centerInside"
-            android:src="@drawable/ic_playlist_play_indicator"
+            android:src="@drawable/kinescope_ic_playlist_play_indicator"
             android:visibility="gone" />
     </FrameLayout>
 
@@ -93,7 +93,7 @@
         android:background="?attr/selectableItemBackgroundBorderless"
         android:contentDescription="@string/player_playlist_copy_link"
         android:scaleType="centerInside"
-        android:src="@drawable/ic_copy_link"
+        android:src="@drawable/kinescope_ic_copy_link"
         android:visibility="gone"
         tools:visibility="visible" />
 

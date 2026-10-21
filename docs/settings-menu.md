@@ -142,7 +142,7 @@ playerView.configureChrome {
         addCustomParameter(
             id = "share",
             title = "Share",
-            icon = R.drawable.ic_share,
+            icon = R.drawable.kinescope_ic_share,
             isAction = true,
         )
         onParameterAction = { parameter ->

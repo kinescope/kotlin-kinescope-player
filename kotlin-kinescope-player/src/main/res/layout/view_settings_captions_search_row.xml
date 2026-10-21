@@ -13,7 +13,7 @@
         android:layout_marginStart="4dp"
         android:importantForAccessibility="no"
         android:scaleType="centerInside"
-        android:src="@drawable/ic_search" />
+        android:src="@drawable/kinescope_ic_search" />
 
     <TextView
         android:id="@+id/title_tv"

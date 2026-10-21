@@ -15,7 +15,7 @@ import io.kinescope.sdk.R
  * Center play/pause control with path morph (play <-> pause) and light tap zoom.
  * Replay uses a static rewind icon.
  *
- * Uses [R.drawable.ic_play_pause_morph]; pause state = animation end.
+ * Uses [R.drawable.kinescope_ic_play_pause_morph]; pause state = animation end.
  */
 class KinescopePlayPauseMorphView @JvmOverloads constructor(
     context: Context,
@@ -46,7 +46,7 @@ class KinescopePlayPauseMorphView @JvmOverloads constructor(
         animate().cancel()
         scaleX = 1f
         scaleY = 1f
-        setImageResource(R.drawable.ic_controls_rewind)
+        setImageResource(R.drawable.kinescope_ic_controls_rewind)
         applyGlyphInset(replay = true)
     }
 
@@ -75,9 +75,9 @@ class KinescopePlayPauseMorphView @JvmOverloads constructor(
         atEnd = isPlaying
         morphAnimating = true
         val morphRes = if (isPlaying) {
-            R.drawable.ic_play_pause_morph
+            R.drawable.kinescope_ic_play_pause_morph
         } else {
-            R.drawable.ic_pause_play_morph
+            R.drawable.kinescope_ic_pause_play_morph
         }
         startMorph(morphRes)
     }
@@ -95,9 +95,9 @@ class KinescopePlayPauseMorphView @JvmOverloads constructor(
         morphAnimating = false
         applyGlyphInset(replay = false)
         val glyphRes = if (atEnd) {
-            R.drawable.ic_center_pause_glyph
+            R.drawable.kinescope_ic_center_pause_glyph
         } else {
-            R.drawable.ic_center_play_glyph
+            R.drawable.kinescope_ic_center_play_glyph
         }
         setImageResource(glyphRes)
     }
