@@ -71,7 +71,7 @@ class KinescopePlaybackService : MediaSessionService() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.player_background_playback_title))
             .setContentText(boundPlayer?.getVideo()?.title.orEmpty())
-            .setSmallIcon(R.drawable.ic_play)
+            .setSmallIcon(R.drawable.kinescope_ic_play)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .build()

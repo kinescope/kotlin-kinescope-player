@@ -3,12 +3,14 @@
 Android SDK for [Kinescope](https://kinescope.io/) video: player, vertical Shorts feed, and offline downloads with DRM (Widevine) in a single dependency.
 
 ```groovy
-implementation 'io.kinescope:kotlin-kinescope-player:0.1.19'
+implementation 'io.kinescope:kotlin-kinescope-player:0.1.20'
 ```
 
 Published on **Maven Central** (`io.kinescope`). See [docs/installation.md](docs/installation.md).
 
 **JitPack is no longer supported** for new projects; existing JitPack pins (`com.github.kinescope:…`) may keep working — details in [installation.md](docs/installation.md).
+
+Player drawable icons use a `kinescope_` prefix (e.g. `R.drawable.kinescope_ic_play`) so they do not clash with host-app resources in multi-module merges. See [CHANGELOG](CHANGELOG.md) for 0.1.20.
 
 ---
 

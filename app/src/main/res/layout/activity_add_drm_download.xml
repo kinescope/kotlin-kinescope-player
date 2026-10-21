@@ -30,7 +30,7 @@
             android:layout_height="wrap_content"
             android:layout_gravity="start|center_vertical"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@drawable/ic_arrow_back"
+            android:src="@drawable/kinescope_ic_arrow_back"
             android:contentDescription="Back"
             android:tint="@color/white" />
     </androidx.appcompat.widget.Toolbar>

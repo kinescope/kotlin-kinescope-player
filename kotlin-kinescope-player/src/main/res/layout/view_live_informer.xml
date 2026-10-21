@@ -23,7 +23,7 @@
         android:contentDescription="@null"
         android:importantForAccessibility="no"
         android:scaleType="fitCenter"
-        android:src="@drawable/ic_live" />
+        android:src="@drawable/kinescope_ic_live" />
 
     <LinearLayout
         android:layout_width="wrap_content"

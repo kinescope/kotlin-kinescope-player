@@ -162,7 +162,7 @@ class CustomPlayerActivity : AppCompatActivity() {
         playerView.configureChrome {
             addButton(
                 id = "demo_share",
-                iconRes = SdkR.drawable.ic_attachments,
+                iconRes = SdkR.drawable.kinescope_ic_attachments,
                 contentDescription = getString(R.string.custom_player_demo_action),
             ) {
                 Toast.makeText(
@@ -175,7 +175,7 @@ class CustomPlayerActivity : AppCompatActivity() {
                 addCustomParameter(
                     id = "demo_share",
                     title = getString(R.string.custom_player_demo_action),
-                    icon = SdkR.drawable.ic_attachments,
+                    icon = SdkR.drawable.kinescope_ic_attachments,
                     isAction = true,
                 )
                 onParameterAction = { parameter ->
@@ -252,63 +252,63 @@ class CustomPlayerActivity : AppCompatActivity() {
     private fun bindViews() {
         switchAutoplay = bindSettingRow(
             rowId = R.id.row_autoplay,
-            iconRes = SdkR.drawable.ic_autoplay,
+            iconRes = SdkR.drawable.kinescope_ic_autoplay,
             labelRes = R.string.custom_player_autoplay,
         )
         switchMuted = bindSettingRow(
             rowId = R.id.row_muted,
-            iconRes = SdkR.drawable.ic_volume_off,
+            iconRes = SdkR.drawable.kinescope_ic_volume_off,
             labelRes = R.string.custom_player_muted,
         )
         switchLoop = bindSettingRow(
             rowId = R.id.row_loop,
-            iconRes = SdkR.drawable.ic_playlist_player,
+            iconRes = SdkR.drawable.kinescope_ic_playlist_player,
             labelRes = R.string.custom_player_loop,
         )
         switchControls = bindSettingRow(
             rowId = R.id.row_controls,
-            iconRes = SdkR.drawable.ic_settings,
+            iconRes = SdkR.drawable.kinescope_ic_settings,
             labelRes = R.string.custom_player_controls,
             checked = true,
         )
         switchPlaysinline = bindSettingRow(
             rowId = R.id.row_playsinline,
-            iconRes = SdkR.drawable.ic_mini_player,
+            iconRes = SdkR.drawable.kinescope_ic_mini_player,
             labelRes = R.string.custom_player_playsinline,
             checked = true,
         )
         switchKeyboardShortcuts = bindSettingRow(
             rowId = R.id.row_keyboard_shortcuts,
-            iconRes = SdkR.drawable.ic_video_settings,
+            iconRes = SdkR.drawable.kinescope_ic_video_settings,
             labelRes = R.string.custom_player_keyboard_shortcuts,
             checked = true,
         )
         switchPictureInPicture = bindSettingRow(
             rowId = R.id.row_picture_in_picture,
-            iconRes = SdkR.drawable.ic_airplay,
+            iconRes = SdkR.drawable.kinescope_ic_airplay,
             labelRes = R.string.custom_player_picture_in_picture,
             checked = true,
         )
         switchFullscreen = bindSettingRow(
             rowId = R.id.row_fullscreen,
-            iconRes = SdkR.drawable.ic_fullscreen,
+            iconRes = SdkR.drawable.kinescope_ic_fullscreen,
             labelRes = R.string.custom_player_fullscreen,
             checked = true,
         )
         switchPlaybackRate = bindSettingRow(
             rowId = R.id.row_playback_rate,
-            iconRes = SdkR.drawable.ic_playback_speed,
+            iconRes = SdkR.drawable.kinescope_ic_playback_speed,
             labelRes = R.string.custom_player_playback_rate,
             checked = true,
         )
         spinnerPreload = bindSpinnerRow(
             rowId = R.id.row_preload,
-            iconRes = SdkR.drawable.ic_clock_player,
+            iconRes = SdkR.drawable.kinescope_ic_clock_player,
             labelRes = R.string.custom_player_preload,
         )
         spinnerQuality = bindSpinnerRow(
             rowId = R.id.row_quality,
-            iconRes = SdkR.drawable.ic_quality,
+            iconRes = SdkR.drawable.kinescope_ic_quality,
             labelRes = R.string.custom_player_quality,
         )
         inputColor = findViewById(R.id.input_color)

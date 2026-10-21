@@ -23,8 +23,8 @@ fun qualitySettingsIconRes(
     isAudioOnlyQuality: Boolean,
     playbackHeightPx: Int,
 ): Int = when {
-    isAudioOnlyQuality || playbackHeightPx <= 0 -> R.drawable.ic_settings
-    playbackHeightPx >= 2160 -> R.drawable.ic_settings_4k
-    playbackHeightPx >= 1080 -> R.drawable.ic_settings_hd
-    else -> R.drawable.ic_settings
+    isAudioOnlyQuality || playbackHeightPx <= 0 -> R.drawable.kinescope_ic_settings
+    playbackHeightPx >= 2160 -> R.drawable.kinescope_ic_settings_4k
+    playbackHeightPx >= 1080 -> R.drawable.kinescope_ic_settings_hd
+    else -> R.drawable.kinescope_ic_settings
 }

@@ -1138,32 +1138,32 @@ class KinescopePlayerView @JvmOverloads constructor(
                 addParameter(
                     parameter = KinescopeSettingsView.Parameter.Subtitles,
                     title = resources.getString(R.string.settings_parameter_subtitles),
-                    icon = R.drawable.ic_menu_cc,
+                    icon = R.drawable.kinescope_ic_menu_cc,
                 )
                 addParameter(
                     parameter = KinescopeSettingsView.Parameter.AudioTracks,
                     title = resources.getString(R.string.settings_parameter_audio_tracks),
-                    icon = R.drawable.ic_menu_audio,
+                    icon = R.drawable.kinescope_ic_menu_audio,
                 )
                 addParameter(
                     parameter = KinescopeSettingsView.Parameter.PlaybackSpeed,
                     title = resources.getString(R.string.settings_parameter_playback_speed),
-                    icon = R.drawable.ic_menu_speed,
+                    icon = R.drawable.kinescope_ic_menu_speed,
                 )
                 addParameter(
                     parameter = KinescopeSettingsView.Parameter.VideoQuality,
                     title = resources.getString(R.string.settings_parameter_video_quality),
-                    icon = R.drawable.ic_menu_quality,
+                    icon = R.drawable.kinescope_ic_menu_quality,
                 )
                 addParameter(
                     parameter = KinescopeSettingsView.Parameter.Scale,
                     title = resources.getString(R.string.settings_parameter_scale),
-                    icon = R.drawable.ic_menu_scale,
+                    icon = R.drawable.kinescope_ic_menu_scale,
                 )
                 addParameter(
                     parameter = KinescopeSettingsView.Parameter.Attachments,
                     title = resources.getString(R.string.settings_parameter_attachments),
-                    icon = R.drawable.ic_attachments,
+                    icon = R.drawable.kinescope_ic_attachments,
                 )
                 onOptionSelected = ::onSettingsOptionSelected
                 onSubtitleStyleChanged = { style ->
@@ -2779,9 +2779,9 @@ class KinescopePlayerView @JvmOverloads constructor(
         val subtitlesOn = trackController?.selectedSubtitleIndex != TrackController.SUBTITLES_OFF_ID
         button.setImageResource(
             if (subtitlesOn) {
-                R.drawable.ic_cc_on
+                R.drawable.kinescope_ic_cc_on
             } else {
-                R.drawable.ic_cc_off
+                R.drawable.kinescope_ic_cc_off
             },
         )
         button.imageTintList = null
@@ -4263,9 +4263,9 @@ class KinescopePlayerView @JvmOverloads constructor(
     private fun updateFullscreenButton() {
         val button = fullscreenButton as? ImageButton ?: return
         val drawableRes = if (isVideoFullscreen) {
-            R.drawable.ic_fullscreen_exit
+            R.drawable.kinescope_ic_fullscreen_exit
         } else {
-            R.drawable.ic_fullscreen
+            R.drawable.kinescope_ic_fullscreen
         }
         button.setImageDrawable(AppCompatResources.getDrawable(context, drawableRes))
         button.setPadding(0, 0, 0, 0)
@@ -5784,8 +5784,8 @@ class KinescopePlayerView @JvmOverloads constructor(
         liveBadgeCircleView?.background = ContextCompat.getDrawable(
             context,
             when (isLiveSynced) {
-                true -> R.drawable.ic_live_synced
-                else -> R.drawable.ic_live_not_synced
+                true -> R.drawable.kinescope_ic_live_synced
+                else -> R.drawable.kinescope_ic_live_not_synced
             },
         )
     }
@@ -5793,11 +5793,11 @@ class KinescopePlayerView @JvmOverloads constructor(
     private fun startLiveBadgePulse() {
         val circle = liveBadgeCircleView ?: return
         if (liveBadgePulseAnimator?.isRunning == true) {
-            circle.background = ContextCompat.getDrawable(context, R.drawable.ic_live_synced)
+            circle.background = ContextCompat.getDrawable(context, R.drawable.kinescope_ic_live_synced)
             return
         }
         stopLiveBadgePulse()
-        circle.background = ContextCompat.getDrawable(context, R.drawable.ic_live_synced)
+        circle.background = ContextCompat.getDrawable(context, R.drawable.kinescope_ic_live_synced)
         circle.alpha = 1f
         liveBadgePulseAnimator = ValueAnimator.ofFloat(1f, LIVE_BADGE_PULSE_MIN_ALPHA).apply {
             duration = LIVE_BADGE_PULSE_DURATION_MS
@@ -6019,9 +6019,9 @@ class KinescopePlayerView @JvmOverloads constructor(
         val finished = kinescopePlayer?.castPlaybackFinished?.invoke() == true
         castPlayPauseView?.setImageResource(
             when {
-                finished -> R.drawable.ic_controls_rewind
-                player.isPlaying -> R.drawable.ic_pause
-                else -> R.drawable.ic_play
+                finished -> R.drawable.kinescope_ic_controls_rewind
+                player.isPlaying -> R.drawable.kinescope_ic_pause
+                else -> R.drawable.kinescope_ic_play
             },
         )
 

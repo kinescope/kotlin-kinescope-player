@@ -93,7 +93,7 @@ Use `configureChrome` to add any number of app-defined icons to the options stri
 playerView.configureChrome {
     addButton(
         id = "share",
-        iconRes = R.drawable.ic_share,
+        iconRes = R.drawable.kinescope_ic_share,
         contentDescription = "Share",
     ) {
         shareCurrentVideo()
@@ -122,7 +122,7 @@ playerView.configureChrome {
         addCustomParameter(
             id = "share",
             title = "Share",
-            icon = R.drawable.ic_share,
+            icon = R.drawable.kinescope_ic_share,
             isAction = true,
         )
         onParameterAction = { parameter ->

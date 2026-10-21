@@ -94,7 +94,7 @@
                     android:layout_width="8dp"
                     android:layout_height="8dp"
                     android:layout_marginEnd="4dp"
-                    android:background="@drawable/ic_live_synced" />
+                    android:background="@drawable/kinescope_ic_live_synced" />
 
                 <TextView
                     android:id="@+id/live_badge_tv"
@@ -223,7 +223,7 @@
                         style="@style/KinescopeMediaButton"
                         android:contentDescription="@string/player_picture_in_picture"
                         android:scaleType="fitCenter"
-                        android:src="@drawable/ic_mini_player"
+                        android:src="@drawable/kinescope_ic_mini_player"
                         android:visibility="gone" />
 
                     <ImageButton
@@ -231,7 +231,7 @@
                         style="@style/KinescopeMediaButton"
                         android:contentDescription="@string/settings_subtitles_cc"
                         android:scaleType="fitCenter"
-                        android:src="@drawable/ic_cc_off"
+                        android:src="@drawable/kinescope_ic_cc_off"
                         android:visibility="gone" />
 
                     <ImageButton
@@ -239,14 +239,14 @@
                         style="@style/KinescopeMediaButton"
                         android:contentDescription="@string/player_playlist"
                         android:scaleType="fitCenter"
-                        android:src="@drawable/ic_playlist_player"
+                        android:src="@drawable/kinescope_ic_playlist_player"
                         android:visibility="gone" />
 
                     <ImageButton
                         android:id="@+id/kinescope_chapters"
                         style="@style/KinescopeMediaButton"
                         android:contentDescription="@string/player_chapters"
-                        android:src="@drawable/ic_chapters"
+                        android:src="@drawable/kinescope_ic_chapters"
                         android:visibility="gone" />
 
                     <ImageButton
@@ -254,7 +254,7 @@
                         style="@style/KinescopeMediaButton"
                         android:contentDescription="@string/player_cast"
                         android:scaleType="fitCenter"
-                        android:src="@drawable/ic_cast"
+                        android:src="@drawable/kinescope_ic_cast"
                         android:visibility="gone" />
 
                     <ImageButton
@@ -264,7 +264,7 @@
                         android:importantForAccessibility="no"
                         android:padding="0dp"
                         android:scaleType="fitCenter"
-                        android:src="@drawable/ic_settings" />
+                        android:src="@drawable/kinescope_ic_settings" />
 
                 </LinearLayout>
 
@@ -282,13 +282,13 @@
                         style="@style/KinescopeMediaButton"
                         android:importantForAccessibility="no"
                         android:scaleType="fitCenter"
-                        android:src="@drawable/ic_fullscreen" />
+                        android:src="@drawable/kinescope_ic_fullscreen" />
 
                 <ImageButton
                     android:id="@+id/kinescope_options_dots"
                     style="@style/KinescopeMediaButton"
                     android:importantForAccessibility="no"
-                    android:src="@drawable/ic_dots_horizontal"
+                    android:src="@drawable/kinescope_ic_dots_horizontal"
                     android:visibility="gone" />
 
             </LinearLayout>

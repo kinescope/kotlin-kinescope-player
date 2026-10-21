@@ -15,7 +15,7 @@
         android:layout_marginEnd="12dp"
         android:importantForAccessibility="no"
         app:tint="@color/kinescope_primary_color"
-        tools:src="@drawable/ic_autoplay" />
+        tools:src="@drawable/kinescope_ic_autoplay" />
 
     <com.google.android.material.switchmaterial.SwitchMaterial
         android:id="@+id/setting_switch"

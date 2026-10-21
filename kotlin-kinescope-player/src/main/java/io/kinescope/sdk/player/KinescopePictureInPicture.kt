@@ -123,7 +123,7 @@ object KinescopePictureInPicture {
         val playPauseTitle = activity.getString(
             if (isPlaying) R.string.player_pip_pause else R.string.player_pip_play
         )
-        val playPauseIcon = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
+        val playPauseIcon = if (isPlaying) R.drawable.kinescope_ic_pause else R.drawable.kinescope_ic_play
 
         return listOf(
             createBroadcastAction(

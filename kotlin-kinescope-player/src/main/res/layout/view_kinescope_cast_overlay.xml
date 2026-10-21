@@ -35,7 +35,7 @@
             android:contentDescription="@string/player_play"
             android:padding="@dimen/kinescope_play_pause_glyph_inset"
             android:scaleType="fitCenter"
-            android:src="@drawable/ic_center_play_glyph" />
+            android:src="@drawable/kinescope_ic_center_play_glyph" />
 
         <LinearLayout
             android:layout_width="match_parent"
