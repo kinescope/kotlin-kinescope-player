@@ -2,7 +2,7 @@
 
 | Feature | Description |
 |--------|-------------|
-| **Player** | `KinescopeVideoPlayer`, `KinescopePlayerView` — HLS, DASH, Live, DRM (+ `drmAuthToken` for Authorization Backend), [local/progressive URI](local-playback.md) via `setLocalSource`, [player chrome](player-chrome.md) (seek bar, PiP, chapters, cast, fullscreen, pinch-to-zoom), [settings menu](settings-menu.md) (quality, speed, scale, audio, subtitles), captions search, progressive subtitles, HD/4K gear badge, analytics |
+| **Player** | `KinescopeVideoPlayer`, `KinescopePlayerView` — HLS, DASH, Live, DRM (+ `drmAuthToken` for Authorization Backend), [local/progressive URI](local-playback.md) via `setLocalSource`, [player chrome](player-chrome.md) (seek bar, PiP, chapters, cast, fullscreen, pinch-to-zoom), [settings menu](settings-menu.md) (quality, speed, scale, audio, subtitles), captions search, progressive subtitles, HD/4K gear badge, [fullscreen on rotate](fullscreen.md), [analytics](analytics.md) with viewer ID (`externalId`) |
 | **Chromecast** | `KinescopeCastSession` — cast to TV via Kinescope custom receiver, cast overlay, position sync on connect/disconnect |
 | **Android TV** | Cast **to** Android TV / Google Cast receivers (e.g. NVIDIA SHIELD); phone/tablet is the sender — see [android-tv.md](android-tv.md) |
 | **Dashboard API** | `KinescopeApiHelper` — video catalog (`page` / `per_page` / `project_id` / `folder_id`) and list/create/update/delete player templates via `api.kinescope.io` |

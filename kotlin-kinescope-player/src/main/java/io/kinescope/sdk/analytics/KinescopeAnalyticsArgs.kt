@@ -11,4 +11,6 @@ data class KinescopeAnalyticsArgs(
     val isFullScreen: Boolean = false,
     val previewPosition: Int = 0,
     val currentPosition: Int = 0,
+    /** [io.kinescope.sdk.player.KinescopePlayerOptions.externalId], sent as `Session.ExternalID`. */
+    val externalId: String? = null,
 )
