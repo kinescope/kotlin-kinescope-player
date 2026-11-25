@@ -30,6 +30,7 @@
 | `showDefaultPoster` | `true` | Built-in `default_poster` when the video has no poster URL |
 | `showLiveAwaitingCover` | `true` | Built-in `live_awaiting_cover` while a live broadcast has not started |
 | `drmAuthToken` | `null` | Authorization Backend token (`drmauthtoken`) sent with `{videoId}.json` on `loadVideo` |
+| `externalId` | `null` | Your viewer ID sent with every analytics event (`externalid` in the web embed), see [Analytics](analytics.md) |
 | `referer` | `https://kinescope.io/` | HTTP `Referer` for metadata / DRM requests (must match domain restrictions in the dashboard) |
 
 Chrome icons (play, seek bar, PiP, fullscreen, …) vs settings popup items (Quality, Speed, …) are documented separately: [Player chrome](player-chrome.md), [Settings menu](settings-menu.md).

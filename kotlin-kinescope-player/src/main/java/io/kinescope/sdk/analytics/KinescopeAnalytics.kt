@@ -43,50 +43,13 @@ class KinescopeAnalytics(
         watchedDuration: Int,
         args: KinescopeAnalyticsArgs
     ): String {
-        val body = Native.newBuilder()
-            .setEvent(event.value)
-            .setValue(value)
-            .setVideo(
-                Video.newBuilder()
-                    .setSource(source)
-                    .setDuration(args.duration)
-                    .build()
-            )
-            .setPlayer(
-                Player.newBuilder()
-                    .setVersion(PLAYER_VERSION)
-                    .setType(PLAYER_TYPE)
-                    .build()
-            )
-            .setDevice(
-                Device.newBuilder()
-                    .setOS(DEVICE_OS)
-                    .setOSVersion(DEVICE_OS_VERSION)
-                    .setScreenWidth(DEVICE_SCREEN_WIDTH)
-                    .setScreenHeight(DEVICE_SCREEN_HEIGHT)
-                    .build()
-            )
-            .setSession(
-                Session.newBuilder()
-                    .setID(ByteString.copyFromUtf8(playerId))
-                    .setViewID(ByteString.copyFromUtf8(viewId))
-                    .setType(SessionType.Online)
-                    .setWatchedDuration(watchedDuration)
-                    .build()
-            )
-            .setPlayback(
-                Playback.newBuilder()
-                    .setRate(args.rate)
-                    .setVolume(args.volume)
-                    .setQuality(args.quality)
-                    .setIsMuted(args.isMuted)
-                    .setIsFullscreen(args.isFullScreen)
-                    .setPreviewPosition(args.previewPosition)
-                    .setCurrentPosition(args.currentPosition)
-                    .build()
-            )
-            .setEventTime(currentTimestamp())
-            .build()
+        val body = buildEvent(
+            event = event,
+            value = value,
+            source = source,
+            watchedDuration = watchedDuration,
+            args = args,
+        )
 
         KinescopeLogger.log(
             level = KinescopeLoggerLevel.SDK,
@@ -109,6 +72,59 @@ class KinescopeAnalytics(
             })
 
         return body.toString()
+    }
+
+    internal fun buildEvent(
+        event: Event,
+        value: Float = 0f,
+        source: String,
+        watchedDuration: Int,
+        args: KinescopeAnalyticsArgs
+    ): Native {
+        val session = Session.newBuilder()
+            .setID(ByteString.copyFromUtf8(playerId))
+            .setViewID(ByteString.copyFromUtf8(viewId))
+            .setType(SessionType.Online)
+            .setWatchedDuration(watchedDuration)
+        args.externalId?.trim()?.takeIf { it.isNotEmpty() }?.let { session.setExternalID(it) }
+
+        return Native.newBuilder()
+            .setEvent(event.value)
+            .setValue(value)
+            .setVideo(
+                Video.newBuilder()
+                    .setSource(source)
+                    .setDuration(args.duration)
+                    .build()
+            )
+            .setPlayer(
+                Player.newBuilder()
+                    .setVersion(PLAYER_VERSION)
+                    .setType(PLAYER_TYPE)
+                    .build()
+            )
+            .setDevice(
+                Device.newBuilder()
+                    .setOS(DEVICE_OS)
+                    .setOSVersion(DEVICE_OS_VERSION)
+                    .setScreenWidth(DEVICE_SCREEN_WIDTH)
+                    .setScreenHeight(DEVICE_SCREEN_HEIGHT)
+                    .build()
+            )
+            .setSession(session.build())
+            .setPlayback(
+                Playback.newBuilder()
+                    .setRate(args.rate)
+                    .setVolume(args.volume)
+                    .setQuality(args.quality)
+                    .setIsMuted(args.isMuted)
+                    .setIsFullscreen(args.isFullScreen)
+                    .setPreviewPosition(args.previewPosition)
+                    .setCurrentPosition(args.currentPosition)
+                    .build()
+            )
+            .setEventTime(currentTimestamp())
+            .build()
     }
 
     enum class Event(val value: String) {

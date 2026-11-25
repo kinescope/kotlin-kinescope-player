@@ -45,4 +45,11 @@ data class KinescopePlayerOptions(
      * playback can use your access-check endpoint instead of leaving the video public.
      */
     var drmAuthToken: String? = null,
+    /**
+     * Your own viewer identifier (user ID, account ID), sent with every analytics event
+     * as `Session.ExternalID` — the same as `externalid` in the web player embed.
+     * Lets Kinescope analytics attribute views to your users. `null` or blank sends nothing.
+     * Can be changed at any time; the next event uses the new value.
+     */
+    var externalId: String? = null,
 )

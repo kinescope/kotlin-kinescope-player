@@ -58,6 +58,24 @@ Portrait / vertical videos stay in portrait (including fullscreen). Landscape vi
 
 If you use [`useTextureSurface`](picture-in-picture.md) (Smooth PiP transition with TextureView) for smooth PiP, apply the same flag when creating both inline and fullscreen player views.
 
+## Fullscreen on rotate
+
+Optional: open fullscreen when a landscape video's device is turned to landscape, and close it when the device is turned back to portrait (like the iOS SDK). Off by default.
+
+```kotlin
+orientationController.fullscreenOnRotate = true
+orientationController.onRotateFullscreenRequest = { enter ->
+    if (enter != isVideoFullscreen) toggleFullscreen() // the same code as the fullscreen button
+}
+```
+
+- The controller only asks; the host switches views and then calls `orientationController.setFullscreen(...)`, as with the button.
+- Works while the Activity is locked to portrait: the device angle comes from `OrientationEventListener`.
+- Portrait videos are ignored. Rotation is ignored in Picture-in-Picture.
+- Respects the system auto-rotate switch. Set `respectSystemRotationLock = false` to rotate anyway.
+- After the fullscreen button, the device has to reach the new mode's orientation first, so leaving fullscreen by button while holding the phone in landscape does not reopen it.
+- Turning on works with `controls = false` too: no fullscreen button is needed.
+
 Hide the fullscreen button via options:
 
 ```kotlin

@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.21] — 24.11.2026
+
+### Added
+- **Fullscreen on rotate** — `KinescopeContentOrientationController.fullscreenOnRotate` (off by default): turning the device to landscape asks the host to enter fullscreen through `onRotateFullscreenRequest(true)`, turning it back to portrait asks to exit. Landscape videos only; respects the system auto-rotate switch (`respectSystemRotationLock`). See [Fullscreen](docs/fullscreen.md)
+- **Viewer ID in analytics** — `KinescopePlayerOptions.externalId` is sent with every analytics event as `Session.ExternalID`, like `externalid` in the web embed. See [Analytics](docs/analytics.md)
+
 ## [0.1.20] — 20.10.2026
 
 ### Changed

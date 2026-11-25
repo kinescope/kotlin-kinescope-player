@@ -1,6 +1,7 @@
 package io.kinescope.sdk.chapters
 
 import android.app.Activity
+import android.os.Looper
 import android.view.View
 import android.widget.FrameLayout
 import androidx.core.view.isVisible
@@ -43,6 +44,34 @@ class KinescopeChaptersViewPositionTest {
             )
         }
         activity.setContentView(host)
+        layoutHost()
+    }
+
+    /**
+     * Shown before its first layout (it starts GONE): the popup waits for the
+     * layout without spinning the main looper, then becomes opaque.
+     * Robolectric may run the window's layout pass while the looper drains, so
+     * the popup can already be shown here; what matters is that the queue empties.
+     */
+    @Test
+    fun show_beforeLayout_waitsForLayoutWithoutLooping() {
+        chapters.setChapters(listOf(KinescopeVideoChapterItem(time = 0, title = "One")))
+        chapters.show()
+
+        // Bounded instead of idleMainLooper(): a re-post loop would never drain.
+        val looper = shadowOf(Looper.getMainLooper())
+        repeat(MAX_TASKS) {
+            if (!looper.isIdle) looper.runOneTask()
+        }
+        assertTrue("main looper keeps re-posting the popup", looper.isIdle)
+
+        val popup = chapters.findViewById<View>(R.id.chapters_popup_container)
+        layoutHost()
+
+        assertEquals(1f, popup.alpha, 0.001f)
+    }
+
+    private fun layoutHost() {
         host.measure(
             View.MeasureSpec.makeMeasureSpec(1600, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(900, View.MeasureSpec.EXACTLY),
@@ -66,7 +95,9 @@ class KinescopeChaptersViewPositionTest {
         assertTrue(popup.isVisible)
         assertEquals(0f, popup.alpha, 0.001f)
 
+        layoutHost()
         ShadowLooper.idleMainLooper()
+        layoutHost()
 
         assertEquals(1f, popup.alpha, 0.001f)
         val params = popup.layoutParams as FrameLayout.LayoutParams
@@ -74,5 +105,9 @@ class KinescopeChaptersViewPositionTest {
             .getDimensionPixelSize(R.dimen.kinescope_settings_popup_edge_margin)
         assertEquals(chapters.width - popup.width - endMargin, params.leftMargin)
         assertTrue(params.leftMargin > chapters.width / 2)
+    }
+
+    private companion object {
+        const val MAX_TASKS = 100
     }
 }

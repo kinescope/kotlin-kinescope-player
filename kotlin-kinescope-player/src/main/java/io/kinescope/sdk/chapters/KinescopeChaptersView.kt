@@ -14,6 +14,7 @@ import android.view.View.MeasureSpec
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import androidx.core.view.ViewCompat
+import androidx.core.view.doOnNextLayout
 import androidx.core.view.isVisible
 import io.kinescope.sdk.R
 import io.kinescope.sdk.databinding.ViewChaptersBinding
@@ -34,6 +35,7 @@ class KinescopeChaptersView(
     private var anchorView: WeakReference<View>? = null
     private var isFullscreenMode = false
     private var isHidingPopup = false
+    private var isWaitingForLayout = false
     private var chapters: List<KinescopeVideoChapterItem> = emptyList()
 
     var onChapterSelected: ((KinescopeVideoChapterItem) -> Unit)? = null
@@ -94,7 +96,16 @@ class KinescopeChaptersView(
             return
         }
         if (width == 0 || height == 0) {
-            post { showPopupWhenReady() }
+            // Not laid out yet (the view was GONE until show()). Wait for the next
+            // layout instead of re-posting: a post loop spins the main thread until
+            // the frame and never drains the queue in tests.
+            if (!isWaitingForLayout) {
+                isWaitingForLayout = true
+                doOnNextLayout {
+                    isWaitingForLayout = false
+                    showPopupWhenReady()
+                }
+            }
             return
         }
         rebuildList()
@@ -205,8 +216,12 @@ class KinescopeChaptersView(
         val headerHeight = rowHeight
         val availableInPopup = (maxPopupHeight - verticalPadding - headerHeight).coerceAtLeast(rowHeight)
         val scrollHeight = optionsContentHeight.coerceAtMost(hardMax).coerceAtMost(availableInPopup)
-        binding.chaptersScrollView.layoutParams = binding.chaptersScrollView.layoutParams.apply {
-            height = scrollHeight
+        val scrollParams = binding.chaptersScrollView.layoutParams
+        // Assigning layoutParams always requests a layout; this runs from onLayout,
+        // so only assign on a real change or every layout schedules the next one.
+        if (scrollParams.height != scrollHeight) {
+            scrollParams.height = scrollHeight
+            binding.chaptersScrollView.layoutParams = scrollParams
         }
     }
 
@@ -254,8 +269,21 @@ class KinescopeChaptersView(
             width - popupWidth - endMargin
         }
         val top = (height - popupHeight - bottomOffset).coerceAtLeast(topMargin)
-        val layoutParams = (popup.layoutParams as? LayoutParams)
-            ?: LayoutParams(popupWidth, popupHeight)
+        val current = popup.layoutParams as? LayoutParams
+        // Called from onLayout: re-assigning unchanged params would request another
+        // layout on every frame (an endless layout loop while the popup is open).
+        if (current != null &&
+            current.width == popupWidth &&
+            current.height == popupHeight &&
+            current.gravity == Gravity.NO_GRAVITY &&
+            current.leftMargin == left &&
+            current.topMargin == top &&
+            current.rightMargin == 0 &&
+            current.bottomMargin == 0
+        ) {
+            return
+        }
+        val layoutParams = current ?: LayoutParams(popupWidth, popupHeight)
         layoutParams.width = popupWidth
         layoutParams.height = popupHeight
         layoutParams.gravity = Gravity.NO_GRAVITY

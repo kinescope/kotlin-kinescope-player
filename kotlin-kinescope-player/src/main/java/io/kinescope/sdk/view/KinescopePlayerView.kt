@@ -5821,7 +5821,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         localExoPlayer.getAnalyticsArguments(
             volume = audioManager.currentVolumeInPercent,
             isFullscreen = isVideoFullscreen,
-        )
+        ).copy(externalId = kinescopePlayer?.kinescopePlayerOptions?.externalId)
 
     fun hideControlsExceptPlayPause() {
         controlView?.children?.forEach { child ->
