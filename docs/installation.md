@@ -20,7 +20,11 @@ dependencyResolutionManagement {
 
 ```groovy
 dependencies {
-    implementation 'io.kinescope:kotlin-kinescope-player:0.1.21'
+    // Player (+ offline downloads, DRM, Cast)
+    implementation 'io.kinescope:kotlin-kinescope-player:0.1.22'
+
+    // Vertical Shorts feed (optional)
+    implementation 'io.kinescope:kotlin-kinescope-shorts:0.1.22'
 }
 ```
 
@@ -28,11 +32,17 @@ Kotlin DSL:
 
 ```kotlin
 dependencies {
-    implementation("io.kinescope:kotlin-kinescope-player:0.1.21")
+    implementation("io.kinescope:kotlin-kinescope-player:0.1.22")
+    implementation("io.kinescope:kotlin-kinescope-shorts:0.1.22") // optional
 }
 ```
 
-This single artifact includes the player, Shorts (`io.kinescope.sdk.shorts`), and offline download helpers.
+| Artifact | Contains |
+|----------|----------|
+| `kotlin-kinescope-player` | Player (`KinescopePlayerView`), offline downloads with DRM (`io.kinescope.sdk.download`), Cast, Dashboard API, server watermark |
+| `kotlin-kinescope-shorts` | Vertical Shorts feed (`io.kinescope.sdk.shorts`) — online playback only |
+
+The artifacts do not depend on each other: add one or both. Up to 0.1.21 the player artifact included Shorts; since 0.1.22 Shorts is added separately (see [CHANGELOG](../CHANGELOG.md)).
 
 See [features.md](features.md) for what is included in the dependency.
 
@@ -60,4 +70,4 @@ dependencies {
 }
 ```
 
-No new releases or support are guaranteed on JitPack. Migrate to `io.kinescope:kotlin-kinescope-player:0.1.21` on Maven Central when you can.
+No new releases or support are guaranteed on JitPack. Migrate to `io.kinescope:kotlin-kinescope-player:0.1.22` on Maven Central when you can.

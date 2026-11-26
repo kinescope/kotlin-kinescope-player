@@ -198,6 +198,12 @@ class KinescopePlayerView @JvmOverloads constructor(
         private const val MAX_UPDATE_INTERVAL_MS = 1000
         private const val CONTROL_OVERLAY_FADE_DURATION_MS = 200L
         private const val CONTROL_OVERLAY_AUTO_HIDE_MS = 3000L
+        /**
+         * A rebuffer after playback started (seek, short stall) shows the spinner only
+         * when it lasts longer than this. Seeks in downloaded / well-buffered video end
+         * sooner, so the spinner no longer flashes on some seeks and not on others.
+         */
+        private const val REBUFFER_SPINNER_DELAY_MS = 400L
         private const val TIME_DURATION_TOGGLE_ANIMATION_MS = 100L
         private const val TIME_DURATION_LABEL_FADE_START = 0.4f
         private const val TIME_LABEL_SEPARATOR = " / "
@@ -348,6 +354,7 @@ class KinescopePlayerView @JvmOverloads constructor(
     private var kinescopePlayer: KinescopeVideoPlayer? = null
     private var boundPlaybackPlayer: Player? = null
     private var exoPlayerView: PlayerView? = null
+    private var watermarkView: KinescopeWatermarkView? = null
     private var subtitleView: SubtitleView? = null
     private var progressiveSubtitleOverlay: ProgressiveSubtitleOverlay? = null
     private var controlView: FrameLayout? = null
@@ -452,6 +459,16 @@ class KinescopePlayerView @JvmOverloads constructor(
 
     /** Optional callback when buffering exceeds [PlaybackBufferingWatchdog.TIMEOUT_MS]. */
     var onPlaybackStallListener: ((String) -> Unit)? = null
+
+    /** True once a rebuffer has lasted [REBUFFER_SPINNER_DELAY_MS]; reset when it ends. */
+    private var rebufferSpinnerDelayElapsed = false
+    private var rebufferSpinnerDelayPending = false
+    private val rebufferSpinnerDelayRunnable = Runnable {
+        rebufferSpinnerDelayPending = false
+        rebufferSpinnerDelayElapsed = true
+        updateBuffering()
+        updatePlayPauseButton()
+    }
 
     private val bufferingWatchdogRunnable: Runnable = object : Runnable {
         override fun run() {
@@ -1033,6 +1050,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         inflate(context, playerLayoutRes, this)
         bindRootLayoutConstraints()
         exoPlayerView = findViewById(R.id.view_exoplayer)
+        installWatermarkView()
         subtitleView = findViewById(R.id.kinescope_subtitle_view)
         progressiveSubtitleOverlay = ProgressiveSubtitleOverlay(
             container = findViewById(R.id.kinescope_progressive_subtitle_container),
@@ -1312,7 +1330,37 @@ class KinescopePlayerView @JvmOverloads constructor(
         exoPlayerView?.player = null
         kinescopePlayer = null
         hasStartedPlayback = false
+        syncWatermark()
     }
+
+    /**
+     * The watermark sits in the video content frame: it covers only the picture
+     * (letterbox bars stay clean) and follows pinch-to-zoom.
+     */
+    private fun installWatermarkView() {
+        val host = exoPlayerView?.findViewById<ViewGroup>(androidx.media3.ui.R.id.exo_content_frame)
+            ?: findViewById<ViewGroup>(R.id.kinescope_video_transform_container)
+            ?: return
+        watermarkView = KinescopeWatermarkView(context).also { view ->
+            host.addView(
+                view,
+                ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                ),
+            )
+        }
+    }
+
+    /** Shows `sdk.watermark` of the current video, hides it when there is none. */
+    private fun syncWatermark() {
+        watermarkView?.watermark =
+            KinescopeWatermarkStyle.from(kinescopePlayer?.getVideo()?.sdk?.watermark)
+    }
+
+    /** Watermark text shown over the video, `null` when there is none. */
+    val watermarkText: String?
+        get() = watermarkView?.text
 
     private fun resolvePauseForPlayPauseButton(): Boolean {
         viewSwitchPauseOverride?.let { return it }
@@ -1419,6 +1467,7 @@ class KinescopePlayerView @JvmOverloads constructor(
                 metricUrl = metricUrl,
             )
             resetOptionsChromeForSourceChange()
+            syncWatermark()
             postVideoLoadedChromeUpdate()
         }
         exoPlayerView?.player = kinescopePlayer?.exoPlayer
@@ -1433,6 +1482,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         applyProgressiveSubtitles()
         applyKinescopePlayerOptions()
         applyAccentColor()
+        syncWatermark()
         applyExoPlayerVisibility()
         ensureControlBarProgressChromeVisible()
         updateAll()
@@ -1966,6 +2016,8 @@ class KinescopePlayerView @JvmOverloads constructor(
     }
 
     override fun onDetachedFromWindow() {
+        removeCallbacks(rebufferSpinnerDelayRunnable)
+        rebufferSpinnerDelayPending = false
         removeOnLayoutChangeListener(chromeTopOverlapLayoutListener)
         viewTreeObserver.removeOnPreDrawListener(screenPositionPreDrawListener)
         super.onDetachedFromWindow()
@@ -2138,6 +2190,31 @@ class KinescopePlayerView @JvmOverloads constructor(
                 showBuffering == PlayerView.SHOW_BUFFERING_WHEN_PLAYING && player.playWhenReady)
     }
 
+    /**
+     * [isBufferingSpinnerVisible] with the rebuffer delay applied: before the first frame
+     * the spinner shows at once; after that only once [REBUFFER_SPINNER_DELAY_MS] passed.
+     */
+    private fun isBufferingSpinnerShown(): Boolean {
+        if (!isBufferingSpinnerVisible()) return false
+        return !hasStartedPlayback || rebufferSpinnerDelayElapsed
+    }
+
+    private fun syncRebufferSpinnerDelay() {
+        val rebuffering = hasStartedPlayback && isBufferingSpinnerVisible()
+        if (!rebuffering) {
+            rebufferSpinnerDelayElapsed = false
+            if (rebufferSpinnerDelayPending) {
+                rebufferSpinnerDelayPending = false
+                removeCallbacks(rebufferSpinnerDelayRunnable)
+            }
+            return
+        }
+        if (!rebufferSpinnerDelayElapsed && !rebufferSpinnerDelayPending) {
+            rebufferSpinnerDelayPending = true
+            postDelayed(rebufferSpinnerDelayRunnable, REBUFFER_SPINNER_DELAY_MS)
+        }
+    }
+
     private fun isVideoLoaded(): Boolean = getVideo() != null
 
     private fun postVideoLoadedChromeUpdate() {
@@ -2206,7 +2283,8 @@ class KinescopePlayerView @JvmOverloads constructor(
     private fun updateBuffering() {
         val player = localExoPlayer
         val waitingForFirstPlayback = player != null && !hasStartedPlayback && player.playWhenReady
-        val showBufferingSpinner = isBufferingSpinnerVisible()
+        syncRebufferSpinnerDelay()
+        val showBufferingSpinner = isBufferingSpinnerShown()
 
         bufferingView?.let { overlay ->
             overlay.isVisible = showBufferingSpinner
@@ -2306,7 +2384,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         if (!showControls) {
             return false
         }
-        if (isBufferingSpinnerVisible()) {
+        if (isBufferingSpinnerShown()) {
             return false
         }
         val showPlayPause = kinescopePlayer?.kinescopePlayerOptions?.showPlayPauseButton ?: true

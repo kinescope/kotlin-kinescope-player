@@ -1,6 +1,8 @@
 # Offline downloads
 
-The library includes an offline download pipeline: `VideoDownloadService` (declared in the library manifest) and [`DownloadVideoOffline`](../kotlin-kinescope-player/src/main/java/io/kinescope/sdk/download/DownloadVideoOffline.kt) as the entry point.
+The player artifact (`io.kinescope:kotlin-kinescope-player`) includes an offline download pipeline: `VideoDownloadService` (declared in the library manifest) and [`DownloadVideoOffline`](../kotlin-kinescope-player/src/main/java/io/kinescope/sdk/download/DownloadVideoOffline.kt) as the entry point. All classes are in the `io.kinescope.sdk.download` package (before 0.1.22 some of them were in `io.kinescope.sdk.shorts.download` / `.drm`). The Shorts artifact has no offline downloads.
+
+Download notification icon: set `VideoDownloadService.notificationIconResId = R.drawable.your_icon` before the first download.
 
 ## Basic flow
 
@@ -42,7 +44,7 @@ DownloadVideoOffline.listDownloadQualities(
 }
 ```
 
-Low-level API: [`OfflineDownloadQualityHelper`](../kotlin-kinescope-shorts/library/src/main/java/io/kinescope/sdk/shorts/download/OfflineDownloadQualityHelper.kt)
+Low-level API: [`OfflineDownloadQualityHelper`](../kotlin-kinescope-player/src/main/java/io/kinescope/sdk/download/OfflineDownloadQualityHelper.kt)
 (Media3 `DownloadHelper` + stream keys).
 
 Offline playback must use `download.request.toMediaItem()` so `streamKeys` match the cached tracks.
@@ -54,7 +56,7 @@ Offline keys are obtained via **Media3 `OfflineLicenseHelper`** and **Widevine C
 ```mermaid
 flowchart
     subgraph meta["Video metadata"]
-        VD["VideoData.drm.widevine.licenseUrl"]
+        VD["Widevine licenseUrl from your video metadata"]
     end
 
     subgraph pssh["PSSH extraction"]
@@ -92,7 +94,7 @@ flowchart
 
 ```mermaid
 sequenceDiagram
-    participant UI as VideoViewHolder / AddDrmDownloadActivity
+    participant UI as Your Activity (e.g. AddDrmDownloadActivity)
     participant DH as DrmHelper
     participant XP as ExoPlayer
     participant DC as DrmConfigurator
@@ -101,9 +103,9 @@ sequenceDiagram
     participant SP as SharedPreferences
     participant DM as DownloadVideoOffline
 
-    UI->>DH: attachToPlayer / setOfflineDownloadPending(VideoData)
+    UI->>DH: setOfflineDownloadPending(metadata) / attachToPlayer
     XP->>DH: drmInitData from stream
-    DH->>UI: callback(VideoData, PSSH)
+    DH->>UI: callback(metadata, PSSH)
 
     UI->>DC: downloadOfflineLicense(..., psshData)
     DC->>OLH: downloadLicense(format with PSSH)
@@ -116,8 +118,8 @@ sequenceDiagram
 
 | Step | Where in the project |
 |------|----------------------|
-| License URL | `videoData.drm?.widevine?.licenseUrl` → `HttpMediaDrmCallback` in [`DrmConfigurator`](../kotlin-kinescope-shorts/library/src/main/java/io/kinescope/sdk/shorts/drm/DrmConfigurator.kt) |
-| PSSH | [`DrmHelper`](../kotlin-kinescope-shorts/library/src/main/java/io/kinescope/sdk/shorts/drm/DrmHelper.kt) parses `DrmInitData` for `C.WIDEVINE_UUID` |
+| License URL | `DrmContentProtection.licenseUrl` → `HttpMediaDrmCallback` in [`DrmConfigurator`](../kotlin-kinescope-player/src/main/java/io/kinescope/sdk/download/DrmConfigurator.kt) |
+| PSSH | [`DrmHelper<T>`](../kotlin-kinescope-player/src/main/java/io/kinescope/sdk/download/DrmHelper.kt) parses `DrmInitData` for `C.WIDEVINE_UUID` |
 | Offline license request | `OfflineLicenseHelper.downloadLicense(format)` with `Format` containing `DrmInitData(SchemeData(WIDEVINE, psshData))` |
 | Offline identifier | `keySetId` — CDM offline license; passed to `DownloadRequest` |
 | Disk backup | `DrmConfigurator.saveOfflineLicenseToStorage` — stores `keySetId` in SharedPreferences by `contentId` |
@@ -126,15 +128,38 @@ sequenceDiagram
 ## DRM download example
 
 ```kotlin
-drmHelper.attachToPlayer(exoPlayer, videoData) { data, pssh ->
-    drmConfigurator.downloadOfflineLicense(context, data, pssh) { keySetId ->
-        val request = DownloadRequest.Builder(contentId, manifestUri)
+import io.kinescope.sdk.download.DownloadVideoOffline
+import io.kinescope.sdk.download.DrmConfigurator
+import io.kinescope.sdk.download.DrmContentProtection
+import io.kinescope.sdk.download.DrmHelper
+
+val drmConfigurator = DrmConfigurator(context)
+// T — your metadata type (here MyVideo with id / hlsLink / licenseUrl)
+val drmHelper = DrmHelper<MyVideo>(context, drmConfigurator) { video, pssh ->
+    val protection = DrmContentProtection(
+        schemeUri = C.WIDEVINE_UUID.toString(),
+        licenseUrl = video.licenseUrl,
+        schemeUuid = C.WIDEVINE_UUID,
+    )
+    drmConfigurator.downloadOfflineLicense(
+        videoUrl = video.hlsLink,
+        drmContentProtection = protection,
+        contentId = video.id,
+        psshData = pssh,
+    ) { keySetId ->
+        keySetId ?: return@downloadOfflineLicense
+        val request = DownloadRequest.Builder(video.id, Uri.parse(video.hlsLink))
             .setMimeType(MimeTypes.APPLICATION_M3U8)
             .setKeySetId(keySetId)
             .build()
         DownloadVideoOffline.startDownload(context, request)
     }
 }
+
+drmHelper.setOfflineDownloadPending(video)
+drmHelper.attachToPlayer(exoPlayer) // exoPlayer plays the DRM stream to get the PSSH
 ```
+
+Full working example: `AddDrmDownloadActivity` in the demo app (`app/.../offlinedrm/`).
 
 The app receives **`keySetId`** after a CDM exchange with the license server; playback and decryption are handled inside Widevine.

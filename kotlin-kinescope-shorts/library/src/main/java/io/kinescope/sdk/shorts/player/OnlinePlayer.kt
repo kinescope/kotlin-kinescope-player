@@ -12,7 +12,6 @@ import androidx.media3.exoplayer.hls.HlsMediaSource
 import io.kinescope.sdk.shorts.cache.VideoCache
 import io.kinescope.sdk.shorts.databinding.ShortsListVideoBinding
 import io.kinescope.sdk.shorts.drm.DrmContentProtection
-import io.kinescope.sdk.shorts.drm.DrmHelper
 import io.kinescope.sdk.shorts.managers.PlayerFactory
 import io.kinescope.sdk.shorts.models.VideoData
 import io.kinescope.sdk.shorts.network.InternetConnection
@@ -27,7 +26,6 @@ import java.util.UUID
 class OnlinePlayer(
     private val context: Context,
     private val internetConnection: InternetConnection,
-    private val drmHelper: DrmHelper,
     private val playerFactory: PlayerFactory
 
 ) {
@@ -69,7 +67,6 @@ class OnlinePlayer(
             .build()
 
         player.setMediaItem(mediaItem)
-        drmHelper.attachToPlayer(player)
     }
 
     private fun setupClearPlayer(player: ExoPlayer, videoData: VideoData, binding: ShortsListVideoBinding) {

@@ -30,8 +30,8 @@ import io.kinescope.demo.databinding.ActivityOfflineMainPlayerBinding
 import io.kinescope.sdk.player.KinescopeContentOrientationController
 import io.kinescope.sdk.player.KinescopeVideoPlayer
 import io.kinescope.sdk.shorts.AppJson
-import io.kinescope.sdk.shorts.download.VideoDownloadManager
-import io.kinescope.sdk.shorts.drm.DrmConfigurator
+import io.kinescope.sdk.download.DrmConfigurator
+import io.kinescope.sdk.download.VideoDownloadManager
 import io.kinescope.sdk.shorts.models.VideoData
 import io.kinescope.sdk.view.KinescopePlayerView
 import java.security.MessageDigest
@@ -412,17 +412,11 @@ class OfflineMainPlayerActivity : AppCompatActivity() {
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         releasePlayerSafely()
 
-        when (intent.getStringExtra(EXTRA_UP_NAVIGATION)) {
-            UP_NAV_OFFLINE_DRM_LIST -> {
-                startActivity(
-                    Intent(this, OfflineDrmDemoActivity::class.java).apply {
-                        addFlags(
-                            Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                                Intent.FLAG_ACTIVITY_SINGLE_TOP,
-                        )
-                    },
-                )
-            }
+        // The list that opened the player is right below: finish() plays the normal
+        // "close" (back) transition. Re-starting the list played the "open" (forward) one.
+        // Only when the player is alone in the task (nothing to return to) open the list.
+        if (isTaskRoot && intent.getStringExtra(EXTRA_UP_NAVIGATION) == UP_NAV_OFFLINE_DRM_LIST) {
+            startActivity(Intent(this, OfflineDrmDemoActivity::class.java))
         }
         finish()
     }

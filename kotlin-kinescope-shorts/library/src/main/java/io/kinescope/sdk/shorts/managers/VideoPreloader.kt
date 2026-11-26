@@ -11,10 +11,8 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
-import androidx.media3.exoplayer.offline.Download
 import io.kinescope.sdk.shorts.cache.MediaCachePrefetcher
 import io.kinescope.sdk.shorts.cache.VideoCache
-import io.kinescope.sdk.shorts.download.VideoDownloadManager
 import io.kinescope.sdk.shorts.models.VideoData
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -169,11 +167,6 @@ class VideoPreloader(
             try {
                 if (scrollPaused.get() || currentPlan.get().tier == PreloadTier.CRITICAL) return@launch
                 if (!currentPlan.get().allowPlayerPreload) return@launch
-                val contentId = generateContentId(videoData.hlsLink)
-                val download = VideoDownloadManager.getDownloadIndex(context).getDownload(contentId)
-                if (download != null && download.state == Download.STATE_COMPLETED) {
-                    return@launch
-                }
 
                 withContext(Dispatchers.Main) {
                     if (scrollPaused.get() || currentPlan.get().tier == PreloadTier.CRITICAL) return@withContext
@@ -221,11 +214,6 @@ class VideoPreloader(
         val job = preloadScope.launch {
             try {
                 if (scrollPaused.get() || currentPlan.get().tier == PreloadTier.CRITICAL) return@launch
-                val contentId = generateContentId(videoData.hlsLink)
-                val download = VideoDownloadManager.getDownloadIndex(context).getDownload(contentId)
-                if (download != null && download.state == Download.STATE_COMPLETED) {
-                    return@launch
-                }
                 prefetcher.prefetchHls(videoData.hlsLink)
             } catch (_: Exception) {
             } finally {

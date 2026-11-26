@@ -20,12 +20,13 @@ import androidx.media3.exoplayer.offline.Download
 import androidx.media3.exoplayer.offline.DownloadManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.recyclerview.widget.SimpleItemAnimator
 import com.bumptech.glide.Glide
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.imageview.ShapeableImageView
 import io.kinescope.demo.R
 import io.kinescope.sdk.shorts.AppJson
-import io.kinescope.sdk.shorts.download.VideoDownloadManager
+import io.kinescope.sdk.download.VideoDownloadManager
 import io.kinescope.sdk.shorts.models.VideoData
 import java.nio.charset.StandardCharsets
 import kotlinx.coroutines.CoroutineScope
@@ -40,7 +41,7 @@ class OfflineDrmDemoActivity : AppCompatActivity() {
 
     private lateinit var recycler: RecyclerView
     private lateinit var emptyText: TextView
-    private var adapter: Adapter? = null
+    private lateinit var adapter: Adapter
     private var progressUpdateJob: Job? = null
 
     private val downloadListener = object : DownloadManager.Listener {
@@ -75,6 +76,10 @@ class OfflineDrmDemoActivity : AppCompatActivity() {
         VideoDownloadManager.initialize(this)
         VideoDownloadManager.addDownloadListener(this, downloadListener)
         recycler.layoutManager = LinearLayoutManager(this)
+        // No cross-fade on every progress tick — it made the row blink.
+        (recycler.itemAnimator as? SimpleItemAnimator)?.supportsChangeAnimations = false
+        adapter = Adapter(::onOfflineItemClick, ::onDeleteClick)
+        recycler.adapter = adapter
         refreshList()
         startProgressUpdates()
     }
@@ -111,8 +116,7 @@ class OfflineDrmDemoActivity : AppCompatActivity() {
 
     private fun refreshList() {
         val items = loadOfflineListItems()
-        adapter = Adapter(items, ::onOfflineItemClick, ::onDeleteClick)
-        recycler.adapter = adapter
+        adapter.update(items)
 
         if (items.isEmpty()) {
             recycler.visibility = View.GONE
@@ -194,10 +198,31 @@ class OfflineDrmDemoActivity : AppCompatActivity() {
     )
 
     private class Adapter(
-        private val items: List<OfflineListItem>,
         private val onItemClick: (OfflineListItem) -> Unit,
         private val onDeleteClick: (String) -> Unit,
     ) : RecyclerView.Adapter<Adapter.VH>() {
+
+        private var items: List<OfflineListItem> = emptyList()
+
+        /**
+         * Same rows in the same order → only progress is rebound (no new adapter, no poster
+         * reload, no restarted spinner). Otherwise the whole list is rebound.
+         */
+        fun update(newItems: List<OfflineListItem>) {
+            val old = items
+            items = newItems
+            val sameRows = old.size == newItems.size && old.indices.all { i ->
+                old[i].download.request.id == newItems[i].download.request.id &&
+                    old[i].isActive == newItems[i].isActive
+            }
+            if (!sameRows) {
+                notifyDataSetChanged()
+                return
+            }
+            newItems.indices.forEach { i ->
+                if (newItems[i].isActive) notifyItemChanged(i, PAYLOAD_PROGRESS)
+            }
+        }
 
         class VH(view: View) : RecyclerView.ViewHolder(view) {
             val index: TextView = view.findViewById(R.id.index)
@@ -213,6 +238,30 @@ class OfflineDrmDemoActivity : AppCompatActivity() {
             val v = LayoutInflater.from(parent.context)
                 .inflate(R.layout.item_offline_drm, parent, false)
             return VH(v)
+        }
+
+        override fun onBindViewHolder(holder: VH, position: Int, payloads: MutableList<Any>) {
+            if (payloads.contains(PAYLOAD_PROGRESS)) {
+                val item = items[position]
+                if (item.isActive) bindProgress(holder, item.download)
+                holder.itemView.setOnClickListener { onItemClick(item) }
+                return
+            }
+            onBindViewHolder(holder, position)
+        }
+
+        private fun bindProgress(holder: VH, download: Download) {
+            val (percent, bytesDownloaded) = VideoDownloadManager.getDownloadProgress(download)
+            val indeterminate = percent <= 0 && bytesDownloaded <= 0 ||
+                download.state == Download.STATE_QUEUED ||
+                download.state == Download.STATE_RESTARTING
+            if (holder.progressBar.isIndeterminate != indeterminate) {
+                holder.progressBar.isIndeterminate = indeterminate
+            }
+            if (!indeterminate) {
+                holder.progressBar.progress = percent.coerceIn(0, 100)
+            }
+            holder.progressText.text = VideoDownloadManager.formatDownloadProgressLabel(download)
         }
 
         override fun onBindViewHolder(holder: VH, position: Int) {
@@ -238,16 +287,7 @@ class OfflineDrmDemoActivity : AppCompatActivity() {
                 holder.playOverlay.isVisible = false
                 holder.progressBar.isVisible = true
                 holder.progressText.isVisible = true
-                val (percent, bytesDownloaded) = VideoDownloadManager.getDownloadProgress(item.download)
-                val indeterminate = percent <= 0 && bytesDownloaded <= 0 ||
-                    item.download.state == Download.STATE_QUEUED ||
-                    item.download.state == Download.STATE_RESTARTING
-                holder.progressBar.isIndeterminate = indeterminate
-                if (!indeterminate) {
-                    holder.progressBar.progress = percent.coerceIn(0, 100)
-                }
-                holder.progressText.text =
-                    VideoDownloadManager.formatDownloadProgressLabel(item.download)
+                bindProgress(holder, item.download)
                 holder.btnDelete.isEnabled = true
             } else {
                 holder.playOverlay.isVisible = true
@@ -268,5 +308,6 @@ class OfflineDrmDemoActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "OfflineDrmDemo"
+        private const val PAYLOAD_PROGRESS = "progress"
     }
 }

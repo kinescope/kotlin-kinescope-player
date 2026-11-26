@@ -66,6 +66,26 @@ playerView.hidePoster()
 
 For the live awaiting placeholder (`live_awaiting_cover`), see [Live](live.md) (`showLiveAwaitingCover`).
 
+## Watermark (from server)
+
+The watermark is set up in the Kinescope dashboard for each video, not in code. The player gets it from the video JSON (`sdk.watermark`) and draws it over the video, including fullscreen and after switching videos. A video without a watermark shows nothing.
+
+| Field | Meaning | Default |
+|-------|---------|---------|
+| `text` | Watermark text; empty → no watermark | — |
+| `mode` | `random` — text jumps to a new place every 6 s; `stripes` — diagonal rows over the whole frame | `random` |
+| `scale` | Text width as a share of the video width (0–1) | `0.25` |
+| `display_timeout` | Blinking, ms: a number (same show and hide time) or `{"visible": …, "hidden": …}`; `0` / absent → always shown | always shown |
+| `color` | CSS colour `#RGB`, `#RGBA`, `#RRGGBB` or `#RRGGBBAA` (last byte is opacity) | white, 40 % |
+
+Read the current text (e.g. for logs or tests):
+
+```kotlin
+val text: String? = playerView.watermarkText // null when there is no watermark
+```
+
+There is no client-side watermark setting for now — the server value is always used.
+
 ## Built-in chrome toggles
 
 Show or hide standard controls via [KinescopePlayerOptions](player-options.md), then call `playerView.applyTemplateOptions()`.

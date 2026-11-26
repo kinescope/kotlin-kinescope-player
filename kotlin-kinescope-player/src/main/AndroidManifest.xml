@@ -13,7 +13,7 @@
             android:value="io.kinescope.sdk.cast.KinescopeCastOptionsProvider" />
 
         <service
-            android:name=".shorts.download.VideoDownloadService"
+            android:name=".download.VideoDownloadService"
             android:exported="false"
             android:foregroundServiceType="dataSync">
             <intent-filter>

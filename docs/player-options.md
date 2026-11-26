@@ -41,8 +41,8 @@ Both placeholders are **on by default**. Disable if you want an empty surface or
 
 ```kotlin
 kinescopePlayer.kinescopePlayerOptions.apply {
-    showDefaultPoster = false       // no default_poster.png fallback
-    showLiveAwaitingCover = false   // no live_awaiting_cover.png before live starts
+    showDefaultPoster = false       // no default_poster fallback
+    showLiveAwaitingCover = false   // no live_awaiting_cover before live starts
 }
 ```
 

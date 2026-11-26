@@ -1,55 +1,26 @@
 package io.kinescope.sdk.shorts.viewholders
 
-import android.app.Activity
 import android.content.Context
-import android.content.Intent
-import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
-import android.os.Handler
-import android.os.Looper
-import android.util.Base64
-import android.view.Gravity
-import android.view.LayoutInflater
 import android.view.SurfaceView
 import android.view.ViewGroup
-import android.widget.Button
-import android.widget.PopupWindow
 import android.widget.SeekBar
-import android.widget.Toast
-import com.bumptech.glide.Glide
-import androidx.appcompat.app.AlertDialog
-import androidx.core.net.toUri
-import androidx.recyclerview.widget.RecyclerView
-import io.kinescope.sdk.shorts.R
-import io.kinescope.sdk.shorts.adapters.ViewPager2Adapter
-import io.kinescope.sdk.shorts.databinding.ShortsListVideoBinding
-import io.kinescope.sdk.shorts.drm.DrmConfigurator
-import io.kinescope.sdk.shorts.drm.DrmContentProtection
-import io.kinescope.sdk.shorts.managers.PlayerManager
-import io.kinescope.sdk.shorts.models.VideoData
-import io.kinescope.sdk.shorts.network.InternetConnection
-import io.kinescope.sdk.shorts.view.SeekBarWrap
-import io.kinescope.sdk.shorts.view.SeekPlayerControl
-import androidx.media3.common.C
-import androidx.media3.common.MimeTypes
-import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.offline.Download
-import androidx.media3.exoplayer.offline.DownloadManager
-import androidx.recyclerview.widget.LinearLayoutManager
-import io.kinescope.sdk.shorts.AppJson
-import io.kinescope.sdk.shorts.interfaces.ActivityProvider
-import io.kinescope.sdk.shorts.download.OfflineDownloadQualityHelper
-import io.kinescope.sdk.shorts.download.VideoDownloadManager
-import io.kinescope.sdk.shorts.download.VideoDownloadService
-import io.kinescope.sdk.shorts.view.DownloadPopupAdapter
+import androidx.recyclerview.widget.RecyclerView
+import com.bumptech.glide.Glide
+import io.kinescope.sdk.shorts.R
+import io.kinescope.sdk.shorts.adapters.ViewPager2Adapter
 import io.kinescope.sdk.shorts.config.KinescopeUiConfig
+import io.kinescope.sdk.shorts.databinding.ShortsListVideoBinding
+import io.kinescope.sdk.shorts.interfaces.ActivityProvider
+import io.kinescope.sdk.shorts.managers.PlayerManager
+import io.kinescope.sdk.shorts.models.VideoData
 import io.kinescope.sdk.shorts.utils.ThumbnailLoader
 import io.kinescope.sdk.shorts.view.ExpandableTextHelper
+import io.kinescope.sdk.shorts.view.SeekBarWrap
+import io.kinescope.sdk.shorts.view.SeekPlayerControl
 import kotlinx.serialization.InternalSerializationApi
-import java.security.MessageDigest
-import java.util.UUID
+
 
 
 @UnstableApi @InternalSerializationApi
@@ -67,16 +38,11 @@ class VideoViewHolder(
         binding.playerView.findViewById<SeekBar>(R.id.seekBar).also { KinescopeUiConfig.applyToSeekBar(it) }
     private val seekBarWrap = SeekBarWrap(this)
     private val seekPlayerControl = SeekPlayerControl(null, seekBar)
-    private val drmConfigurator = DrmConfigurator(context)
-    private val internetConnection = InternetConnection(context)
 
     private val titleExpand = ExpandableTextHelper(binding.TitleVideo, expandedMaxLines = 5)
     private val descriptionExpand =
         ExpandableTextHelper(binding.descriptionVideo, expandedMaxLines = 10)
 
-    private var popupWindow: PopupWindow? = null
-    private val progressUpdateHandler = Handler(Looper.getMainLooper())
-    private var progressUpdateRunnable: Runnable? = null
 
     /** Optional: pause Shorts preload while this page rebuffers. */
     var onRebufferingChanged: ((Boolean) -> Unit)? = null
@@ -84,36 +50,6 @@ class VideoViewHolder(
             field = value
             playerManager.onRebufferingChanged = value
         }
-
-    private val downloadListener = object : DownloadManager.Listener {
-        private val handler = Handler(Looper.getMainLooper())
-
-        override fun onDownloadChanged(
-            downloadManager: DownloadManager,
-            download: Download,
-            finalException: Exception?
-        ) {
-            handler.post {
-                videoData?.let { data ->
-                    val contentId = generateStableContentId(data.hlsLink)
-                    if (download.request.id == contentId) {
-                        updateDownloadProgressForVideo(data)
-                    }
-                }
-            }
-        }
-
-        override fun onDownloadRemoved(downloadManager: DownloadManager, download: Download) {
-            handler.post {
-                videoData?.let { data ->
-                    val contentId = generateStableContentId(data.hlsLink)
-                    if (download.request.id == contentId) {
-                        updateDownloadProgressForVideo(data)
-                    }
-                }
-            }
-        }
-    }
 
     val playerManager = PlayerManager(
         context,
@@ -123,45 +59,22 @@ class VideoViewHolder(
         this,
     )
 
-    private fun showToast(message: String) {
-        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-    }
-
-    private fun updateDownloadStatus(message: String) {
-        showToast(message)
-    }
-
     init {
         val layoutParams = binding.root.layoutParams
         layoutParams.height = ViewGroup.LayoutParams.MATCH_PARENT
         layoutParams.width = ViewGroup.LayoutParams.MATCH_PARENT
         binding.root.layoutParams = layoutParams
         KinescopeUiConfig.applyToVideoItem(binding.root)
-
-        VideoDownloadManager.addDownloadListener(context, downloadListener)
-
-        binding.btnOffline.setOnClickListener {
-            videoData?.let { data ->
-                VideoDownloadManager.initialize(context)
-                promptQualityThenDownload(data)
-            }
-        }
-        binding.btnShowSavedVideos.setOnClickListener {
-            showOfflineVideosPopup()
-        }
     }
 
     fun bindOnlineVideos(videoData: VideoData, preloadedPlayer: ExoPlayer? = null) {
         binding.playerView.player = null
         this.videoData = videoData
-        playerManager.exposedDrmHelper.reset()
         val surfaceView = binding.playerView.videoSurfaceView as? SurfaceView
         surfaceView?.holder?.setFixedSize(1, 1)
 
         bindTextChrome(videoData)
         showThumbnail()
-
-        updateDownloadProgressForVideo(videoData)
 
         playerManager.setupOnlinePlayer(
             videoData,
@@ -200,309 +113,12 @@ class VideoViewHolder(
     fun hideThumbnail() {
         binding.thumbnailView.visibility = android.view.View.GONE
     }
-    
-    private fun updateDownloadProgressForVideo(videoData: VideoData) {
-        binding.downloadProgress.visibility = android.view.View.GONE
-        stopProgressUpdates()
-    }
 
-    private fun stopProgressUpdates() {
-        progressUpdateRunnable?.let {
-            progressUpdateHandler.removeCallbacks(it)
-            progressUpdateRunnable = null
-        }
-    }
-    
-    private fun startAggressiveProgressUpdates(contentId: String, videoData: VideoData) {
-        var attempts = 0
-        val maxFastAttempts = 25
-
-        val aggressiveRunnable = object : Runnable {
-            override fun run() {
-                val download = VideoDownloadManager.getDownloadById(contentId)
-
-                if (download != null) {
-                    updateDownloadProgressForVideo(videoData)
-                    return
-                }
-
-                attempts++
-                if (attempts < maxFastAttempts) {
-                    progressUpdateHandler.postDelayed(this, 200)
-                } else {
-                    updateDownloadProgressForVideo(videoData)
-                }
-            }
-        }
-        
-        progressUpdateHandler.post(aggressiveRunnable)
-    }
-    
     fun onDetached() {
-        stopProgressUpdates()
         titleExpand.onDetached()
         descriptionExpand.onDetached()
         titleExpand.collapse(animate = false)
         descriptionExpand.collapse(animate = false)
-        VideoDownloadManager.removeDownloadListener(downloadListener)
-    }
-
-    private var pendingDownloadHeight: Int? = null
-
-    private fun promptQualityThenDownload(data: VideoData) {
-        updateDownloadStatus("Читаем качества…")
-        val hints = data.qualityMap?.map { entry ->
-            OfflineDownloadQualityHelper.QualityMapHint(
-                height = entry.height,
-                name = entry.name,
-                label = entry.label,
-            )
-        }
-        OfflineDownloadQualityHelper.listQualities(
-            context = context,
-            manifestUri = data.hlsLink.toUri(),
-            qualityMap = hints,
-        ) { result ->
-            result.onSuccess { qualities ->
-                if (qualities.isEmpty()) {
-                    updateDownloadStatus("Нет доступных качеств")
-                    return@onSuccess
-                }
-                val activity = context as? Activity
-                if (activity == null) {
-                    beginDownloadWithQuality(data, qualities.first())
-                    return@onSuccess
-                }
-                AlertDialog.Builder(activity)
-                    .setTitle("Качество")
-                    .setItems(qualities.map { it.label }.toTypedArray()) { _, which ->
-                        beginDownloadWithQuality(data, qualities[which])
-                    }
-                    .setNegativeButton(android.R.string.cancel, null)
-                    .show()
-            }.onFailure {
-                updateDownloadStatus("Ошибка чтения качеств")
-            }
-        }
-    }
-
-    private fun beginDownloadWithQuality(
-        data: VideoData,
-        quality: OfflineDownloadQualityHelper.QualityOption,
-    ) {
-        val dataWithQuality = data.copy(selectedQualityLabel = quality.label)
-        pendingDownloadHeight = quality.height
-        val contentId = generateStableContentId(data.hlsLink, quality.height)
-        val existingDownload = VideoDownloadManager.getDownloadById(contentId)
-        if (existingDownload != null && existingDownload.state == Download.STATE_COMPLETED) {
-            updateDownloadStatus("Видео уже скачено (${quality.label})")
-            return
-        }
-
-        if (!data.drm?.widevine?.licenseUrl.isNullOrBlank()) {
-            updateDownloadStatus("Получение DRM ключей...")
-            val existingLicense = drmConfigurator.loadOfflineLicenseFromStorage(contentId)
-            if (existingLicense != null) {
-                updateDownloadStatus("Ключ получен, начинаем загрузку…")
-                startOfflineDownload(dataWithQuality, existingLicense, quality.height)
-                return
-            }
-
-            val player = playerManager.exoPlayer
-            val currentPosition = player?.currentPosition ?: 0L
-            val wasPlaying = player?.isPlaying == true
-
-            playerManager.exposedDrmHelper.callback = { videoData, pssh ->
-                updateDownloadStatus("Ключ получен, начинаем загрузку…")
-                downloadLicense(videoData.copy(selectedQualityLabel = quality.label), pssh, quality.height) { keySetId ->
-                    if (keySetId != null) {
-                        val active = playerManager.exoPlayer
-                        if (wasPlaying && active != null && active.playbackState != androidx.media3.common.Player.STATE_IDLE) {
-                            active.seekTo(currentPosition)
-                            active.playWhenReady = true
-                        }
-                    } else {
-                        updateDownloadStatus("Ошибка загрузки лицензии")
-                    }
-                }
-            }
-
-            var availablePssh = playerManager.exposedDrmHelper.psshData
-            if (availablePssh == null) {
-                availablePssh = player?.videoFormat?.drmInitData?.let { drmInitData ->
-                    for (i in 0 until drmInitData.schemeDataCount) {
-                        val schemeData = drmInitData.get(i)
-                        if (schemeData.matches(C.WIDEVINE_UUID) && schemeData.hasData()) {
-                            return@let schemeData.data
-                        }
-                    }
-                    null
-                }
-            }
-            if (availablePssh == null) {
-                try {
-                    player?.currentTracks?.groups?.forEach { group ->
-                        if (group.mediaTrackGroup.length > 0) {
-                            group.mediaTrackGroup.getFormat(0).drmInitData?.let { drmInitData ->
-                                for (i in 0 until drmInitData.schemeDataCount) {
-                                    val schemeData = drmInitData.get(i)
-                                    if (schemeData.matches(C.WIDEVINE_UUID) && schemeData.hasData()) {
-                                        availablePssh = schemeData.data
-                                        return@forEach
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } catch (_: Exception) {
-                }
-            }
-
-            val finalPssh = availablePssh
-            if (finalPssh != null && finalPssh.isNotEmpty()) {
-                playerManager.exposedDrmHelper.psshData = finalPssh
-                playerManager.exposedDrmHelper.callback?.invoke(dataWithQuality, finalPssh)
-            } else {
-                playerManager.exposedDrmHelper.setOfflineDownloadPending(dataWithQuality)
-                playerManager.setupOnlinePlayer(dataWithQuality, absoluteAdapterPosition, binding)
-                playerManager.exoPlayer?.playWhenReady = true
-                Toast.makeText(context, "Получаем ключ...", Toast.LENGTH_SHORT).show()
-            }
-        } else {
-            updateDownloadStatus("Начинаем загрузку (${quality.label})…")
-            startClearVideoDownload(dataWithQuality, quality.height)
-        }
-    }
-
-    fun startOfflineLicenseDownload(
-        videoData: VideoData,
-        psshData: ByteArray?,
-        callback: (ByteArray?) -> Unit
-    ) {
-        if(psshData !=null && psshData.isNotEmpty()){
-            downloadLicense(videoData, psshData, pendingDownloadHeight, callback)
-            return
-        }
-        val tempCallback: (VideoData, ByteArray) -> Unit = { videoData, pssh ->
-            downloadLicense(videoData, pssh, pendingDownloadHeight, callback)
-        }
-        val originalCallback = playerManager.exposedDrmHelper.callback
-        playerManager.exposedDrmHelper.callback = tempCallback
-        playerManager.exposedDrmHelper.setOfflineDownloadPending(videoData)
-        Handler(Looper.getMainLooper()).postDelayed({
-            playerManager.exposedDrmHelper.callback = originalCallback
-        }, 1000)
-    }
-
-    private fun downloadLicense(
-        videoData: VideoData,
-        psshData: ByteArray,
-        videoHeightPx: Int? = pendingDownloadHeight,
-        callback: (ByteArray?) -> Unit,
-    ) {
-        val height = videoHeightPx ?: 0
-        val contentId = generateStableContentId(videoData.hlsLink, height)
-        val drmData = DrmContentProtection(
-            schemeUri = C.WIDEVINE_UUID.toString(),
-            licenseUrl = videoData.drm?.widevine?.licenseUrl,
-            schemeUuid = C.WIDEVINE_UUID
-        )
-        drmConfigurator.downloadOfflineLicense(
-            videoUrl = videoData.hlsLink,
-            drmContentProtection = drmData,
-            contentId = contentId,
-            psshData = psshData
-        ) { keySetId ->
-            (context as? Activity)?.runOnUiThread {
-                if (keySetId != null) {
-                    drmConfigurator.saveOfflineLicenseToStorage(contentId, keySetId)
-                    startOfflineDownload(videoData, keySetId, height)
-                } else {
-                    Toast.makeText(context, "Ошибка загрузки лицензии", Toast.LENGTH_SHORT).show()
-                }
-                callback(keySetId)
-            }
-        }
-    }
-
-    fun startOfflineDownload(videoData: VideoData, keySetId: ByteArray, videoHeightPx: Int = pendingDownloadHeight ?: 0) {
-        val contentId = generateStableContentId(videoData.hlsLink, videoHeightPx)
-        val existingDownload = VideoDownloadManager.getDownloadById(contentId)
-        if (existingDownload != null && existingDownload.state == Download.STATE_COMPLETED) {
-            Toast.makeText(context, "Видео уже скачено", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val videoDataJson = try {
-            AppJson.encodeToString(VideoData.serializer(), videoData)
-        } catch (e: Exception) {
-            "{}"
-        }
-        if (videoHeightPx > 0) {
-            OfflineDownloadQualityHelper.buildDownloadRequest(
-                context = context,
-                contentId = contentId,
-                manifestUri = videoData.hlsLink.toUri(),
-                videoHeightPx = videoHeightPx,
-                videoWidthPx = C.LENGTH_UNSET,
-                data = videoDataJson.toByteArray(Charsets.UTF_8),
-                keySetId = keySetId,
-            ) { result ->
-                result.onSuccess { request ->
-                    VideoDownloadService.startDownload(context, request)
-                    binding.downloadProgress.visibility = android.view.View.GONE
-                }
-            }
-        } else {
-            try {
-                val downloadRequest = androidx.media3.exoplayer.offline.DownloadRequest.Builder(
-                    contentId,
-                    videoData.hlsLink.toUri(),
-                )
-                    .setMimeType(MimeTypes.APPLICATION_M3U8)
-                    .setData(videoDataJson.toByteArray(Charsets.UTF_8))
-                    .setKeySetId(keySetId)
-                    .build()
-                VideoDownloadService.startDownload(context, downloadRequest)
-                binding.downloadProgress.visibility = android.view.View.GONE
-            } catch (_: Exception) {
-            }
-        }
-    }
-
-    private fun startClearVideoDownload(videoData: VideoData, videoHeightPx: Int) {
-        val contentId = generateStableContentId(videoData.hlsLink, videoHeightPx)
-        val existingDownload = VideoDownloadManager.getDownloadById(contentId)
-
-        if (existingDownload != null && existingDownload.state == Download.STATE_COMPLETED) {
-            Toast.makeText(context, "Видео уже скачено", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val videoDataJson = try {
-            AppJson.encodeToString(VideoData.serializer(), videoData)
-        } catch (_: Exception) {
-            "{}"
-        }
-        OfflineDownloadQualityHelper.buildDownloadRequest(
-            context = context,
-            contentId = contentId,
-            manifestUri = videoData.hlsLink.toUri(),
-            videoHeightPx = videoHeightPx,
-            data = videoDataJson.toByteArray(Charsets.UTF_8),
-            keySetId = null,
-        ) { result ->
-            result.onSuccess { request ->
-                VideoDownloadService.startDownload(context, request)
-                binding.downloadProgress.visibility = android.view.View.GONE
-            }
-        }
-    }
-
-    fun bindOfflineVideos(videoData: VideoData, download: Download?) {
-        this.videoData = videoData
-        bindTextChrome(videoData)
-        showThumbnail()
-        playerManager.setupOfflinePlayer(videoData, absoluteAdapterPosition, binding, download)
     }
 
     fun bindTextChrome(videoData: VideoData) {
@@ -514,163 +130,6 @@ class VideoViewHolder(
         } else {
             binding.descriptionVideo.visibility = android.view.View.VISIBLE
             descriptionExpand.bind(description)
-        }
-    }
-
-    fun generateStableContentId(url: String, heightPx: Int = 0): String {
-        return try {
-            val stablePart = if (heightPx > 0) {
-                "${url.substringBefore("?")}#$heightPx"
-            } else {
-                url.substringBefore("?")
-            }
-            val digest = MessageDigest.getInstance("SHA-256").digest(stablePart.toByteArray())
-            Base64.encodeToString(digest, Base64.NO_WRAP or Base64.NO_PADDING)
-        } catch (e: Exception) {
-            UUID.randomUUID().toString()
-        }
-    }
-
-    private fun showOfflineVideosPopup() {
-        VideoDownloadManager.initialize(context)
-        val inflater = context.getSystemService(Context.LAYOUT_INFLATER_SERVICE) as LayoutInflater
-        val popupView = inflater.inflate(R.layout.shorts_popup_offline_videos, null)
-        val recyclerView = popupView.findViewById<RecyclerView>(R.id.recyclerOffline)
-        val closeButton = popupView.findViewById<Button>(R.id.btnClose)
-
-        val allDownloads = VideoDownloadManager.getAllDownloadsWithActiveFirst(context).toMutableList()
-        val adapter = DownloadPopupAdapter(context, allDownloads)
-        recyclerView.layoutManager = LinearLayoutManager(context)
-        recyclerView.adapter = adapter
-        adapter.startProgressUpdates()
-
-        adapter.setOnItemClicked { download ->
-            if (download.state == Download.STATE_COMPLETED) {
-                activityProvider?.pauseCurrentPlayer()
-
-                debugDownloadData(download)
-                val videoDataJson = try {
-                    String(download.request.data, Charsets.UTF_8)
-                } catch (e: Exception) {
-                    "{}"
-                }
-
-                val videoData = try {
-                    AppJson.decodeFromString(VideoData.serializer(), videoDataJson)
-                } catch (e: Exception) {
-                    VideoData(
-                        hlsLink = download.request.uri.toString(),
-                        drm = null,
-                        title = "Загруженное видео"
-                    )
-                }
-
-                val intent = activityProvider?.getOfflinePlayerActivityIntent(videoData, download.request.id)
-                    ?: Intent().apply { }
-
-                if (context is Activity) {
-                    context.startActivity(intent)
-                } else {
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    context.startActivity(intent)
-                }
-
-            } else if (download.state == Download.STATE_DOWNLOADING || download.state == Download.STATE_QUEUED) {
-                val (percent, bytesDownloaded) = VideoDownloadManager.getDownloadProgress(download)
-                val totalSize = download.contentLength
-                val downloadedMB = bytesDownloaded / (1024 * 1024)
-                val totalMB = if (totalSize > 0) totalSize / (1024 * 1024) else 0
-
-                Toast.makeText(
-                    context,
-                    "Загрузка: $percent% ($downloadedMB MB / $totalMB MB)",
-                    Toast.LENGTH_SHORT
-                ).show()
-            } else {
-                Toast.makeText(
-                    context,
-                    "Статус: ${getDownloadStateText(download.state)}",
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
-        }
-
-
-        adapter.setOnDeleteClicked { download ->
-            VideoDownloadManager.removeDownload(context, download.request.id)
-            Toast.makeText(context, "Видео удалено", Toast.LENGTH_SHORT).show()
-        }
-
-        val downloadListener = object : DownloadManager.Listener {
-            private val handler = Handler(Looper.getMainLooper())
-
-            override fun onDownloadChanged(
-                downloadManager: DownloadManager,
-                download: Download,
-                finalException: Exception?
-            ) {
-                handler.post {
-                    val updatedDownloads = VideoDownloadManager.getAllDownloadsWithActiveFirst(context)
-                    adapter.updateDownloadsList(updatedDownloads)
-
-                    videoData?.let { data ->
-                        val contentId = generateStableContentId(data.hlsLink)
-                        if (download.request.id == contentId) {
-                            updateDownloadProgressForVideo(data)
-                        }
-                    }
-                }
-            }
-
-            override fun onDownloadRemoved(downloadManager: DownloadManager, download: Download) {
-                handler.post {
-                    val updatedDownloads = VideoDownloadManager.getAllDownloadsWithActiveFirst(context)
-                    adapter.updateDownloadsList(updatedDownloads)
-
-                    videoData?.let { data ->
-                        val contentId = generateStableContentId(data.hlsLink)
-                        if (download.request.id == contentId) {
-                            updateDownloadProgressForVideo(data)
-                        }
-                    }
-                }
-            }
-        }
-        VideoDownloadManager.addDownloadListener(context, downloadListener)
-        popupWindow = PopupWindow(
-            popupView,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            true
-        ).apply {
-            isOutsideTouchable = true
-            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-            animationStyle = R.style.PopupAnimation
-        }
-
-        popupWindow?.showAtLocation(binding.root, Gravity.END, 0, 0)
-
-        popupWindow?.setOnDismissListener {
-            adapter.stopProgressUpdates()
-            VideoDownloadManager.removeDownloadListener(downloadListener)
-            popupWindow = null
-        }
-
-        closeButton.setOnClickListener {
-            popupWindow?.dismiss()
-        }
-    }
-    private fun debugDownloadData(download: Download) {
-    }
-
-    private fun getDownloadStateText(state: Int): String {
-        return when (state) {
-            Download.STATE_QUEUED -> "В очереди"
-            Download.STATE_DOWNLOADING -> "Скачивается"
-            Download.STATE_COMPLETED -> "Завершено"
-            Download.STATE_FAILED -> "Ошибка"
-            Download.STATE_STOPPED -> "Остановлено"
-            else -> "Неизвестно"
         }
     }
 }

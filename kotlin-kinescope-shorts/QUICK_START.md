@@ -68,7 +68,6 @@ KinescopeUiConfig.seekBarTrackColor = 0x52FFFFFF
 | Flag / field | Effect |
 |--------------|--------|
 | `showLikeButton` / `showDislikeButton` / `showCommentButton` / `showShareButton` | Side action visibility |
-| `showOfflineButton` / `showSavedVideosButton` | Offline / saved-menu buttons |
 | `showPlayButton` | Center play overlay on pause (`false` hides icon; tap-to-toggle still works) |
 | `showSeekBar` | Bottom timeline + hit area + time chip |
 | `showPreloadImage` | Figma stub while poster loads / when poster is missing (`false` → black until poster/frame) |
@@ -86,13 +85,15 @@ Scrub seeks only after **hold + drag** (tap alone does not seek). Timeline is sh
 
 ### 1. Add the dependency
 
-Via **kotlin-kinescope-player** (recommended; includes Shorts, player, and offline):
+Shorts is a separate artifact since 0.1.22 (no full player, no offline downloads):
 
 ```groovy
 dependencies {
-    implementation 'io.kinescope:kotlin-kinescope-player:0.1.21'
+    implementation 'io.kinescope:kotlin-kinescope-shorts:0.1.22'
 }
 ```
+
+Also need `KinescopePlayerView` or offline downloads? Add `io.kinescope:kotlin-kinescope-player:0.1.22` as well.
 
 Maven Central is recommended. **JitPack is no longer supported** for new apps (legacy pins: [installation.md](../docs/installation.md#legacy--jitpack-unsupported)).
 
@@ -121,7 +122,6 @@ class MainActivity : AppCompatActivity(), ActivityProvider {
         // Initialize
         VideoCache.initialize(this)
         PoolPlayers.init(this)
-        VideoDownloadManager.initialize(this)
         
         // Load videos
         loadVideos()
@@ -157,13 +157,8 @@ class MainActivity : AppCompatActivity(), ActivityProvider {
         adapter.attachToViewPager(binding.viewPager2)
     }
     
-    // ActivityProvider: use your offline player Activity and its extra key constants
+    // ActivityProvider
     override fun getMainActivityIntent() = Intent(this, MainActivity::class.java)
-    override fun getOfflinePlayerActivityIntent(videoData: VideoData, downloadId: String) =
-        Intent(this, OfflineVideoPlayerActivity::class.java).apply {
-            putExtra(OfflineVideoPlayerActivity.EXTRA_VIDEO_DATA, videoData)  // or EXTRA_VIDEO_DATA_JSON + AppJson
-            putExtra(OfflineVideoPlayerActivity.EXTRA_DOWNLOAD_ID, downloadId)
-        }
     override fun pauseCurrentPlayer() {
         exoPlayerItems.forEach { it.exoPlayer.pause() }
     }
@@ -191,16 +186,15 @@ class MainActivity : AppCompatActivity(), ActivityProvider {
 
 ```xml
 <uses-permission android:name="android.permission.INTERNET" />
-<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 ```
 
-`FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC`, and `VideoDownloadService` are merged from the kotlin-kinescope-player / kotlin-kinescope-shorts manifest.
+Both are already merged from the kotlin-kinescope-shorts manifest. Shorts declares no services and no foreground-service permissions.
 
 ## Done
 
 You now have a video player with:
 - Kinescope video playback
-- Offline video downloads
 - DRM-protected video support
 - Vertical scrolling (TikTok-style)
 
