@@ -32,8 +32,39 @@
 | `drmAuthToken` | `null` | Authorization Backend token (`drmauthtoken`) sent with `{videoId}.json` on `loadVideo` |
 | `externalId` | `null` | Your viewer ID sent with every analytics event (`externalid` in the web embed), see [Analytics](analytics.md) |
 | `referer` | `https://kinescope.io/` | HTTP `Referer` for metadata / DRM requests (must match domain restrictions in the dashboard) |
+| `startTime` | `null` | Start position in seconds on every `loadVideo` (`t` in the web embed). Ignored for live |
+| `dnt` | `false` | Do not track: no analytics events are sent to Kinescope (`dnt`) |
+| `autopause` | `false` | Pause this player when another `KinescopeVideoPlayer` in the app starts playing (`autopause`) |
+| `header` | `true` | Show the video title and author (`header`). Shown only when `playerView.titleChromeEnabled` is also `true` |
+| `background` | `false` | Background video (`background`): setting it to `true` turns on `autoplay`, `muted`, `loop` and turns off `controls` |
+| `transparent` | `false` | Transparent backdrop instead of black (`transparent`) |
+| `autofocus` | `false` | Request focus for the player view after the video loads (`autofocus`) — Android TV, D-pad, keyboards |
+| `baseUrl` | `null` (`https://kinescope.io/`) | Host for `{videoId}.json` (`baseUrl`), e.g. your custom player domain |
+| `userAgent` | `null` | `User-Agent` for video, subtitle and metadata requests |
 
 Chrome icons (play, seek bar, PiP, fullscreen, …) vs settings popup items (Quality, Speed, …) are documented separately: [Player chrome](player-chrome.md), [Settings menu](settings-menu.md).
+
+### Web embed parameters
+
+The same parameters as in the web player embed. `disableFiles` maps to `showAttachments = false` (already the default on Android).
+
+```kotlin
+kinescopePlayer.kinescopePlayerOptions.apply {
+    startTime = 90.0                       // t=90
+    dnt = true                             // no analytics
+    autopause = true                       // pause when another player starts
+    header = false                         // no title / author
+    transparent = true                     // no black backdrop
+    baseUrl = "https://video.example.com"  // custom domain for {videoId}.json
+    userAgent = "MyApp/1.0"
+}
+kinescopePlayer.loadVideo(videoId)
+```
+
+- **`background`** is a preset, not a mode: set it **before** `loadVideo` (and call `playerView.applyTemplateOptions()` if the view is already bound). Turning it off does not restore the previous `autoplay` / `muted` / `loop` / `controls`.
+- **`transparent`**: before the first frame the video surface itself stays opaque with the default `SurfaceView`. For full transparency use the TextureView layout (`useTextureSurface`, see [Picture-in-Picture](picture-in-picture.md)). Applied by `playerView.applyTemplateOptions()`.
+- **`baseUrl`, `userAgent`, `referer`** changed in the options are picked up on the next `loadVideo`. `baseUrl` without a scheme gets `https://`; a trailing `/` is added.
+- **`startTime`** applies to every `loadVideo` of this player — reset it to `null` if the next video should start from the beginning.
 
 ### Built-in posters
 
@@ -41,8 +72,8 @@ Both placeholders are **on by default**. Disable if you want an empty surface or
 
 ```kotlin
 kinescopePlayer.kinescopePlayerOptions.apply {
-    showDefaultPoster = false       // no default_poster.png fallback
-    showLiveAwaitingCover = false   // no live_awaiting_cover.png before live starts
+    showDefaultPoster = false       // no default_poster fallback
+    showLiveAwaitingCover = false   // no live_awaiting_cover before live starts
 }
 ```
 

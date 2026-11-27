@@ -18,7 +18,7 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles "consumer-rules.pro"
 
-        versionName "0.1.21"
+        versionName "0.1.22"
     }
 
     buildTypes {
@@ -85,7 +85,7 @@ mavenPublishing {
     // Explicit Central Portal — default in 0.30.0 is legacy OSSRH (402 on stagingProfiles).
     publishToMavenCentral(com.vanniktech.maven.publish.SonatypeHost.CENTRAL_PORTAL)
     signAllPublications()
-    coordinates('io.kinescope', 'kotlin-kinescope-player', findProperty('kinescopeSdkVersion') ?: '0.1.21')
+    coordinates('io.kinescope', 'kotlin-kinescope-player', findProperty('kinescopeSdkVersion') ?: '0.1.22')
     pom {
         name = 'kotlin-kinescope-player'
         description = 'Kinescope Android SDK: video player, Shorts feed, and offline downloads with Widevine DRM'
@@ -114,8 +114,6 @@ mavenPublishing {
 }
 
 dependencies {
-    api project(':kotlin-kinescope-shorts')
-
     implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.7'
     implementation 'androidx.appcompat:appcompat:1.6.1'

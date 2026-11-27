@@ -149,6 +149,8 @@ For the **Shorts vertical feed**, implement `KinescopeVideoProvider` yourself an
 
 ### Step 1: Recommended — delegate to built-in SDK clients
 
+> `KinescopeApiHelper` and `FetchBuilder` are in the player artifact. Since 0.1.22 Shorts does not include it, so for this provider add `io.kinescope:kotlin-kinescope-player` as well. With Shorts only, call the API directly over HTTP (see below).
+
 ```kotlin
 import io.kinescope.sdk.api.KinescopeApiConfig
 import io.kinescope.sdk.api.KinescopeApiHelper

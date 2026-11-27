@@ -8,6 +8,7 @@ import android.util.Base64
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageButton
@@ -17,6 +18,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.net.toUri
+import androidx.core.view.isVisible
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -30,6 +32,7 @@ import androidx.media3.exoplayer.offline.Download
 import androidx.media3.exoplayer.offline.DownloadManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.recyclerview.widget.SimpleItemAnimator
 import io.kinescope.demo.KinescopeDemoConfig
 import io.kinescope.demo.R
 import io.kinescope.demo.application.KinescopeSDKDemoApplication
@@ -38,11 +41,11 @@ import io.kinescope.sdk.download.DownloadVideoOffline
 import io.kinescope.sdk.player.KinescopeSecureDecoderWorkaround
 import io.kinescope.sdk.player.KinescopeVideoPlayer
 import io.kinescope.sdk.shorts.AppJson
-import io.kinescope.sdk.shorts.download.OfflineDownloadQualityHelper
-import io.kinescope.sdk.shorts.download.VideoDownloadManager
-import io.kinescope.sdk.shorts.drm.DrmConfigurator
-import io.kinescope.sdk.shorts.drm.DrmContentProtection
-import io.kinescope.sdk.shorts.drm.DrmHelper
+import io.kinescope.sdk.download.DrmConfigurator
+import io.kinescope.sdk.download.DrmContentProtection
+import io.kinescope.sdk.download.DrmHelper
+import io.kinescope.sdk.download.OfflineDownloadQualityHelper
+import io.kinescope.sdk.download.VideoDownloadManager
 import io.kinescope.sdk.shorts.models.DrmInfo
 import io.kinescope.sdk.shorts.models.VideoData
 import io.kinescope.sdk.shorts.models.VideoQualityMapEntry
@@ -73,6 +76,18 @@ class AddDrmDownloadActivity : AppCompatActivity() {
     private var drmTimeoutJob: Job? = null
     private var progressUpdateJob: Job? = null
 
+    // Download by ID: every step is shown in the status panel under the ID field
+    // instead of toasts (the video is usually not in the list below).
+    private var idStatusPanel: View? = null
+    private var idStatusTitle: TextView? = null
+    private var idStatusProgress: android.widget.ProgressBar? = null
+    private var idStatusText: TextView? = null
+    private var btnDownloadById: Button? = null
+    /** HLS key of the video started from the ID field — its steps go to the panel. */
+    private var idFlowHls: String? = null
+    /** contentId of that download once it is queued; progress is polled for it. */
+    private var idFlowContentId: String? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_add_drm_download)
@@ -81,18 +96,15 @@ class AddDrmDownloadActivity : AppCompatActivity() {
             onBackPressedDispatcher.onBackPressed()
         }
 
+        // Back: plain finish() — the Saved videos list is right below and refreshes in onResume.
+        // Starting it again here played the "open" (forward) transition instead of "close".
         onBackPressedDispatcher.addCallback(
             this,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
-                    startActivity(
-                        Intent(this@AddDrmDownloadActivity, OfflineDrmDemoActivity::class.java).apply {
-                            addFlags(
-                                Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                                    Intent.FLAG_ACTIVITY_SINGLE_TOP,
-                            )
-                        },
-                    )
+                    if (isTaskRoot) {
+                        startActivity(Intent(this@AddDrmDownloadActivity, OfflineDrmDemoActivity::class.java))
+                    }
                     finish()
                 }
             },
@@ -103,17 +115,28 @@ class AddDrmDownloadActivity : AppCompatActivity() {
         apiHelper = (application as KinescopeSDKDemoApplication).apiHelper
         kinescopeVideoPlayer = KinescopeVideoPlayer(applicationContext)
 
-        findViewById<Button>(R.id.btnDownloadById).setOnClickListener {
-            val videoId = findViewById<EditText>(R.id.etVideoId).text?.toString()?.trim().orEmpty()
+        idStatusPanel = findViewById(R.id.idStatusPanel)
+        idStatusTitle = findViewById(R.id.idStatusTitle)
+        idStatusProgress = findViewById(R.id.idStatusProgress)
+        idStatusText = findViewById(R.id.idStatusText)
+        btnDownloadById = findViewById(R.id.btnDownloadById)
+        btnDownloadById?.setOnClickListener {
+            val input = findViewById<EditText>(R.id.etVideoId)
+            val videoId = input.text?.toString()?.trim().orEmpty()
             if (videoId.isEmpty()) {
-                Toast.makeText(this, "Введите Video ID", Toast.LENGTH_SHORT).show()
+                input.error = "Введите Video ID"
                 return@setOnClickListener
             }
+            input.clearFocus()
+            (getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager)
+                ?.hideSoftInputFromWindow(input.windowToken, 0)
             downloadByVideoId(videoId)
         }
 
         recycler = findViewById(R.id.recyclerAddDrm)
         recycler?.layoutManager = LinearLayoutManager(this)
+        // No cross-fade on every progress tick — it made the row blink.
+        (recycler?.itemAnimator as? SimpleItemAnimator)?.supportsChangeAnimations = false
         VideoDownloadManager.addDownloadListener(this, downloadProgressListener)
         startProgressUpdates()
         loadVideosFromApi()
@@ -124,6 +147,7 @@ class AddDrmDownloadActivity : AppCompatActivity() {
             while (isActive) {
                 delay(500)
                 adapter?.notifyProgressUpdate()
+                updateIdDownloadStatus()
             }
         }
     }
@@ -135,6 +159,14 @@ class AddDrmDownloadActivity : AppCompatActivity() {
             finalException: Exception?,
         ) {
             runOnUiThread {
+                if (download.request.id == idFlowContentId) {
+                    if (download.state == Download.STATE_COMPLETED || download.state == Download.STATE_FAILED) {
+                        downloadingIds.remove(download.request.id)
+                    }
+                    updateIdDownloadStatus(download)
+                    adapter?.notifyItemChangedForDownload(download)
+                    return@runOnUiThread
+                }
                 when (download.state) {
                     Download.STATE_COMPLETED -> {
                         downloadingIds.remove(download.request.id)
@@ -166,6 +198,10 @@ class AddDrmDownloadActivity : AppCompatActivity() {
 
         override fun onDownloadRemoved(downloadManager: DownloadManager, download: Download) {
             runOnUiThread {
+                if (download.request.id == idFlowContentId) {
+                    idFlowContentId = null
+                    showIdStatus("Загрузка удалена", PROGRESS_NONE)
+                }
                 downloadingIds.remove(download.request.id)
                 adapter?.notifyItemChangedForDownload(download)
             }
@@ -204,16 +240,121 @@ class AddDrmDownloadActivity : AppCompatActivity() {
     }
 
     private fun downloadByVideoId(videoId: String) {
-        Toast.makeText(this, "Загрузка метаданных…", Toast.LENGTH_SHORT).show()
+        idFlowHls = null
+        idFlowContentId = null
+        setIdBusy(true)
+        showIdStatus("Загружаем данные видео…", PROGRESS_INDETERMINATE, title = "ID: $videoId")
         CoroutineScope(Dispatchers.Main).launch {
             val videoData = loadVideoDetails(videoId)
             if (videoData == null || videoData.hlsLink.isBlank()) {
-                Toast.makeText(this@AddDrmDownloadActivity, "Не удалось загрузить видео", Toast.LENGTH_SHORT).show()
+                showIdStatus("Не удалось загрузить видео. Проверьте ID.", PROGRESS_NONE, isError = true)
+                setIdBusy(false)
                 return@launch
             }
+            idFlowHls = hlsKey(videoData.hlsLink)
+            idStatusTitle?.text = videoData.title.ifBlank { videoId }
             promptQualityAndDownload(videoData)
         }
     }
+
+    // region Download-by-ID status panel
+
+    private fun isIdFlow(videoData: VideoData): Boolean =
+        idFlowHls != null && idFlowHls == hlsKey(videoData.hlsLink)
+
+    private fun setIdBusy(busy: Boolean) {
+        btnDownloadById?.isEnabled = !busy
+    }
+
+    /** A step in progress: status panel for the ID flow, toast for the list. */
+    private fun report(videoData: VideoData, message: String, long: Boolean = false) {
+        if (isIdFlow(videoData)) {
+            showIdStatus(message, PROGRESS_INDETERMINATE)
+        } else {
+            Toast.makeText(this, message, if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /** The flow stopped with an error. */
+    private fun reportError(videoData: VideoData, message: String) {
+        if (isIdFlow(videoData)) {
+            showIdStatus(message, PROGRESS_NONE, isError = true)
+            setIdBusy(false)
+        } else {
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /** The flow ended without a new download (e.g. already downloaded). */
+    private fun reportDone(videoData: VideoData, message: String) {
+        if (isIdFlow(videoData)) {
+            showIdStatus(message, PROGRESS_NONE)
+            setIdBusy(false)
+        } else {
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun showIdStatus(
+        text: String,
+        progress: Int,
+        isError: Boolean = false,
+        title: String? = null,
+    ) {
+        idStatusPanel?.isVisible = true
+        title?.let { idStatusTitle?.text = it }
+        idStatusText?.text = text
+        idStatusText?.setTextColor(if (isError) STATUS_ERROR_COLOR else getColor(R.color.gray))
+        val bar = idStatusProgress ?: return
+        when (progress) {
+            PROGRESS_NONE -> bar.isVisible = false
+            PROGRESS_INDETERMINATE -> {
+                bar.isVisible = true
+                if (!bar.isIndeterminate) bar.isIndeterminate = true
+            }
+            else -> {
+                bar.isVisible = true
+                if (bar.isIndeterminate) bar.isIndeterminate = false
+                bar.progress = progress.coerceIn(0, 100)
+            }
+        }
+    }
+
+    /**
+     * Progress of the download started from the ID field. Prefers the live object from
+     * [DownloadManager.getCurrentDownloads] (updated while downloading) over the index copy.
+     */
+    private fun updateIdDownloadStatus(changed: Download? = null) {
+        val id = idFlowContentId ?: return
+        val download = changed?.takeIf { it.request.id == id }
+            ?: VideoDownloadManager.getDownloadManager(this).currentDownloads.firstOrNull { it.request.id == id }
+            ?: VideoDownloadManager.getDownloadById(id)
+            ?: return
+        when (download.state) {
+            Download.STATE_COMPLETED -> {
+                idFlowContentId = null
+                showIdStatus("Скачано — видео в «Сохранённых»", PROGRESS_NONE)
+            }
+            Download.STATE_FAILED -> {
+                idFlowContentId = null
+                showIdStatus("Ошибка скачивания", PROGRESS_NONE, isError = true)
+            }
+            Download.STATE_STOPPED -> showIdStatus("Скачивание приостановлено", PROGRESS_NONE)
+            Download.STATE_REMOVING -> showIdStatus("Удаляется…", PROGRESS_INDETERMINATE)
+            else -> {
+                val (percent, bytesDownloaded) = VideoDownloadManager.getDownloadProgress(download)
+                val indeterminate = percent <= 0 && bytesDownloaded <= 0 ||
+                    download.state == Download.STATE_QUEUED ||
+                    download.state == Download.STATE_RESTARTING
+                showIdStatus(
+                    VideoDownloadManager.formatDownloadProgressLabel(download),
+                    if (indeterminate) PROGRESS_INDETERMINATE else percent,
+                )
+            }
+        }
+    }
+
+    // endregion
 
     private suspend fun loadVideoDetails(videoId: String): VideoData? {
         return suspendCancellableCoroutine { continuation ->
@@ -270,7 +411,7 @@ class AddDrmDownloadActivity : AppCompatActivity() {
 
     private fun promptQualityAndDownload(videoData: VideoData) {
         if (currentTempPlayer != null) {
-            Toast.makeText(this, "Дождитесь окончания", Toast.LENGTH_SHORT).show()
+            reportError(videoData, "Дождитесь окончания текущего скачивания")
             return
         }
         val hints = videoData.qualityMap?.map { entry ->
@@ -290,7 +431,7 @@ class AddDrmDownloadActivity : AppCompatActivity() {
             return
         }
 
-        Toast.makeText(this, "Читаем качества…", Toast.LENGTH_SHORT).show()
+        report(videoData, "Читаем качества…")
         DownloadVideoOffline.listDownloadQualities(
             context = this,
             manifestUri = videoData.hlsLink,
@@ -299,7 +440,7 @@ class AddDrmDownloadActivity : AppCompatActivity() {
         ) { result ->
             result.onSuccess { qualities ->
                 if (qualities.isEmpty()) {
-                    Toast.makeText(this, "Нет доступных качеств", Toast.LENGTH_SHORT).show()
+                    reportError(videoData, "Нет доступных качеств")
                     return@onSuccess
                 }
                 showQualityPicker(videoData, qualities)
@@ -307,7 +448,7 @@ class AddDrmDownloadActivity : AppCompatActivity() {
                 if (fromMap.isNotEmpty()) {
                     showQualityPicker(videoData, fromMap)
                 } else {
-                    Toast.makeText(this, "Ошибка чтения качеств", Toast.LENGTH_SHORT).show()
+                    reportError(videoData, "Ошибка чтения качеств")
                 }
             }
         }
@@ -318,18 +459,31 @@ class AddDrmDownloadActivity : AppCompatActivity() {
         qualities: List<OfflineDownloadQualityHelper.QualityOption>,
     ) {
         val labels = qualities.map { it.label }.toTypedArray()
+        if (isIdFlow(videoData)) {
+            showIdStatus("Выберите качество", PROGRESS_NONE)
+        }
+        val onCancelled = {
+            if (isIdFlow(videoData)) {
+                showIdStatus("Скачивание отменено", PROGRESS_NONE)
+                setIdBusy(false)
+            }
+        }
         AlertDialog.Builder(this)
             .setTitle("Качество: ${videoData.title}")
             .setItems(labels) { _, which ->
                 val selected = qualities[which]
                 val withLabel = videoData.copy(selectedQualityLabel = selected.label)
+                if (isIdFlow(withLabel)) {
+                    idStatusTitle?.text = "${videoData.title} · ${selected.label}"
+                }
                 if (withLabel.drm?.widevine?.licenseUrl.isNullOrBlank()) {
                     startClearDownload(withLabel, selected.height, selected.width)
                 } else {
                     startDrmDownload(withLabel, selected.height, selected.width)
                 }
             }
-            .setNegativeButton(android.R.string.cancel, null)
+            .setNegativeButton(android.R.string.cancel) { _, _ -> onCancelled() }
+            .setOnCancelListener { onCancelled() }
             .show()
     }
 
@@ -360,33 +514,29 @@ class AddDrmDownloadActivity : AppCompatActivity() {
     private fun startClearDownload(videoData: VideoData, videoHeightPx: Int, videoWidthPx: Int) {
         val contentId = generateStableContentId(videoData.hlsLink, videoHeightPx)
         if (currentTempPlayer != null) {
-            Toast.makeText(this, "Дождитесь окончания", Toast.LENGTH_SHORT).show()
+            reportError(videoData, "Дождитесь окончания текущего скачивания")
             return
         }
         val existing = VideoDownloadManager.getDownloadById(contentId)
         if (existing != null && existing.state == Download.STATE_COMPLETED) {
-            Toast.makeText(
-                this,
-                "Видео уже скачано (${videoData.selectedQualityLabel ?: "${videoHeightPx}p"})",
-                Toast.LENGTH_SHORT,
-            ).show()
+            reportDone(videoData, "Видео уже скачано (${videoData.selectedQualityLabel ?: "${videoHeightPx}p"})")
             return
         }
         downloadingIds[contentId] = hlsKey(videoData.hlsLink)
         adapter?.notifyDataSetChanged()
-        Toast.makeText(this, "Скачиваем ${videoData.selectedQualityLabel ?: ""}…", Toast.LENGTH_SHORT).show()
+        report(videoData, "Подготовка загрузки ${videoData.selectedQualityLabel ?: ""}…")
         startOfflineDownload(videoData, null, videoHeightPx, videoWidthPx)
     }
 
     private fun startDrmDownload(videoData: VideoData, videoHeightPx: Int, videoWidthPx: Int = C.LENGTH_UNSET) {
         val contentId = generateStableContentId(videoData.hlsLink, videoHeightPx)
         if (currentTempPlayer != null) {
-            Toast.makeText(this, "Дождитесь окончания", Toast.LENGTH_SHORT).show()
+            reportError(videoData, "Дождитесь окончания текущего скачивания")
             return
         }
         val existing = VideoDownloadManager.getDownloadById(contentId)
         if (existing != null && existing.state == Download.STATE_COMPLETED) {
-            Toast.makeText(this, "Видео уже скачано (${videoData.selectedQualityLabel ?: "${videoHeightPx}p"})", Toast.LENGTH_SHORT).show()
+            reportDone(videoData, "Видео уже скачано (${videoData.selectedQualityLabel ?: "${videoHeightPx}p"})")
             return
         }
 
@@ -399,7 +549,7 @@ class AddDrmDownloadActivity : AppCompatActivity() {
             return
         }
 
-        Toast.makeText(this, "Скачиваем… Не покидайте страницу", Toast.LENGTH_LONG).show()
+        report(videoData, "Получаем DRM-ключ… Не покидайте страницу", long = true)
 
         var psshReceived = false
         val cId = contentId
@@ -409,22 +559,14 @@ class AddDrmDownloadActivity : AppCompatActivity() {
             if (keySetId == null) {
                 downloadingIds.remove(cId)
                 adapter?.notifyDataSetChanged()
-                Toast.makeText(
-                    this,
-                    "Не удалось получить DRM-ключ. Скачивание отменено.",
-                    Toast.LENGTH_LONG,
-                ).show()
+                reportError(videoData, "Не удалось получить DRM-ключ. Скачивание отменено.")
                 return
             }
             val withDrm = videoData.copy(
                 drm = DrmInfo(widevine = WidevineInfo(licenseUrl = licenseUrl)),
             )
+            report(videoData, "DRM-ключ получен, запускаем скачивание…")
             startOfflineDownload(withDrm, keySetId, videoHeightPx, videoWidthPx)
-            Toast.makeText(
-                this,
-                "Скачивание с DRM запущено (${videoData.selectedQualityLabel})",
-                Toast.LENGTH_SHORT,
-            ).show()
         }
 
         fun finishDrmFailed(message: String) {
@@ -435,11 +577,11 @@ class AddDrmDownloadActivity : AppCompatActivity() {
                 releaseTempPlayer()
                 downloadingIds.remove(cId)
                 adapter?.notifyDataSetChanged()
-                Toast.makeText(this@AddDrmDownloadActivity, message, Toast.LENGTH_LONG).show()
+                reportError(videoData, message)
             }
         }
 
-        val drmHelper = DrmHelper(this, drmConfigurator) { vd, pssh ->
+        val drmHelper = DrmHelper<VideoData>(this, drmConfigurator) { vd, pssh ->
             if (psshReceived) return@DrmHelper
             psshReceived = true
             drmTimeoutJob?.cancel()
@@ -589,6 +731,7 @@ class AddDrmDownloadActivity : AppCompatActivity() {
         if (existing != null && existing.state == Download.STATE_COMPLETED) {
             downloadingIds.remove(contentId)
             adapter?.notifyDataSetChanged()
+            reportDone(videoData, "Видео уже скачано")
             return
         }
         downloadingIds[contentId] = hlsKey(videoData.hlsLink)
@@ -611,10 +754,15 @@ class AddDrmDownloadActivity : AppCompatActivity() {
             onError = {
                 downloadingIds.remove(contentId)
                 adapter?.notifyDataSetChanged()
-                Toast.makeText(this, "Ошибка начала загрузки", Toast.LENGTH_SHORT).show()
+                reportError(videoData, "Ошибка начала загрузки")
             },
             onStarted = {
                 adapter?.notifyDataSetChanged()
+                if (isIdFlow(videoData)) {
+                    idFlowContentId = contentId
+                    setIdBusy(false)
+                    updateIdDownloadStatus()
+                }
             },
         )
     }
@@ -693,7 +841,9 @@ class AddDrmDownloadActivity : AppCompatActivity() {
                         val indeterminate = percent <= 0 && bytesDownloaded <= 0 ||
                             activeDownload.state == Download.STATE_QUEUED ||
                             activeDownload.state == Download.STATE_RESTARTING
-                        holder.progressBar.isIndeterminate = indeterminate
+                        if (holder.progressBar.isIndeterminate != indeterminate) {
+                            holder.progressBar.isIndeterminate = indeterminate
+                        }
                         if (!indeterminate) {
                             holder.progressBar.progress = percent.coerceIn(0, 100)
                         }
@@ -763,5 +913,11 @@ class AddDrmDownloadActivity : AppCompatActivity() {
                 false
             }
         }
+    }
+
+    private companion object {
+        const val PROGRESS_NONE = -2
+        const val PROGRESS_INDETERMINATE = -1
+        val STATUS_ERROR_COLOR = android.graphics.Color.parseColor("#FF6B6B")
     }
 }

@@ -1,0 +1,233 @@
+package io.kinescope.sdk.download
+
+import android.content.Context
+import androidx.annotation.OptIn
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.database.ExoDatabaseProvider
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.cache.Cache
+import androidx.media3.datasource.cache.NoOpCacheEvictor
+import androidx.media3.datasource.cache.SimpleCache
+import androidx.media3.exoplayer.offline.DefaultDownloadIndex
+import androidx.media3.exoplayer.offline.Download
+import androidx.media3.exoplayer.offline.DownloadManager
+import java.io.File
+import java.util.concurrent.Executors
+
+
+@OptIn(UnstableApi::class)
+object VideoDownloadManager {
+    /**
+     * Soft UI quota only. Download cache must use [NoOpCacheEvictor] (Media3 requirement);
+     * an LRU evictor silently deletes spans mid-download (progress rollback) and leaves
+     * "completed" downloads with missing segments (intermittent Source error).
+     */
+    private const val SOFT_STORAGE_QUOTA_BYTES = 2L * 1024 * 1024 * 1024
+    private const val DOWNLOAD_THREAD_COUNT = 6
+    private var downloadManager: DownloadManager? = null
+    private var databaseProvider: ExoDatabaseProvider? = null
+    private var downloadCache: Cache? = null
+    private var downloadIndex: DefaultDownloadIndex? = null
+    private var listener: DownloadManager.Listener? = null
+    private val listeners = mutableListOf<DownloadManager.Listener>()
+
+    fun initialize(context: Context) {
+        if (downloadManager == null) {
+            val downloadDirectory = File(context.getExternalFilesDir(null), "downloads")
+            if (!downloadDirectory.exists()) {
+                downloadDirectory.mkdirs()
+            }
+            databaseProvider = ExoDatabaseProvider(context)
+            downloadCache = SimpleCache(
+                downloadDirectory,
+                NoOpCacheEvictor(),
+                databaseProvider!!
+            )
+            val httpFactory = DefaultHttpDataSource.Factory()
+                .setUserAgent("KinescopeAndroidVideoKotlin")
+                .setConnectTimeoutMs(20_000)
+                .setReadTimeoutMs(120_000)
+                .setAllowCrossProtocolRedirects(true)
+            val upstreamFactory = DefaultDataSource.Factory(context, httpFactory)
+            downloadManager = DownloadManager(
+                context,
+                databaseProvider!!,
+                downloadCache!!,
+                upstreamFactory,
+                Executors.newFixedThreadPool(DOWNLOAD_THREAD_COUNT)
+            )
+            downloadIndex = downloadManager!!.downloadIndex as DefaultDownloadIndex
+        }
+    }
+
+    fun getDownloadManager(context: Context): DownloadManager {
+        initialize(context)
+        return downloadManager!!
+    }
+
+    fun getDownloadCache(context: Context): Cache {
+        initialize(context)
+        return downloadCache!!
+    }
+
+    fun getDownloadIndex(context: Context): DefaultDownloadIndex {
+        initialize(context)
+        return downloadIndex!!
+    }
+
+    fun getDownloadById(contentId: String): Download? {
+        return try {
+            downloadIndex?.getDownload(contentId)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun getAllCompletedDownloads(context: Context): List<Download> {
+        val index = getDownloadIndex(context)
+        val downloads = mutableListOf<Download>()
+        index.getDownloads().use { cursor ->
+            while (cursor.moveToNext()) {
+                val download = cursor.download
+                if (download.state == Download.STATE_COMPLETED) {
+                    downloads.add(download)
+                }
+            }
+        }
+        return downloads
+    }
+
+    fun getAllDownloadsWithActiveFirst(context: Context): List<Download> {
+        val active = getActiveDownloads(context)
+        val completed = getAllCompletedDownloads(context)
+        return active + completed
+    }
+
+    fun getDownloadProgress(download: Download): Pair<Int, Long> {
+        val percentFromMedia3 = download.percentDownloaded
+        val percent = when {
+            percentFromMedia3 >= 0f -> percentFromMedia3.toInt().coerceIn(0, 100)
+            download.bytesDownloaded > 0 && download.contentLength > 0 -> {
+                ((download.bytesDownloaded * 100) / download.contentLength).toInt()
+            }
+            else -> 0
+        }
+        return Pair(percent, download.bytesDownloaded)
+    }
+
+    /**
+     * Fresh download snapshot from the index (includes latest persisted progress).
+     * Prefer this over stale objects from [DownloadManager.currentDownloads] when polling UI.
+     */
+    fun findActiveDownload(
+        context: Context,
+        contentId: String? = null,
+        matches: ((Download) -> Boolean)? = null,
+    ): Download? {
+        initialize(context)
+        if (!contentId.isNullOrBlank()) {
+            getDownloadById(contentId)?.takeIf { isActiveState(it.state) }?.let { return it }
+        }
+        return getActiveDownloads(context).firstOrNull { download ->
+            matches?.invoke(download) != false
+        }
+    }
+
+    fun isActiveState(state: Int): Boolean =
+        state == Download.STATE_DOWNLOADING ||
+            state == Download.STATE_QUEUED ||
+            state == Download.STATE_RESTARTING
+
+    fun formatDownloadProgressLabel(download: Download): String {
+        val (percent, bytesDownloaded) = getDownloadProgress(download)
+        val downloadedMb = bytesDownloaded / (1024.0 * 1024.0)
+        val totalBytes = download.contentLength
+        return when {
+            download.state == Download.STATE_QUEUED ||
+                download.state == Download.STATE_RESTARTING ->
+                "В очереди / подготовка…"
+            bytesDownloaded <= 0L && percent <= 0 ->
+                "Скачивается…"
+            totalBytes > 0L && percent > 0 -> {
+                val totalMb = totalBytes / (1024.0 * 1024.0)
+                "Скачивается: %.1f / %.1f МБ (%d%%)".format(downloadedMb, totalMb, percent)
+            }
+            totalBytes > 0L -> {
+                val totalMb = totalBytes / (1024.0 * 1024.0)
+                "Скачивается: %.1f / %.1f МБ".format(downloadedMb, totalMb)
+            }
+            percent > 0 ->
+                "Скачивается: %.1f МБ (%d%%)".format(downloadedMb, percent)
+            else ->
+                "Скачивается: %.1f МБ".format(downloadedMb)
+        }
+    }
+
+    fun getRemainingStorage(context: Context): Long {
+        val downloadDirectory = File(context.getExternalFilesDir(null), "downloads")
+        val freeSpace = downloadDirectory.freeSpace
+        val softRemaining = (SOFT_STORAGE_QUOTA_BYTES - getUsedStorageSpace()).coerceAtLeast(0L)
+        return minOf(freeSpace, softRemaining)
+    }
+
+    fun getUsedStorageSpace(): Long {
+        return downloadCache?.cacheSpace ?: 0L
+    }
+
+    fun getMaxStorage(): Long {
+        return SOFT_STORAGE_QUOTA_BYTES
+    }
+
+    fun getStorageInfo(context: Context): String {
+        val used = getUsedStorageSpace()
+        val remaining = getRemainingStorage(context)
+        val usedMB = used / (1024 * 1024)
+        val remainingMB = remaining / (1024 * 1024)
+        return "Использовано: ${usedMB}MB (доступно: ${remainingMB}MB)"
+    }
+
+    fun getActiveDownloads(context: Context): List<Download> {
+        val index = getDownloadIndex(context)
+        val downloads = mutableListOf<Download>()
+        index.getDownloads().use { cursor ->
+            while (cursor.moveToNext()) {
+                val download = cursor.download
+                if (download.state == Download.STATE_DOWNLOADING ||
+                    download.state == Download.STATE_QUEUED ||
+                    download.state == Download.STATE_RESTARTING
+                ) {
+                    downloads.add(download)
+                }
+            }
+        }
+        return downloads
+    }
+
+    fun addDownloadListener(context: Context, listener: DownloadManager.Listener) {
+        initialize(context)
+        if (!listeners.contains(listener)) {
+            listeners.add(listener)
+            downloadManager?.addListener(listener)
+        }
+    }
+
+    fun removeDownloadListener(listener: DownloadManager.Listener) {
+        if (listeners.remove(listener)) {
+            downloadManager?.removeListener(listener)
+        }
+    }
+
+    fun getUpdatedDownload(downloadId: String): Download? {
+        return try {
+            downloadIndex?.getDownload(downloadId)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun removeDownload(context: Context, downloadId: String) {
+        val manager = getDownloadManager(context)
+        manager.removeDownload(downloadId)
+    }
+}

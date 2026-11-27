@@ -1,10 +1,58 @@
 # Changelog
 
+## [0.1.22] — 26.11.2026
+
+> **Breaking changes — update your code when upgrading to 0.1.22**
+>
+> **1. Download and DRM classes moved to `io.kinescope.sdk.download`.** The DRM classes below are only for **offline** downloads (PSSH, offline license, `keySetId`), so they live next to `DownloadVideoOffline`. Online DRM playback needs no code and did not change. Change the imports:
+>
+> | Class | Was (≤ 0.1.21) | Now (0.1.22) |
+> |-------|----------------|--------------|
+> | `VideoDownloadManager` | `io.kinescope.sdk.shorts.download` | `io.kinescope.sdk.download` |
+> | `VideoDownloadService` | `io.kinescope.sdk.shorts.download` | `io.kinescope.sdk.download` |
+> | `OfflineDownloadQualityHelper` | `io.kinescope.sdk.shorts.download` | `io.kinescope.sdk.download` |
+> | `DrmHelper` | `io.kinescope.sdk.shorts.drm` | `io.kinescope.sdk.download` |
+> | `DrmConfigurator` | `io.kinescope.sdk.shorts.drm` | `io.kinescope.sdk.download` |
+> | `DrmContentProtection` | `io.kinescope.sdk.shorts.drm` | `io.kinescope.sdk.download` |
+>
+> `DrmHelper` is now generic: `DrmHelper(...)` → `DrmHelper<YourMetadata>(...)`. For downloads pass `io.kinescope.sdk.download.DrmContentProtection` to `DrmConfigurator` (Shorts keeps its own `io.kinescope.sdk.shorts.drm.DrmContentProtection` for online playback only). Storage did not change, so existing downloads and offline licenses keep working.
+>
+> **2. Shorts is a separate dependency.** `kotlin-kinescope-player` no longer includes Shorts. If you use the Shorts feed, add `implementation 'io.kinescope:kotlin-kinescope-shorts:0.1.22'`.
+>
+> **3. Only if your app uses Shorts: remove the Shorts offline code.** Shorts has no offline downloads any more, so this code no longer compiles:
+>
+> - the `getOfflinePlayerActivityIntent(...)` override in your `ActivityProvider` — keep only `getMainActivityIntent()` and `pauseCurrentPlayer()`
+> - `KinescopeUiConfig.showOfflineButton`, `showSavedVideosButton`, `offlineButtonIconResId`, `savedVideosButtonIconResId`, `downloadNotificationIconResId`
+> - `NotificationHelper` and imports from `io.kinescope.sdk.shorts.download` / `io.kinescope.sdk.shorts.drm` (except `DrmContentProtection`)
+> - the offline player Activity you opened from the Shorts feed, if it was only used for that
+>
+> To keep offline video, download it with the player artifact — see [Offline downloads](docs/offline-downloads.md). Apps that use only the player skip this step.
+
+### Added
+- **Watermark from the server** — the player reads `sdk.watermark` from the video JSON and draws it over the video: text, `mode` (`random` — jumps around the frame, `stripes` — diagonal rows), `scale`, `display_timeout` (show/hide blinking) and `color` (`#RRGGBBAA`). Set it up in the Kinescope dashboard; no code needed. See [Customization — Watermark](docs/customization.md)
+- **Download notification icon** — `VideoDownloadService.notificationIconResId`
+- **Web embed parameters** in `KinescopePlayerOptions`, all off / unchanged by default: `startTime` (`t`), `dnt`, `autopause`, `header`, `background`, `transparent`, `autofocus`, `baseUrl`, `userAgent`. `disableFiles` maps to the existing `showAttachments`. See [Player options](docs/player-options.md)
+
+### Changed
+- **Player and Shorts are separate artifacts.** The SDK is split into two independent components: `io.kinescope:kotlin-kinescope-player` (player, offline downloads, DRM, Cast) and `io.kinescope:kotlin-kinescope-shorts` (vertical feed). Neither depends on the other. Apps that use only the player get a smaller APK
+- **Offline downloads live in the player** — all download and DRM-download classes are in `io.kinescope.sdk.download` (see Breaking changes above)
+- **Smaller libraries** — large images converted to WebP (`default_poster`, `live_awaiting_cover`, Shorts `bg_shorts_stub`) and template resources removed. Player AAR: 3.19 MB → 1.90 MB; Shorts AAR: 2.10 MB → 0.92 MB
+
+### Removed (Shorts)
+- Offline downloads in the Shorts feed: download / saved-videos buttons, offline playback, download service, `NotificationHelper`
+- `KinescopeUiConfig.showOfflineButton`, `showSavedVideosButton`, `offlineButtonIconResId`, `savedVideosButtonIconResId`, `downloadNotificationIconResId`
+- `ActivityProvider.getOfflinePlayerActivityIntent` — `ActivityProvider` now has only `getMainActivityIntent()` and `pauseCurrentPlayer()`
+- `FOREGROUND_SERVICE` / `POST_NOTIFICATIONS` permissions from the Shorts manifest
+- Android Studio template leftovers: `ic_launcher` icons, `Theme.ExoPlayer` / `Base.Theme.ExoPlayer` themes, `purple_*` / `teal_*` colors. They leaked into host apps and could clash with the app's own resources
+
 ## [0.1.21] — 24.11.2026
 
 ### Added
 - **Fullscreen on rotate** — `KinescopeContentOrientationController.fullscreenOnRotate` (off by default): turning the device to landscape asks the host to enter fullscreen through `onRotateFullscreenRequest(true)`, turning it back to portrait asks to exit. Landscape videos only; respects the system auto-rotate switch (`respectSystemRotationLock`). See [Fullscreen](docs/fullscreen.md)
 - **Viewer ID in analytics** — `KinescopePlayerOptions.externalId` is sent with every analytics event as `Session.ExternalID`, like `externalid` in the web embed. See [Analytics](docs/analytics.md)
+
+### Fixed
+- **Chapters popup** — no more endless layout loop (UI freeze) when the popup is positioned before the view has a size
 
 ## [0.1.20] — 20.10.2026
 

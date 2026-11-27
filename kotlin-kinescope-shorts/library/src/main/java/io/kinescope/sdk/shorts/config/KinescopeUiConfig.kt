@@ -18,8 +18,6 @@ object KinescopeUiConfig {
     @JvmField var showDislikeButton: Boolean? = null
     @JvmField var showCommentButton: Boolean? = null
     @JvmField var showShareButton: Boolean? = null
-    @JvmField var showOfflineButton: Boolean? = null
-    @JvmField var showSavedVideosButton: Boolean? = null
 
     /** Center play overlay on pause. `false` hides it; tap-to-toggle still works. */
     @JvmField var showPlayButton: Boolean? = null
@@ -37,14 +35,10 @@ object KinescopeUiConfig {
     @JvmField @DrawableRes var dislikeButtonIconResId: Int? = null
     @JvmField @DrawableRes var commentButtonIconResId: Int? = null
     @JvmField @DrawableRes var shareButtonIconResId: Int? = null
-    @JvmField @DrawableRes var offlineButtonIconResId: Int? = null
-    @JvmField @DrawableRes var savedVideosButtonIconResId: Int? = null
     @JvmField @DrawableRes var playButtonIconResId: Int? = null
 
     /** Custom stub drawable; ignored when [showPreloadImage] is `false`. */
     @JvmField @DrawableRes var preloadImageResId: Int? = null
-
-    @JvmField @DrawableRes var downloadNotificationIconResId: Int? = null
 
     /** Side action buttons (like / share / …) size in dp. `null` = layout default (28). */
     @JvmField var actionButtonSizeDp: Int? = null
@@ -78,14 +72,6 @@ object KinescopeUiConfig {
         applyImageButton(root, R.id.btnDisLike, showDislikeButton, dislikeButtonIconResId, actionButtonSizeDp)
         applyImageButton(root, R.id.btnComment, showCommentButton, commentButtonIconResId, actionButtonSizeDp)
         applyImageButton(root, R.id.btnShare, showShareButton, shareButtonIconResId, actionButtonSizeDp)
-        applyImageButton(root, R.id.btnOffline, showOfflineButton, offlineButtonIconResId, actionButtonSizeDp)
-        applyImageButton(
-            root,
-            R.id.btnShowSavedVideos,
-            showSavedVideosButton,
-            savedVideosButtonIconResId,
-            actionButtonSizeDp,
-        )
 
         root.findViewById<android.widget.ImageView>(R.id.thumbnailView)?.let { thumb ->
             val preloadRes = resolvePreloadImageResId()
@@ -154,11 +140,6 @@ object KinescopeUiConfig {
         }
     }
 
-    @DrawableRes
-    fun resolveDownloadNotificationIconResId(): Int {
-        val configured = downloadNotificationIconResId
-        return if (configured != null && configured != 0) configured else R.drawable.shorts_ic_save
-    }
 
     private fun applyImageButton(
         root: View,

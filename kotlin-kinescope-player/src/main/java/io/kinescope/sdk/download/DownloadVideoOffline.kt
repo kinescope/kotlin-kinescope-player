@@ -10,9 +10,6 @@ import androidx.media3.datasource.cache.Cache
 import androidx.media3.exoplayer.offline.Download
 import androidx.media3.exoplayer.offline.DownloadManager
 import androidx.media3.exoplayer.offline.DownloadRequest
-import io.kinescope.sdk.shorts.download.OfflineDownloadQualityHelper
-import io.kinescope.sdk.shorts.download.VideoDownloadManager
-import io.kinescope.sdk.shorts.download.VideoDownloadService
 
 /**
  * Entry point for offline video downloads in apps using kotlin-kinescope-player.
@@ -46,7 +43,7 @@ import io.kinescope.sdk.shorts.download.VideoDownloadService
  * ## With DRM (Widevine)
  *
  * You need: PSSH from the stream, license URL, and keySetId after acquiring the offline license.
- * [io.kinescope.sdk.shorts.drm.DrmConfigurator] and [io.kinescope.sdk.shorts.drm.DrmHelper]
+ * [DrmConfigurator] and [DrmHelper]
  * can obtain PSSH from ExoPlayer and acquire the offline license. Then pass [keySetId] to
  * [startDownloadWithQuality] / [startDownload].
  *

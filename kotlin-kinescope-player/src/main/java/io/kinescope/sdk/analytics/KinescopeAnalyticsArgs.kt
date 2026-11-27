@@ -13,4 +13,6 @@ data class KinescopeAnalyticsArgs(
     val currentPosition: Int = 0,
     /** [io.kinescope.sdk.player.KinescopePlayerOptions.externalId], sent as `Session.ExternalID`. */
     val externalId: String? = null,
+    /** [io.kinescope.sdk.player.KinescopePlayerOptions.dnt] — when `true`, nothing is sent. */
+    val doNotTrack: Boolean = false,
 )

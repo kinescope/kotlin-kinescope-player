@@ -9,20 +9,14 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.util.Log
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.offline.Download
-import androidx.media3.exoplayer.offline.DownloadManager
 import io.kinescope.sdk.shorts.models.PlayerItem
 import io.kinescope.sdk.shorts.adapters.ViewPager2Adapter
 import io.kinescope.sdk.shorts.cache.VideoCache
 import io.kinescope.demo.KinescopeDemoConfig
 import io.kinescope.demo.databinding.ActivityShortsBinding
-import io.kinescope.sdk.shorts.download.VideoDownloadManager
-import io.kinescope.sdk.shorts.drm.DrmConfigurator
-import io.kinescope.sdk.shorts.managers.NotificationHelper
 import io.kinescope.sdk.shorts.managers.PoolPlayers
 import io.kinescope.sdk.shorts.interfaces.ActivityProvider
 import io.kinescope.sdk.shorts.models.VideoData
-import io.kinescope.sdk.shorts.AppJson
 import kotlinx.coroutines.launch
 import kotlinx.serialization.InternalSerializationApi
 
@@ -32,8 +26,6 @@ class ShortsActivity : AppCompatActivity(), ActivityProvider {
     private lateinit var binding: ActivityShortsBinding
     private var adapter: ViewPager2Adapter? = null
     private val exoPlayerItems = ArrayList<PlayerItem>()
-    private val drmConfigurator = DrmConfigurator(this)
-    private lateinit var notificationHelper: NotificationHelper
 
     @OptIn(UnstableApi::class) @SuppressLint("SourceLockedOrientationActivity")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -47,11 +39,6 @@ class ShortsActivity : AppCompatActivity(), ActivityProvider {
 
         VideoCache.initialize(this)
         PoolPlayers.init(this)
-        notificationHelper = NotificationHelper(this, this)
-
-        VideoDownloadManager.initialize(this)
-        VideoDownloadManager.addDownloadListener(this, listener)
-
         loadVideos()
     }
 
@@ -101,19 +88,6 @@ class ShortsActivity : AppCompatActivity(), ActivityProvider {
         binding.viewPager2.setCurrentItem(0, false)
     }
 
-    @OptIn(UnstableApi::class)
-    private val listener = object : DownloadManager.Listener {
-        override fun onDownloadChanged(
-            downloadManager: DownloadManager,
-            download: Download,
-            finalException: java.lang.Exception?
-        ) {
-            if (download.state == Download.STATE_COMPLETED) {
-                notificationHelper.showDownloadCompleteNotification(download)
-            }
-        }
-    }
-
     override fun pauseCurrentPlayer(){
         val currentItem = binding.viewPager2.currentItem
         val exoPlayerItem = exoPlayerItems.find { it.position == currentItem}
@@ -123,20 +97,6 @@ class ShortsActivity : AppCompatActivity(), ActivityProvider {
     override fun getMainActivityIntent(): android.content.Intent {
         return android.content.Intent(this, ShortsActivity::class.java).apply {
             flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-    }
-
-    override fun getOfflinePlayerActivityIntent(videoData: VideoData, downloadId: String): android.content.Intent {
-        return android.content.Intent(this, io.kinescope.demo.offlinedrm.OfflineMainPlayerActivity::class.java).apply {
-            // Avoid NEW_TASK|CLEAR_TOP — they wipe the Shorts back stack so Back jumps to Main.
-            val videoDataJson = try {
-                AppJson.encodeToString(VideoData.serializer(), videoData)
-            } catch (e: Exception) {
-                "{}"
-            }
-            putExtra(io.kinescope.demo.offlinedrm.OfflineMainPlayerActivity.EXTRA_VIDEO_DATA_JSON, videoDataJson)
-            putExtra(io.kinescope.demo.offlinedrm.OfflineMainPlayerActivity.EXTRA_DOWNLOAD_ID, downloadId)
-            // No EXTRA_UP_NAVIGATION → OfflineMainPlayerActivity.finish() returns to Shorts.
         }
     }
 
@@ -155,7 +115,6 @@ class ShortsActivity : AppCompatActivity(), ActivityProvider {
         adapter = null
         PoolPlayers.shutdown()
         VideoCache.release()
-        VideoDownloadManager.removeDownloadListener(listener)
         super.onDestroy()
     }
 

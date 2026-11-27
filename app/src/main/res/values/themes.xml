@@ -13,4 +13,11 @@
         <item name="android:windowLightStatusBar" tools:targetApi="m">true</item>
         <!-- Customize your theme here. -->
     </style>
+
+    <!-- Launch screen: Kinescope logo on brand purple, as in the iOS example. -->
+    <style name="Theme.KinescopeSDKDemo.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
+        <item name="postSplashScreenTheme">@style/Theme.KinescopeSDKDemo</item>
+    </style>
 </resources>

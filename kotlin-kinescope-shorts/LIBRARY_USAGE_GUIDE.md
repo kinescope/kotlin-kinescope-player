@@ -8,14 +8,16 @@ This guide helps you integrate the Kinescope video playback library into your An
 
 ### 1. Add the library to your project
 
-**Recommended** — via kotlin-kinescope-player (includes the player, Shorts, and offline downloads):
+Since 0.1.22 Shorts is a separate artifact. It does **not** include the full player or offline downloads:
 
 ```groovy
 // build.gradle
 dependencies {
-    implementation 'io.kinescope:kotlin-kinescope-player:0.1.21'
+    implementation 'io.kinescope:kotlin-kinescope-shorts:0.1.22'
 }
 ```
+
+Need the full player (`KinescopePlayerView`) or offline downloads with DRM as well? Add `io.kinescope:kotlin-kinescope-player:0.1.22` next to it — see [installation.md](../docs/installation.md).
 
 Maven Central is recommended. **JitPack is no longer supported** for new apps; legacy `com.github.kinescope:…` pins are documented in [installation.md](../docs/installation.md#legacy--jitpack-unsupported).
 ---
@@ -27,9 +29,7 @@ Maven Central is recommended. **JitPack is no longer supported** for new apps; l
 ```kotlin
 import io.kinescope.sdk.shorts.adapters.ViewPager2Adapter
 import io.kinescope.sdk.shorts.cache.VideoCache
-import io.kinescope.sdk.shorts.download.VideoDownloadManager
 import io.kinescope.sdk.shorts.managers.PoolPlayers
-import io.kinescope.sdk.shorts.managers.NotificationHelper
 import io.kinescope.sdk.shorts.models.PlayerItem
 import io.kinescope.sdk.shorts.models.VideoData
 import io.kinescope.sdk.shorts.interfaces.ActivityProvider
@@ -40,7 +40,6 @@ class MainActivity : AppCompatActivity(), ActivityProvider {
     private lateinit var binding: ActivityMainBinding
     private lateinit var adapter: ViewPager2Adapter
     private val exoPlayerItems = ArrayList<PlayerItem>()
-    private lateinit var notificationHelper: NotificationHelper
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,8 +50,6 @@ class MainActivity : AppCompatActivity(), ActivityProvider {
         // Initialize library components
         VideoCache.initialize(this)
         PoolPlayers.init(this)
-        VideoDownloadManager.initialize(this)
-        notificationHelper = NotificationHelper(this, this) // this as ActivityProvider
         
         // ViewPager2 setup
         binding.viewPager2.offscreenPageLimit = 1
@@ -155,11 +152,10 @@ Full table and seek-bar colour options: [QUICK_START — UI customization](QUICK
 
 ## Implementing ActivityProvider
 
-The library uses the `ActivityProvider` interface to abstract the Activity. You implement `OfflineVideoPlayerActivity` yourself and define the extra keys (e.g. `EXTRA_VIDEO_DATA`/`EXTRA_VIDEO_DATA_JSON` and `EXTRA_DOWNLOAD_ID`).
+The library uses the `ActivityProvider` interface to abstract the Activity. It has two methods: `getMainActivityIntent()` and `pauseCurrentPlayer()`.
 
 ```kotlin
 import io.kinescope.sdk.shorts.interfaces.ActivityProvider
-import io.kinescope.sdk.shorts.models.VideoData
 import android.content.Intent
 
 class MainActivity : AppCompatActivity(), ActivityProvider {
@@ -167,16 +163,6 @@ class MainActivity : AppCompatActivity(), ActivityProvider {
     // Returns Intent to open the main Activity
     override fun getMainActivityIntent(): Intent {
         return Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-    }
-    
-    // Intent for the offline player. In your OfflineVideoPlayerActivity use
-    // EXTRA_VIDEO_DATA (Serializable) or EXTRA_VIDEO_DATA_JSON (JSON String) + EXTRA_DOWNLOAD_ID.
-    override fun getOfflinePlayerActivityIntent(videoData: VideoData, downloadId: String): Intent {
-        return Intent(this, OfflineVideoPlayerActivity::class.java).apply {
-            putExtra(OfflineVideoPlayerActivity.EXTRA_VIDEO_DATA, videoData)
-            putExtra(OfflineVideoPlayerActivity.EXTRA_DOWNLOAD_ID, downloadId)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
     }
@@ -224,75 +210,9 @@ private fun setupViewPager(videos: List<VideoData>) {
 ```xml
 <uses-permission android:name="android.permission.INTERNET" />
 <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 ```
 
-### Requesting permissions in code (Android 13+)
-
-```kotlin
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Build
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
-
-override fun onCreate(savedInstanceState: Bundle?) {
-    super.onCreate(savedInstanceState)
-    
-    // Request notification permission (Android 13+)
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        if (ContextCompat.checkSelfPermission(
-                this, 
-                Manifest.permission.POST_NOTIFICATIONS
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            ActivityCompat.requestPermissions(
-                this,
-                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-                1
-            )
-        }
-    }
-}
-```
-
----
-
-## Download notifications
-
-The library can show notifications when downloads complete. Configure a listener:
-
-```kotlin
-import io.kinescope.sdk.shorts.download.VideoDownloadManager
-import androidx.media3.exoplayer.offline.Download
-import androidx.media3.exoplayer.offline.DownloadManager
-
-private val downloadListener = object : DownloadManager.Listener {
-    override fun onDownloadChanged(
-        downloadManager: DownloadManager,
-        download: Download,
-        finalException: Exception?
-    ) {
-        if (download.state == Download.STATE_COMPLETED) {
-            // Show download complete notification
-            notificationHelper.showDownloadCompleteNotification(download)
-        }
-    }
-    
-    override fun onDownloadRemoved(
-        downloadManager: DownloadManager,
-        download: Download
-    ) {
-        // Handle download removal
-    }
-}
-
-override fun onCreate(savedInstanceState: Bundle?) {
-    super.onCreate(savedInstanceState)
-    // ...
-    VideoDownloadManager.addDownloadListener(this, downloadListener)
-}
-```
+Both permissions are already merged from the library manifest. Shorts does not need `POST_NOTIFICATIONS` or foreground-service permissions.
 
 ---
 
@@ -301,23 +221,14 @@ override fun onCreate(savedInstanceState: Bundle?) {
 ```kotlin
 package com.example.myapp
 
-import android.Manifest
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.offline.Download
-import androidx.media3.exoplayer.offline.DownloadManager
 import io.kinescope.sdk.shorts.adapters.ViewPager2Adapter
 import io.kinescope.sdk.shorts.cache.VideoCache
-import io.kinescope.sdk.shorts.download.VideoDownloadManager
 import io.kinescope.sdk.shorts.interfaces.ActivityProvider
-import io.kinescope.sdk.shorts.managers.NotificationHelper
 import io.kinescope.sdk.shorts.managers.PoolPlayers
 import io.kinescope.sdk.shorts.models.PlayerItem
 import io.kinescope.sdk.shorts.models.VideoData
@@ -335,7 +246,6 @@ class MainActivity : AppCompatActivity(), ActivityProvider {
     private lateinit var binding: ActivityMainBinding
     private lateinit var adapter: ViewPager2Adapter
     private val exoPlayerItems = ArrayList<PlayerItem>()
-    private lateinit var notificationHelper: NotificationHelper
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -346,29 +256,9 @@ class MainActivity : AppCompatActivity(), ActivityProvider {
         // Initialize library
         VideoCache.initialize(this)
         PoolPlayers.init(this)
-        VideoDownloadManager.initialize(this)
-        notificationHelper = NotificationHelper(this, this)
 
         // ViewPager2 setup
         binding.viewPager2.offscreenPageLimit = 1
-
-        // Request permissions
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.POST_NOTIFICATIONS
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                ActivityCompat.requestPermissions(
-                    this,
-                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-                    1
-                )
-            }
-        }
-
-        // Download listener
-        VideoDownloadManager.addDownloadListener(this, downloadListener)
 
         // Load videos
         loadVideosFromApi()
@@ -420,17 +310,6 @@ class MainActivity : AppCompatActivity(), ActivityProvider {
         }
     }
 
-    override fun getOfflinePlayerActivityIntent(
-        videoData: VideoData,
-        downloadId: String
-    ): Intent {
-        return Intent(this, OfflineVideoPlayerActivity::class.java).apply {
-            putExtra(OfflineVideoPlayerActivity.EXTRA_VIDEO_DATA, videoData)
-            putExtra(OfflineVideoPlayerActivity.EXTRA_DOWNLOAD_ID, downloadId)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-    }
-
     override fun pauseCurrentPlayer() {
         exoPlayerItems.forEach { item ->
             item.exoPlayer.pause()
@@ -438,29 +317,8 @@ class MainActivity : AppCompatActivity(), ActivityProvider {
         }
     }
 
-    // Download listener
-    private val downloadListener = object : DownloadManager.Listener {
-        override fun onDownloadChanged(
-            downloadManager: DownloadManager,
-            download: Download,
-            finalException: Exception?
-        ) {
-            if (download.state == Download.STATE_COMPLETED) {
-                notificationHelper.showDownloadCompleteNotification(download)
-            }
-        }
-
-        override fun onDownloadRemoved(
-            downloadManager: DownloadManager,
-            download: Download
-        ) {
-            // Handle download removal
-        }
-    }
-
     override fun onDestroy() {
         super.onDestroy()
-        VideoDownloadManager.removeDownloadListener(downloadListener)
         PoolPlayers.release()
     }
 }
@@ -501,32 +359,14 @@ Weak devices are capped at most at `MEDIUM`. Online playback still uses ExoPlaye
 
 ### Offline video downloads
 
-**Note:** The download UI in Shorts is currently hidden. The download mechanism remains available in the code but is not exposed to users. For offline video downloads, use the main player (`kotlin-kinescope-player`) with `DownloadVideoOffline` (see main README.md).
-
-The download infrastructure (`VideoDownloadManager`, `VideoDownloadService`) is still present and functional, but the download button (`btnOffline`) in the Shorts player UI is hidden.
-
-### Offline playback
-
-When opening downloaded videos, the main player (`KinescopeVideoPlayer` / `KinescopePlayerView`) is used, not the Shorts player. Implement `getOfflinePlayerActivityIntent` in your `ActivityProvider` to return an Intent pointing to your offline player activity that uses `KinescopePlayerView`.
-
-### Managing downloads
-
-Via `VideoDownloadManager` (package `io.kinescope.sdk.shorts.download`):
-
-```kotlin
-val downloads = VideoDownloadManager.getAllDownloadsWithActiveFirst(context)
-val download = VideoDownloadManager.getDownloadById(contentId)
-VideoDownloadManager.removeDownload(context, downloadId)
-```
-
-When using **kotlin-kinescope-player**, you can alternatively use `io.kinescope.sdk.download.DownloadVideoOffline`: `initialize`, `startDownload`, `removeDownload`, `getAllCompletedDownloads`, `addDownloadListener`.
+Shorts has no offline downloads since 0.1.22 (no download button, no offline playback, no download service). For offline video with DRM, use the player artifact `io.kinescope:kotlin-kinescope-player` and `io.kinescope.sdk.download.DownloadVideoOffline` / `VideoDownloadManager` — see [offline-downloads.md](../docs/offline-downloads.md).
 
 ---
 
 ## Support
 
 If you have questions or issues:
-1. Check Logcat for tags: `DOWNLOAD_MANAGER`, `KinescopeUrls`
+1. Check Logcat for the `KinescopeUrls` tag
 2. Ensure your `KinescopeVideoProvider` implementation is correct
 3. Verify the API token and Project ID
 4. Check the internet connection

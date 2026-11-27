@@ -12,10 +12,5 @@
 
 
 
-    <string name="download_channel_name">Video downloads</string>
-    <string name="download_channel_description">Video download notifications</string>
-    <string name="download_notification_title">Downloading video</string>
-    <string name="download_completed">Download completed</string>
-    <string name="download_failed">Download failed</string>
 
 </resources>

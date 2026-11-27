@@ -34,3 +34,7 @@ kinescopePlayer.kinescopePlayerOptions.externalId = user.id
 | Session | install ID, view ID, watched seconds, `externalId` |
 
 `externalId` is the only field set by the app; everything else is filled by the SDK.
+
+## Do not track (`dnt`)
+
+Set `kinescopePlayerOptions.dnt = true` to stop sending analytics events to Kinescope — the same as `dnt` in the web embed. The `setAnalyticsCallback` callback above still receives the events, so your own analytics keeps working.

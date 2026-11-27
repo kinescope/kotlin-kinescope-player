@@ -1,6 +1,6 @@
 # Kinescope API Integration
 
-The library provides interfaces to connect to the Kinescope API. You implement them yourself. When using `io.kinescope:kotlin-kinescope-player`, the `io.kinescope.sdk.shorts` package is available along with the player.
+The library provides interfaces to connect to the Kinescope API. You implement them yourself. The `io.kinescope.sdk.shorts` package comes with the `io.kinescope:kotlin-kinescope-shorts` dependency (since 0.1.22 it is not part of `kotlin-kinescope-player`).
 
 ## Configuration (`KinescopeShortsConfig`)
 
@@ -151,7 +151,7 @@ Real endpoints used by the SDK (there is no `GET /v1/vod/{videoId}` on `api.kine
 
 - **Widevine license:** `GET /v1/vod/{video_id}/acquire/widevine?token=`
 
-For Shorts, implement `KinescopeVideoProvider` using catalog + `/{video_id}.json`. See [API_USAGE_GUIDE.md](../../API_USAGE_GUIDE.md).
+For Shorts, implement `KinescopeVideoProvider` using catalog + `/{video_id}.json`. See [API_USAGE_GUIDE.md](../API_USAGE_GUIDE.md).
 
 ## Dependencies
 

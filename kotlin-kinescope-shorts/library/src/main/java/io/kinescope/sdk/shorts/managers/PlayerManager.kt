@@ -1,21 +1,16 @@
 package io.kinescope.sdk.shorts.managers
 
 import android.content.Context
-import android.widget.Toast
 import androidx.annotation.OptIn
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.offline.Download
 import io.kinescope.sdk.shorts.adapters.ViewPager2Adapter
 import io.kinescope.sdk.shorts.databinding.ShortsListVideoBinding
-import io.kinescope.sdk.shorts.drm.DrmConfigurator
-import io.kinescope.sdk.shorts.drm.DrmHelper
 import io.kinescope.sdk.shorts.models.PlayerItem
 import io.kinescope.sdk.shorts.models.VideoData
 import io.kinescope.sdk.shorts.network.InternetConnection
-import io.kinescope.sdk.shorts.player.OfflinePlayer
 import io.kinescope.sdk.shorts.player.OnlinePlayer
 import io.kinescope.sdk.shorts.view.SeekBarWrap
 import io.kinescope.sdk.shorts.view.SeekPlayerControl
@@ -34,8 +29,6 @@ class PlayerManager(
     var exoPlayer: ExoPlayer? = null
     var shouldAutoPlay = false
     val playerFactory = PlayerFactory(context)
-    val exposedDrmHelper: DrmHelper
-        get() = drmHelper
 
     /** Invoked when the active player enters/leaves rebuffer while wanting to play. */
     var onRebufferingChanged: ((Boolean) -> Unit)? = null
@@ -46,16 +39,8 @@ class PlayerManager(
     private var hasSuccessfullyPlayed = false
     private var activeListener: Player.Listener? = null
 
-    private val drmHelper = DrmHelper(context, DrmConfigurator(context)) { videoData, pssh ->
-        videoViewHolder.startOfflineLicenseDownload(videoData, pssh) { keySetId ->
-            if (keySetId != null) {
-                Toast.makeText(context, "Лицензия сохранена", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
     private val onlinePlayer =
-        OnlinePlayer(context, InternetConnection(context), drmHelper, playerFactory)
-    private val offlinePlayer = OfflinePlayer(context, DrmConfigurator(context))
+        OnlinePlayer(context, InternetConnection(context), playerFactory)
 
     fun setupOnlinePlayer(
         videoData: VideoData,
@@ -79,10 +64,6 @@ class PlayerManager(
 
         if (preloadedPlayer != null) {
             binding.playerView.player = player
-            val hasDrm = !videoData.drm?.widevine?.licenseUrl.isNullOrBlank()
-            if (hasDrm) {
-                drmHelper.attachToPlayer(player)
-            }
             player.addListener(createPlayerListener(position).also { activeListener = it })
             seekPlayerControl.startSeekBarUpdates()
             seekPlayerControl.setupPlayer(player)
@@ -100,26 +81,6 @@ class PlayerManager(
                 videoPreparedListener.onVideoPrepared(PlayerItem(player, position))
             }
         }
-    }
-
-    fun setupOfflinePlayer(
-        videoData: VideoData,
-        position: Int,
-        binding: ShortsListVideoBinding,
-        download: Download?,
-    ) {
-        releasePlayer()
-        val player = PoolPlayers.get().acquirePlayer()
-        exoPlayer = player
-
-        offlinePlayer.setupPlayer(videoData, download, binding, {
-            setupOnlinePlayer(videoData, position, binding)
-        }, player)
-        player.addListener(createPlayerListener(position).also { activeListener = it })
-        seekPlayerControl.startSeekBarUpdates()
-        seekPlayerControl.setupPlayer(player)
-        seekBarWrap.hidePlayButton()
-        videoPreparedListener.onVideoPrepared(PlayerItem(player, position))
     }
 
     private fun createPlayerListener(position: Int): Player.Listener = object : Player.Listener {

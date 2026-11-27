@@ -7,12 +7,10 @@ import android.widget.SeekBar
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.offline.Download
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import io.kinescope.sdk.shorts.R
 import io.kinescope.sdk.shorts.databinding.ShortsListVideoBinding
-import io.kinescope.sdk.shorts.download.VideoDownloadManager
 import io.kinescope.sdk.shorts.interfaces.ActivityProvider
 import io.kinescope.sdk.shorts.managers.PlaybackHealthMonitor
 import io.kinescope.sdk.shorts.managers.PlayerFactory
@@ -115,17 +113,8 @@ class ViewPager2Adapter(
 
     override fun onBindViewHolder(holder: VideoViewHolder, position: Int) {
         val videoData = videos[position]
-        val contentId = holder.generateStableContentId(videoData.hlsLink)
-        val download = VideoDownloadManager.getDownloadIndex(context).getDownload(contentId)
-
-        val isDownloaded = download != null && download.state == Download.STATE_COMPLETED
-
-        if (isDownloaded) {
-            holder.bindOfflineVideos(videoData, download)
-        } else {
-            val preloaded = videoPreloader?.getPreloadedPlayer(position)
-            holder.bindOnlineVideos(videoData, preloadedPlayer = preloaded)
-        }
+        val preloaded = videoPreloader?.getPreloadedPlayer(position)
+        holder.bindOnlineVideos(videoData, preloadedPlayer = preloaded)
     }
 
     override fun getItemCount(): Int = videos.size
