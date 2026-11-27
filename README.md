@@ -1,4 +1,4 @@
-# Kinescope Kotlin player SDK
+# Kinescope Android Kotlin player SDK
 
 Android SDK for [Kinescope](https://kinescope.io/) video: player with offline downloads and DRM (Widevine), and a vertical Shorts feed — two separate artifacts, take only what you need.
 
