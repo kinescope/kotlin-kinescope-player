@@ -25,6 +25,7 @@ import androidx.media3.datasource.FileDataSource
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.offline.Download
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import io.kinescope.demo.R
 import io.kinescope.demo.databinding.ActivityOfflineMainPlayerBinding
 import io.kinescope.sdk.player.KinescopeContentOrientationController
@@ -216,6 +217,11 @@ class OfflineMainPlayerActivity : AppCompatActivity() {
     }
 
     private fun pinOfflineQualityLabel(player: ExoPlayer, videoData: VideoData) {
+        // "Audio only" in settings disables the video track type. Re-pinning the downloaded
+        // quality on the next onTracksChanged / onVideoSizeChanged would turn video back on.
+        val trackSelector = player.trackSelector as? DefaultTrackSelector
+        if (trackSelector?.parameters?.disabledTrackTypes?.contains(C.TRACK_TYPE_VIDEO) == true) return
+
         val selectedLabel = videoData.selectedQualityLabel?.trim()?.takeIf { it.isNotEmpty() }
         val format = player.videoFormat
         applyQualityLabels(videoData, format?.height, format?.width ?: 0, forceLabel = selectedLabel)

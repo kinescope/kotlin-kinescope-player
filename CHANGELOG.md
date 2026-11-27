@@ -4,7 +4,7 @@
 
 > **Breaking changes — update your code when upgrading to 0.1.22**
 >
-> **1. Download and DRM classes moved to `io.kinescope.sdk.download`.** Change the imports:
+> **1. Download and DRM classes moved to `io.kinescope.sdk.download`.** The DRM classes below are only for **offline** downloads (PSSH, offline license, `keySetId`), so they live next to `DownloadVideoOffline`. Online DRM playback needs no code and did not change. Change the imports:
 >
 > | Class | Was (≤ 0.1.21) | Now (0.1.22) |
 > |-------|----------------|--------------|
@@ -19,11 +19,19 @@
 >
 > **2. Shorts is a separate dependency.** `kotlin-kinescope-player` no longer includes Shorts. If you use the Shorts feed, add `implementation 'io.kinescope:kotlin-kinescope-shorts:0.1.22'`.
 >
-> **3. Shorts has no offline downloads.** Remove `ActivityProvider.getOfflinePlayerActivityIntent` and the offline `KinescopeUiConfig` fields (listed under Removed below). Download videos with the player artifact — see [Offline downloads](docs/offline-downloads.md).
+> **3. Only if your app uses Shorts: remove the Shorts offline code.** Shorts has no offline downloads any more, so this code no longer compiles:
+>
+> - the `getOfflinePlayerActivityIntent(...)` override in your `ActivityProvider` — keep only `getMainActivityIntent()` and `pauseCurrentPlayer()`
+> - `KinescopeUiConfig.showOfflineButton`, `showSavedVideosButton`, `offlineButtonIconResId`, `savedVideosButtonIconResId`, `downloadNotificationIconResId`
+> - `NotificationHelper` and imports from `io.kinescope.sdk.shorts.download` / `io.kinescope.sdk.shorts.drm` (except `DrmContentProtection`)
+> - the offline player Activity you opened from the Shorts feed, if it was only used for that
+>
+> To keep offline video, download it with the player artifact — see [Offline downloads](docs/offline-downloads.md). Apps that use only the player skip this step.
 
 ### Added
 - **Watermark from the server** — the player reads `sdk.watermark` from the video JSON and draws it over the video: text, `mode` (`random` — jumps around the frame, `stripes` — diagonal rows), `scale`, `display_timeout` (show/hide blinking) and `color` (`#RRGGBBAA`). Set it up in the Kinescope dashboard; no code needed. See [Customization — Watermark](docs/customization.md)
 - **Download notification icon** — `VideoDownloadService.notificationIconResId`
+- **Web embed parameters** in `KinescopePlayerOptions`, all off / unchanged by default: `startTime` (`t`), `dnt`, `autopause`, `header`, `background`, `transparent`, `autofocus`, `baseUrl`, `userAgent`. `disableFiles` maps to the existing `showAttachments`. See [Player options](docs/player-options.md)
 
 ### Changed
 - **Player and Shorts are separate artifacts.** The SDK is split into two independent components: `io.kinescope:kotlin-kinescope-player` (player, offline downloads, DRM, Cast) and `io.kinescope:kotlin-kinescope-shorts` (vertical feed). Neither depends on the other. Apps that use only the player get a smaller APK

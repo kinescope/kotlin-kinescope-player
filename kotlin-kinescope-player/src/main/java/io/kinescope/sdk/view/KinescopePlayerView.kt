@@ -584,6 +584,13 @@ class KinescopePlayerView @JvmOverloads constructor(
             updateTitles()
         }
 
+    /** [titleChromeEnabled] and [io.kinescope.sdk.player.KinescopePlayerOptions.header]. */
+    private fun isTitleChromeShown(): Boolean =
+        titleChromeEnabled && kinescopePlayer?.kinescopePlayerOptions?.header != false
+
+    /** Root backdrop of the inflated player layout (black unless `transparent`). */
+    private var playerBackdropView: View? = null
+
     /**
      * Insets last dispatched to this view — the fallback source, see
      * [currentWindowInsets] — and the screen Y the overlap was resolved against.
@@ -1049,6 +1056,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
         inflate(context, playerLayoutRes, this)
         bindRootLayoutConstraints()
+        playerBackdropView = getChildAt(0)
         exoPlayerView = findViewById(R.id.view_exoplayer)
         installWatermarkView()
         subtitleView = findViewById(R.id.kinescope_subtitle_view)
@@ -2217,6 +2225,15 @@ class KinescopePlayerView @JvmOverloads constructor(
 
     private fun isVideoLoaded(): Boolean = getVideo() != null
 
+    /** [io.kinescope.sdk.player.KinescopePlayerOptions.transparent]: clear the black backdrops. */
+    private fun applyTransparentBackground() {
+        val transparent = kinescopePlayer?.kinescopePlayerOptions?.transparent == true
+        val color = if (transparent) Color.TRANSPARENT else Color.BLACK
+        playerBackdropView?.setBackgroundColor(color)
+        posterView?.setBackgroundColor(color)
+        exoPlayerView?.setShutterBackgroundColor(color)
+    }
+
     private fun postVideoLoadedChromeUpdate() {
         val update = {
             enforceLiveTimeChromeIfNeeded()
@@ -2226,6 +2243,10 @@ class KinescopePlayerView @JvmOverloads constructor(
             ensureInitialSubtitlesIfNeeded()
             updateChaptersMenuContent()
             updatePlayPauseButton()
+            if (kinescopePlayer?.kinescopePlayerOptions?.autofocus == true && !isPictureInPictureActive) {
+                isFocusable = true
+                requestFocus()
+            }
         }
         if (Looper.myLooper() == Looper.getMainLooper()) {
             update()
@@ -2289,7 +2310,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         bufferingView?.let { overlay ->
             overlay.isVisible = showBufferingSpinner
             overlay.setBackgroundColor(
-                if (waitingForFirstPlayback) {
+                if (waitingForFirstPlayback && kinescopePlayer?.kinescopePlayerOptions?.transparent != true) {
                     android.graphics.Color.BLACK
                 } else {
                     android.graphics.Color.TRANSPARENT
@@ -3923,6 +3944,7 @@ class KinescopePlayerView @JvmOverloads constructor(
             return
         }
         enforceLiveTimeChromeIfNeeded()
+        applyTransparentBackground()
         val options = kinescopePlayer?.kinescopePlayerOptions
         if (options != null) {
             val showControls = options.controls
@@ -4076,11 +4098,11 @@ class KinescopePlayerView @JvmOverloads constructor(
         if (video != null) {
             titleView?.apply {
                 text = video.title
-                isVisible = titleChromeEnabled && video.title.isNotEmpty()
+                isVisible = isTitleChromeShown() && video.title.isNotEmpty()
             }
             authorView?.apply {
                 text = video.subtitle
-                isVisible = titleChromeEnabled && !video.subtitle.isNullOrEmpty()
+                isVisible = isTitleChromeShown() && !video.subtitle.isNullOrEmpty()
             }
             enforceLiveTimeChromeIfNeeded()
             applyVideoPoster()
@@ -4733,7 +4755,7 @@ class KinescopePlayerView @JvmOverloads constructor(
         }
 
     private fun restoreControlOverlayAfterCaptionsSearch() {
-        descriptionBlock?.isVisible = titleChromeEnabled
+        descriptionBlock?.isVisible = isTitleChromeShown()
         updateTitles()
         ensureControlBarProgressChromeVisible()
         updatePlayPauseButton()
@@ -5899,7 +5921,10 @@ class KinescopePlayerView @JvmOverloads constructor(
         localExoPlayer.getAnalyticsArguments(
             volume = audioManager.currentVolumeInPercent,
             isFullscreen = isVideoFullscreen,
-        ).copy(externalId = kinescopePlayer?.kinescopePlayerOptions?.externalId)
+        ).copy(
+            externalId = kinescopePlayer?.kinescopePlayerOptions?.externalId,
+            doNotTrack = kinescopePlayer?.kinescopePlayerOptions?.dnt == true,
+        )
 
     fun hideControlsExceptPlayPause() {
         controlView?.children?.forEach { child ->

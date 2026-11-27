@@ -22,13 +22,14 @@ import io.kinescope.sdk.models.videos.KinescopeVideoSubtitle
 @UnstableApi
 internal object KinescopeSubtitleMediaSources {
 
-  private const val USER_AGENT = "KinescopeAndroidVideoKotlin"
+  private const val USER_AGENT = KinescopePlayerOptions.DEFAULT_USER_AGENT
 
   fun createDashMediaSource(
       dashLink: String,
       referer: String,
+      userAgent: String = USER_AGENT,
   ): DashMediaSource {
-    val httpFactory = createHttpDataSourceFactory(referer)
+    val httpFactory = createHttpDataSourceFactory(referer, userAgent)
     val dashChunkSourceFactory: DashChunkSource.Factory =
         DefaultDashChunkSource.Factory(httpFactory)
 
@@ -47,14 +48,15 @@ internal object KinescopeSubtitleMediaSources {
   fun createDashWithSideloadedSubtitles(
       video: KinescopeVideo,
       referer: String,
+      userAgent: String = USER_AGENT,
   ): MediaSource {
     val dashLink = video.dashLink.orEmpty()
-    val dashSource = createDashMediaSource(dashLink, referer)
+    val dashSource = createDashMediaSource(dashLink, referer, userAgent)
     if (video.subtitles.isEmpty()) {
       return dashSource
     }
 
-    val httpFactory = createHttpDataSourceFactory(referer)
+    val httpFactory = createHttpDataSourceFactory(referer, userAgent)
     val parserFactory = DefaultSubtitleParserFactory()
     val subtitleSources = video.subtitles.map { subtitle ->
       createSubtitleMediaSource(subtitle, httpFactory, parserFactory)
@@ -88,14 +90,17 @@ internal object KinescopeSubtitleMediaSources {
         else -> MimeTypes.TEXT_VTT
       }
 
-  private fun createHttpDataSourceFactory(referer: String): DefaultHttpDataSource.Factory {
+  private fun createHttpDataSourceFactory(
+      referer: String,
+      userAgent: String,
+  ): DefaultHttpDataSource.Factory {
     val headers = mutableMapOf(
         "Origin" to "*/*",
         "x-drm-type" to "widevine",
         "Referer" to referer,
     )
     return DefaultHttpDataSource.Factory()
-        .setUserAgent(USER_AGENT)
+        .setUserAgent(userAgent)
         .setDefaultRequestProperties(headers)
   }
 }

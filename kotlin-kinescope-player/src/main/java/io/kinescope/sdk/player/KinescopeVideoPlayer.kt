@@ -28,6 +28,7 @@ import io.kinescope.sdk.network.FetchBuilder
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
+import java.lang.ref.WeakReference
 
 @UnstableApi
 class KinescopeVideoPlayer(
@@ -39,15 +40,27 @@ class KinescopeVideoPlayer(
     var exoPlayer: ExoPlayer? = null
     var onSourceChanged: ((source: String, metricUrl: String?) -> Unit)? = null
 
-    private val USER_AGENT = "KinescopeAndroidVideoKotlin"
+    /** [KinescopePlayerOptions.userAgent] or the SDK default for media requests. */
+    private val mediaUserAgent: String
+        get() = kinescopePlayerOptions.userAgent?.takeIf { it.isNotBlank() }
+            ?: KinescopePlayerOptions.DEFAULT_USER_AGENT
     private var currentKinescopeVideo: KinescopeVideo? = null
     /** height → display name from embed `quality_map.name`. */
     private var qualityNamesByHeight: Map<Int, String> = emptyMap()
     private var fetch: KinescopeFetch
+    /** Options the current [fetch] was built with; rebuilt when they change. */
+    private var fetchConfig: Triple<String, String?, String?>
     private var boundLifecycle: Lifecycle? = null
     private var lifecycleObserver: DefaultLifecycleObserver? = null
     private var resumeOnStart = false
     private var playerHost: KinescopePlayerHost? = null
+
+    // Declared before init: init adds it to the player.
+    private val autopauseListener = object : Player.Listener {
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            if (isPlaying) pauseOtherPlayersForAutopause(this@KinescopeVideoPlayer)
+        }
+    }
 
     init {
         val toneMapToSdr = KinescopeHdrHelper.shouldToneMapToSdr(context, kinescopePlayerOptions.hdrToneMapping)
@@ -65,8 +78,11 @@ class KinescopeVideoPlayer(
             .setRenderersFactory(renderersFactory)
         exoPlayer = playerBuilder.build()
         playerHost = exoPlayer?.let { KinescopePlayerHost(it) }
+        exoPlayer?.addListener(autopauseListener)
+        registerForAutopause(this)
 
-        fetch = FetchBuilder.getKinescopeFetch(kinescopePlayerOptions.referer)
+        fetchConfig = currentFetchConfig()
+        fetch = buildFetch(fetchConfig)
         exoPlayer?.let { KinescopeHdrHelper.configure(it, context, kinescopePlayerOptions.hdrToneMapping) }
     }
 
@@ -77,7 +93,7 @@ class KinescopeVideoPlayer(
         headers["Referer"] = kinescopePlayerOptions.referer
 
         val defaultHttpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent(USER_AGENT)
+            .setUserAgent(mediaUserAgent)
             .setDefaultRequestProperties(headers)
             .setTransferListener(
                 DefaultBandwidthMeter.Builder(context)
@@ -111,6 +127,7 @@ class KinescopeVideoPlayer(
                     KinescopeSubtitleMediaSources.createDashWithSideloadedSubtitles(
                         video = kinescopeVideo,
                         referer = kinescopePlayerOptions.referer,
+                        userAgent = mediaUserAgent,
                     )
                 } else {
                     getDashMediaSource(
@@ -121,7 +138,7 @@ class KinescopeVideoPlayer(
 
             kinescopeVideo.hlsLink.isNullOrEmpty().not() -> {
                 source = kinescopeVideo.hlsLink.orEmpty()
-                HlsMediaSource.Factory(DefaultHttpDataSource.Factory())
+                HlsMediaSource.Factory(DefaultHttpDataSource.Factory().setUserAgent(mediaUserAgent))
                     .setLoadErrorHandlingPolicy(KinescopeErrorHandlingPolicy())
                     .createMediaSource(MediaItem.fromUri(kinescopeVideo.hlsLink.orEmpty()))
             }
@@ -135,7 +152,13 @@ class KinescopeVideoPlayer(
             kinescopeVideo.sdk?.metricUrl
         )
 
-        exoPlayer?.setMediaSource(mediaSource)
+        val startPositionMs = KinescopePlayerOptions.startPositionMs(kinescopePlayerOptions.startTime)
+            ?.takeUnless { kinescopeVideo.isLive }
+        if (startPositionMs != null) {
+            exoPlayer?.setMediaSource(mediaSource, startPositionMs)
+        } else {
+            exoPlayer?.setMediaSource(mediaSource)
+        }
         applyPlaybackOptions()
         val castHandler = castVideoChangedHandler.takeIf { isCasting }
         exoPlayer?.playWhenReady = kinescopePlayerOptions.autoplay && castHandler == null
@@ -173,7 +196,26 @@ class KinescopeVideoPlayer(
     }
 
     private fun fetchUpdate() {
-        fetch = FetchBuilder.getKinescopeFetch(kinescopePlayerOptions.referer)
+        fetchConfig = currentFetchConfig()
+        fetch = buildFetch(fetchConfig)
+    }
+
+    private fun currentFetchConfig(): Triple<String, String?, String?> = Triple(
+        kinescopePlayerOptions.referer,
+        kinescopePlayerOptions.baseUrl?.takeIf { it.isNotBlank() },
+        kinescopePlayerOptions.userAgent?.takeIf { it.isNotBlank() },
+    )
+
+    private fun buildFetch(config: Triple<String, String?, String?>): KinescopeFetch =
+        FetchBuilder.getKinescopeFetch(
+            referer = config.first,
+            baseUrl = config.second,
+            userAgent = config.third,
+        )
+
+    /** Picks up `referer` / `baseUrl` / `userAgent` changed directly in the options. */
+    private fun ensureFetchUpToDate() {
+        if (currentFetchConfig() != fetchConfig) fetchUpdate()
     }
 
     fun getVideo(): KinescopeVideo? = currentKinescopeVideo
@@ -287,6 +329,7 @@ class KinescopeVideoPlayer(
         onSuccess: ((KinescopeVideo?) -> Unit)? = null,
         onFailed: ((t: Throwable?) -> Unit)? = null,
     ) {
+        ensureFetchUpToDate()
         val drmAuthToken = kinescopePlayerOptions.drmAuthToken?.takeIf { it.isNotBlank() }
         fetch.getVideo(videoId = videoId, drmAuthToken = drmAuthToken)
             .enqueue(object : Callback<KinescopeVideo> {
@@ -354,9 +397,11 @@ class KinescopeVideoPlayer(
     }
 
     private fun releasePlayerEngine() {
+        exoPlayer?.removeListener(autopauseListener)
         exoPlayer?.release()
         exoPlayer = null
         playerHost = null
+        unregisterForAutopause(this)
     }
 
     /**
@@ -364,9 +409,12 @@ class KinescopeVideoPlayer(
      * Re-attach [io.kinescope.sdk.view.KinescopePlayerView] via [setPlayer] after calling this.
      */
     fun replaceExoPlayer(player: ExoPlayer) {
+        exoPlayer?.removeListener(autopauseListener)
         exoPlayer?.release()
         exoPlayer = player
         playerHost = KinescopePlayerHost(player)
+        player.addListener(autopauseListener)
+        registerForAutopause(this)
     }
 
     fun seekTo(toMilliSeconds: Long) {
@@ -445,5 +493,29 @@ class KinescopeVideoPlayer(
 
     fun setShowAudioTracksInSettings(value: Boolean) {
         kinescopePlayerOptions.showAudioTracksInSettings = value
+    }
+
+    companion object {
+        /** Live players, for [KinescopePlayerOptions.autopause]. Main thread only. */
+        private val autopausePlayers = mutableListOf<WeakReference<KinescopeVideoPlayer>>()
+
+        private fun registerForAutopause(player: KinescopeVideoPlayer) {
+            autopausePlayers.removeAll { it.get() == null || it.get() === player }
+            autopausePlayers.add(WeakReference(player))
+        }
+
+        private fun unregisterForAutopause(player: KinescopeVideoPlayer) {
+            autopausePlayers.removeAll { it.get() == null || it.get() === player }
+        }
+
+        /** [started] began playing: pause every other player that has `autopause` on. */
+        internal fun pauseOtherPlayersForAutopause(started: KinescopeVideoPlayer) {
+            autopausePlayers.removeAll { it.get() == null }
+            autopausePlayers.mapNotNull { it.get() }
+                .filter { it !== started && it.kinescopePlayerOptions.autopause }
+                .forEach { other ->
+                    if (other.playbackPlayer?.playWhenReady == true) other.pause()
+                }
+        }
     }
 }

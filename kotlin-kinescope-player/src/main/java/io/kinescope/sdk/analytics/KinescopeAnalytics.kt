@@ -56,6 +56,14 @@ class KinescopeAnalytics(
             message = "Analytics event. ${body.toStringData()}"
         )
 
+        if (args.doNotTrack) {
+            KinescopeLogger.log(
+                level = KinescopeLoggerLevel.NETWORK,
+                message = "Event ${event.value} not sent: dnt"
+            )
+            return body.toString()
+        }
+
         analyticsApi.sendEvent(url = metricUrl as String, body = body)
             .enqueue(object : Callback<Void> {
                 override fun onResponse(call: Call<Void>, response: Response<Void>) =
